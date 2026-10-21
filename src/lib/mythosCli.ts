@@ -3,6 +3,7 @@ import JSZip from "jszip";
 import CLI_JS from "./mythos-code-cli/mythos.js?raw";
 import SHARED_TOOLS_RAW from "./mythos-code-shared/tools.js?raw";
 import TOOL_PARSE from "./mythos-code-shared/toolparse.js?raw";
+import SMART_UI from "./mythos-code-shared/smartui.js?raw";
 import APP_MAIN from "./mythos-code-app/main.js?raw";
 import APP_PRELOAD from "./mythos-code-app/preload.js?raw";
 import APP_HTML from "./mythos-code-app/index.html?raw";
@@ -119,7 +120,7 @@ Voraussetzung: [Node.js](https://nodejs.org) ab Version 18.
 export const APP_PKG = "mythos-code-app";
 export const APP_DOWNLOAD_SETTING = "codeprogram_download_url";
 export const APP_UPDATE_SETTING = "codeprogram_update";
-export const APP_VERSION = "2.13.4";
+export const APP_VERSION = "2.14.0";
 
 /** Google-Drive-Freigabelink -> direkter Download-Link (andere https-Links bleiben unverändert). */
 export function toDirectDownloadUrl(input: string): string | null {
@@ -166,7 +167,7 @@ const appPkg = () => JSON.stringify({
     appId: "online.mythoscraft.mythoscode",
     productName: "Mythos Code",
     publish: { provider: "generic", url: "https://github.com/lluananonym-cloud/ai-mythoscraft/releases/download/code-latest" },
-    files: ["main.js", "preload.js", "index.html", "markdown.js", "mcp.js", "voice.js", "tts-worker.js", "stt-worker.js", "renderer.js", "config.json", "icon.png"],
+    files: ["main.js", "preload.js", "index.html", "smartui.js", "markdown.js", "mcp.js", "voice.js", "tts-worker.js", "stt-worker.js", "renderer.js", "config.json", "icon.png"],
     win: { target: "nsis", icon: "icon.png" },
     nsis: { oneClick: false, allowToChangeInstallationDirectory: true, createDesktopShortcut: true, shortcutName: "Mythos Code", artifactName: "MythosCode-Setup-${version}.exe" },
   },
@@ -203,6 +204,7 @@ export async function buildAppZip(site: string): Promise<Blob> {
   root.file("main.js", fill(APP_MAIN, { "// @@SHARED_TOOLS@@": SHARED_TOOLS }));
   root.file("preload.js", fill(APP_PRELOAD));
   root.file("index.html", fill(APP_HTML));
+  root.file("smartui.js", fill(SMART_UI));
   root.file("markdown.js", fill(APP_MARKDOWN));
   root.file("mcp.js", fill(APP_MCP));
   root.file("voice.js", fill(APP_VOICE));

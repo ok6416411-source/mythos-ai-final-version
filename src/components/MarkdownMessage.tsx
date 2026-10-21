@@ -5,6 +5,7 @@ import { Check, Copy, Download, Play, FileArchive, Eye, EyeOff, FileText, FileCo
 import JSZip from "jszip";
 import { toast } from "sonner";
 import { copyText } from "@/lib/copyText";
+import SmartUI from "@/components/chat/SmartUI";
 import { parseFileInfo, fileBlob, saveBlob, openBlob, svgToPng, fmtSize, extOf, isImageName } from "@/lib/chatFiles";
 
 const EXT: Record<string, string> = {
@@ -44,6 +45,7 @@ function extractBlocks(md: string) {
   let m: RegExpExecArray | null;
   let i = 1;
   while ((m = re.exec(md))) {
+    if (/^mythos-ui$/i.test(m[1])) continue;
     const file = parseFileInfo(m[1]);
     const lang = (m[1] || "txt").toLowerCase();
     const named = /^(?:\/\/|#|<!--)\s*([\w.\-/]+\.[a-zA-Z0-9]{1,5})/.exec(m[2].trim());
@@ -195,6 +197,7 @@ export default function MarkdownMessage({ content }: { content: string }) {
             const info = /language-(\S+)/.exec(className || "")?.[1] || "";
             const file = parseFileInfo(info);
             if (file) return <FileCard name={file.name} content={raw.replace(/\n$/, "")} base64={file.base64} />;
+            if (/^mythos-ui$/i.test(info)) return <SmartUI raw={raw} />;
             const lang = /^[\w+#-]+/.exec(info)?.[0] || "";
             const isBlock = lang || raw.includes("\n");
             if (!isBlock) {

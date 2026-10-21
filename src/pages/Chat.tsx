@@ -53,6 +53,7 @@ import StarterPrompts from "@/components/chat/StarterPrompts";
 import { getInstructions, getMcpServers, getProjects, projectOfChat, setProjects, type Project } from "@/lib/chatPrefs";
 import { callTool, collectTools, connectorStates } from "@/lib/mcpClient";
 import { FILE_PROMPT } from "@/lib/chatFiles";
+import { SMART_UI_PROMPT, SMART_UI_SEND, stripSmartUI } from "@/components/chat/SmartUI";
 import { capabilitiesPrompt } from "@/lib/mythosCapabilities";
 import { fallbackTitle, generateChatTitle } from "@/lib/chatTitle";
 import {
@@ -907,6 +908,7 @@ const Chat = () => {
       parts.push("## Werkzeuge\nIn diesem Chat sind keine Werkzeuge verbunden. Schreibe nie <tool>- oder <tool_call>-Blöcke, sondern antworte direkt als normaler Text.");
     }
     parts.push(FILE_PROMPT);
+    parts.push(SMART_UI_PROMPT);
     parts.push(capabilitiesPrompt(SLASH_COMMANDS, isAdmin));
     if (goalNow) {
       parts.push(
@@ -1049,6 +1051,13 @@ const Chat = () => {
 
   useEffect(() => { sendRef.current = send; });
 
+  // Buttons in der intelligenten Oberfläche (```mythos-ui) schicken ihren Text als neue Nachricht.
+  useEffect(() => {
+    const onSmart = (e: Event) => { const t = (e as CustomEvent<string>).detail; if (t) sendRef.current?.(t); };
+    window.addEventListener(SMART_UI_SEND, onSmart);
+    return () => window.removeEventListener(SMART_UI_SEND, onSmart);
+  }, []);
+
   // Von der Startseite: /app?q=... schickt die Nachricht direkt in einem neuen Chat ab.
   const startedFromHomeRef = useRef(false);
   useEffect(() => {
@@ -1068,7 +1077,7 @@ const Chat = () => {
     if (!last || last.role !== "assistant" || !last.content) return;
     if (lastSpokenRef.current === last.content) return;
     lastSpokenRef.current = last.content;
-    voice.speak(last.content);
+    voice.speak(stripSmartUI(last.content));
   }, [voiceMode, sending, messages, voice]);
 
   useEffect(() => {
@@ -1585,12 +1594,12 @@ const Chat = () => {
                           {forDisplay(m.content) && !(sending && i === messages.length - 1) && (
                             <div className="flex items-center gap-0.5 mt-2 -ml-1.5 text-muted-foreground">
                               <span className="px-1.5 text-xs">{relTime(m.created_at)}</span>
-                              <button onClick={() => copyMessage(forDisplay(m.content))} title="Kopieren" className="p-1.5 rounded-md hover:bg-white/5">
+                              <button onClick={() => copyMessage(stripSmartUI(forDisplay(m.content)))} title="Kopieren" className="p-1.5 rounded-md hover:bg-white/5">
                                 <Copy className="h-3.5 w-3.5" />
                               </button>
                               {voice.supported && (
                                 <button
-                                  onClick={() => { if (voice.status === "speaking") voice.stopSpeaking(); else { voice.prepare(); voice.speak(m.content); } }}
+                                  onClick={() => { if (voice.status === "speaking") voice.stopSpeaking(); else { voice.prepare(); voice.speak(stripSmartUI(m.content)); } }}
                                   title={voice.status === "speaking" ? "Stop" : "Vorlesen"}
                                   className="p-1.5 rounded-md hover:bg-white/5"
                                 >

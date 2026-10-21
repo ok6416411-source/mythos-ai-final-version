@@ -99,7 +99,14 @@
         flush();
         const code = []; i++;
         while (i < lines.length && !lines[i].trim().startsWith(fence[1])) code.push(lines[i++]);
+        const closed = i < lines.length;
         i++;
+        // ```mythos-ui → intelligente Oberfläche (Karten, Regler, Diagramme …), siehe smartui.js.
+        if (/^mythos-ui$/i.test(fence[2]) && window.MythosSmartUI) {
+          box.appendChild(window.MythosSmartUI.render(code.join("\n"), { streaming: !closed, openLink: openLink, blobImages: true,
+            send: (t) => window.mythosSendPrompt && window.mythosSendPrompt(t), copy: (t) => navigator.clipboard.writeText(t) }));
+          continue;
+        }
         const f = fileInfo(fence[2]);
         box.appendChild(f ? fileCard(f, code.join("\n")) : codeBlock(/^[\w+#.-]*/.exec(fence[2])[0], code.join("\n")));
         continue;

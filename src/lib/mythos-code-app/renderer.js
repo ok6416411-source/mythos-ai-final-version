@@ -18,6 +18,8 @@ const base = (p) => p.split(/[\\/]/).filter(Boolean).pop() || p;
 const openLink = (u) => window.mythos.open(u);
 window.mythosFolder = () => (chat && chat.folder) || cfg.folder || "";
 const md = (box, text) => window.renderMarkdown(box, text, openLink);
+// Buttons in der intelligenten Oberfläche (```mythos-ui) schicken ihren Text wie eine getippte Nachricht.
+window.mythosSendPrompt = (t) => { $("inp").value = t; send(); };
 let follow = true;
 const nearBottom = () => follow;
 const atBottom = () => { const l = $("log"); return l.scrollHeight - l.scrollTop - l.clientHeight < 40; };
@@ -231,7 +233,7 @@ const estTokens = (system, msgs) => {
 async function systemPrompt(run) {
   return "Du bist Mythos Code, ein autonomer Coding-Agent als Desktop-App (Windows). Arbeitsordner: " + (run.folder || "(keiner)") +
     (run.git ? " · Git-Branch: " + run.git.branch : "") + ". Pfade relativ zum Arbeitsordner.\n" + await window.mythos.systemPrompt(run.folder, run.chat.goal || "") +
-    "\n\n" + appCommandsPrompt();
+    "\n\n" + appCommandsPrompt() + (window.MythosSmartUI ? "\n\n" + window.MythosSmartUI.PROMPT : "");
 }
 // Mythos soll seine eigenen Befehle kennen und sie dem Nutzer empfehlen können (statt zu raten).
 function appCommandsPrompt() {

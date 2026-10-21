@@ -63,7 +63,7 @@ write(app, "package.json", JSON.stringify({
     productName: "Mythos Code",
     // Update-Quelle für electron-updater: das Release "code-latest" (latest.yml + versionierte Setup-EXE).
     publish: { provider: "generic", url: "https://github.com/lluananonym-cloud/ai-mythoscraft/releases/download/code-latest" },
-    files: ["main.js", "preload.js", "index.html", "markdown.js", "mcp.js", "voice.js", "tts-worker.js", "stt-worker.js", "renderer.js", "config.json", "icon.png"],
+    files: ["main.js", "preload.js", "index.html", "smartui.js", "markdown.js", "mcp.js", "voice.js", "tts-worker.js", "stt-worker.js", "renderer.js", "config.json", "icon.png"],
     win: { target: "nsis", icon: "icon.png" },
     nsis: { oneClick: false, allowToChangeInstallationDirectory: true, createDesktopShortcut: true, shortcutName: "Mythos Code", artifactName: "MythosCode-Setup-${version}.exe" },
   },
@@ -71,6 +71,7 @@ write(app, "package.json", JSON.stringify({
 fs.copyFileSync(path.join(root, "public/icon.png"), path.join(app, "icon.png"));
 write(app, "main.js", fill(lib("mythos-code-app/main.js"), { "// @@SHARED_TOOLS@@": SHARED_TOOLS }));
 for (const f of ["preload.js", "index.html", "markdown.js", "mcp.js", "voice.js"]) write(app, f, fill(lib(`mythos-code-app/${f}`)));
+write(app, "smartui.js", fill(lib("mythos-code-shared/smartui.js")));
 write(app, "tts-worker.js", gunzipB64(lib("mythos-code-app/tts-worker.js.gz.b64")));
 write(app, "stt-worker.js", gunzipB64(lib("mythos-code-app/stt-worker.js.gz.b64")));
 write(app, "renderer.js", fill(lib("mythos-code-app/renderer.js"), { "// @@TOOL_PARSE@@": TOOL_PARSE, "__SITE__": SITE, "__FN__": FN_BASE }));
