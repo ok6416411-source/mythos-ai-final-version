@@ -42,7 +42,6 @@ Deno.serve(async (req) => {
     if (samples.length < 3) return json({ error: 'not_enough_data', message: 'Schreibe ein paar Nachrichten oder füge Beispiele manuell hinzu.' }, 400);
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) return json({ error: 'config_missing' }, 500);
 
     const prompt = `Analysiere folgende Nachrichten EINER Person und erstelle ein Style-Profil auf Deutsch.
 

@@ -1,0 +1,99 @@
+name: Backend umziehen
+
+# Einmaliger Umzug von Lovable Cloud ins eigene Supabase-Projekt, ohne Datenverlust:
+# Schema + Functions deployen, Login-Einstellungen setzen, alle Tabellen, Nutzer (mit Passwort)
+# und Dateien kopieren, dann Website/Code-App/CLI/Erweiterung auf das neue Backend umstellen.
+# Darf mehrmals laufen (kopiert nur Fehlendes) – z. B. nach dem Umschalten noch einmal zum Nachziehen.
+#
+# Braucht diese Repo-Secrets: SUPABASE_ACCESS_TOKEN, SUPABASE_PROJECT_REF, SUPABASE_DB_PASSWORD,
+# LOVABLE_ADMIN_EMAIL, LOVABLE_ADMIN_PASSWORD (dein Mythos-Admin-Login) und bei Lovable die
+# bereitgestellte Funktion backend-export.
+
+on:
+  workflow_dispatch:
+    inputs:
+      umschalten:
+        description: 'Danach Website und Apps auf das neue Backend umstellen'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: backend-deploy
+  cancel-in-progress: false
+
+jobs:
+  move:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      OLD_ADMIN_EMAIL: ${{ secrets.LOVABLE_ADMIN_EMAIL }}
+      OLD_ADMIN_PASSWORD: ${{ secrets.LOVABLE_ADMIN_PASSWORD }}
+      SITE: https://mythos-ai-final-version.lovable.app
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: neu
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Secrets vorhanden?
+        run: |
+          for k in SUPABASE_ACCESS_TOKEN REF DB_PASSWORD OLD_ADMIN_EMAIL OLD_ADMIN_PASSWORD; do
+            [ -n "${!k}" ] || { echo "Secret für $k fehlt (Settings > Secrets and variables > Actions)."; exit 1; }
+          done
+
+      - name: Projekt-Zugang holen
+        run: bash scripts/backend-move/project.sh
+
+      - name: Alte Adresse (Lovable Cloud) aus .env
+        run: |
+          echo "OLD_URL=$(sed -n 's/^VITE_SUPABASE_URL="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' .env)" >> "$GITHUB_ENV"
+          echo "OLD_ANON=$(sed -n 's/^VITE_SUPABASE_PUBLISHABLE_KEY="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' .env)" >> "$GITHUB_ENV"
+
+      - name: Migrationen anwenden
+        run: supabase db push --db-url "$NEW_DB_URL" --include-all
+
+      - name: Edge Functions bereitstellen
+        run: supabase functions deploy --project-ref "$REF" --no-verify-jwt --use-api
+
+      - name: Login-Einstellungen (wie bisher sofort eingeloggt, Links führen zur Website)
+        run: |
+          curl -fsS -X PATCH "https://api.supabase.com/v1/projects/$REF/config/auth" \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H "Content-Type: application/json" \
+            -d "$(jq -n --arg s "$SITE" '{site_url: $s, uri_allow_list: ($s + "/**,https://*.lovable.app/**,http://localhost:8080/**"), mailer_autoconfirm: true}')" -o /dev/null
+          echo "Login-Einstellungen gesetzt."
+
+      - name: Daten, Nutzer und Dateien kopieren
+        run: |
+          mkdir -p "$RUNNER_TEMP/mv" && cp scripts/backend-move/move.mjs "$RUNNER_TEMP/mv/"
+          npm i --no-save --no-package-lock --prefix "$RUNNER_TEMP/mv" pg@8 @supabase/supabase-js@2 >/dev/null
+          node "$RUNNER_TEMP/mv/move.mjs"
+
+      - name: Website und Apps umstellen
+        if: inputs.umschalten
+        run: |
+          jq -n --arg u "$NEW_URL" --arg k "$NEW_ANON" --arg r "$REF" \
+            '{_hinweis: "Eigenes Supabase-Backend. Leer = Lovable Cloud aus .env. Wird vom Workflow Backend umziehen automatisch ausgefüllt.", url: $u, anonKey: $k, projectId: $r}' > backend.json
+          sed -i "s#https://[a-z0-9]*\.supabase\.co/functions/v1/browser-control#$NEW_URL/functions/v1/browser-control#" extension/background.js
+          # Neue Patch-Version, damit installierte Code-Apps und CLIs das Update mit der neuen Adresse bekommen.
+          node -e '
+            const fs = require("fs"), p = "src/lib/mythosCli.ts"; let s = fs.readFileSync(p, "utf8");
+            for (const n of ["APP_VERSION", "CLI_VERSION"]) s = s.replace(new RegExp(`(export const ${n} = ")(\\d+)\\.(\\d+)\\.(\\d+)"`), (_, a, x, y, z) => `${a}${x}.${y}.${+z + 1}"`);
+            fs.writeFileSync(p, s);'
+          git config user.name "github-actions[bot]"; git config user.email "41898333+github-actions[bot]@users.noreply.github.com"
+          git add backend.json extension/background.js src/lib/mythosCli.ts
+          if git diff --cached --quiet; then echo "Schon umgestellt."; exit 0; fi
+          git commit -m "Backend auf eigenes Supabase ($REF) umgestellt"
+          git push origin HEAD:neu
+          gh workflow run build-apps.yml --ref neu -f force=true || true

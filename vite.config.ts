@@ -4,10 +4,23 @@ import path from "path";
 import { componentTagger } from "lovable-tagger";
 import { VitePWA } from "vite-plugin-pwa";
 import dyadComponentTagger from '@dyad-sh/react-vite-component-tagger';
+import fs from "fs";
 // nitro import removed – using custom middleware instead
+
+// Eigenes Supabase-Backend (backend.json) hat Vorrang vor Lovable Cloud (.env),
+// damit die Seite nicht mitpausiert, wenn bei Lovable die Credits leer sind.
+const backend = (() => {
+  try { return JSON.parse(fs.readFileSync(path.resolve(__dirname, "backend.json"), "utf8")); } catch { return {}; }
+})();
+const backendDefine: Record<string, string> = backend.url && backend.anonKey ? {
+  "import.meta.env.VITE_SUPABASE_URL": JSON.stringify(backend.url),
+  "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY": JSON.stringify(backend.anonKey),
+  "import.meta.env.VITE_SUPABASE_PROJECT_ID": JSON.stringify(backend.projectId || new URL(backend.url).hostname.split(".")[0]),
+} : {};
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
+  define: backendDefine,
   build: { minify: true, sourcemap: false },
   // Web Worker als ES-Module (der Sprach-Worker mit Piper lädt Teile nach).
   worker: { format: "es" },

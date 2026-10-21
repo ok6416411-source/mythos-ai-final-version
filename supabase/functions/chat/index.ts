@@ -146,7 +146,6 @@ Deno.serve(async (req) => {
       ? requestedModel
       : resolved.model;
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY missing");
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,

@@ -14,7 +14,10 @@ const lib = (p) => fs.readFileSync(path.join(root, "src/lib", p), "utf8");
 
 const SITE = process.env.MYTHOS_SITE_URL || "https://mythos-ai-final-version.lovable.app";
 const env = fs.existsSync(path.join(root, ".env")) ? fs.readFileSync(path.join(root, ".env"), "utf8") : "";
-const PROJECT_ID = process.env.VITE_SUPABASE_PROJECT_ID || env.match(/VITE_SUPABASE_PROJECT_ID="?([\w-]+)"?/)?.[1];
+// Eigenes Backend (backend.json) hat Vorrang vor Lovable Cloud (.env), wie in vite.config.ts.
+const backend = (() => { try { return JSON.parse(fs.readFileSync(path.join(root, "backend.json"), "utf8")); } catch { return {}; } })();
+const PROJECT_ID = process.env.VITE_SUPABASE_PROJECT_ID || (backend.url && backend.anonKey && (backend.projectId || new URL(backend.url).hostname.split(".")[0]))
+  || env.match(/VITE_SUPABASE_PROJECT_ID="?([\w-]+)"?/)?.[1];
 if (!PROJECT_ID) throw new Error("VITE_SUPABASE_PROJECT_ID fehlt (.env)");
 const FN_BASE = `https://${PROJECT_ID}.supabase.co/functions/v1`;
 const API = `${FN_BASE}/v1-messages`;

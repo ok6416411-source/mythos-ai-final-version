@@ -1,3 +1,4 @@
+import { aiFetch } from "../_shared/ai.ts";
 // MythosAI Minecraft Plugin Bridge
 // Auth: Authorization: Bearer <api_key>
 //   - sk-mc-XXXX  -> looks up mc_servers.key_hash
@@ -30,9 +31,9 @@ async function sha256(s: string): Promise<string> {
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
-async function callAI(systemPrompt: string, userPrompt: string, apiKey: string, retries = 2): Promise<string> {
+async function callAI(systemPrompt: string, userPrompt: string, apiKey: string | undefined, retries = 2): Promise<string> {
   for (let i = 0; i <= retries; i++) {
-    const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const r = await aiFetch("gateway", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -68,7 +69,6 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY missing");
 
     // Resolve server row: master key -> shared "MythosCraft Public" row (auto-provision), else lookup by hash
     let server: any = null;

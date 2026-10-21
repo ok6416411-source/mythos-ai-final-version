@@ -167,7 +167,6 @@ Deno.serve(async (req) => {
       return await realSong(req, prompt, duration);
     }
     const key = Deno.env.get('LOVABLE_API_KEY');
-    if (!key) return new Response(JSON.stringify({ error: 'LOVABLE_API_KEY missing' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
     const r = await aiFetch('gateway', {
       method: 'POST',

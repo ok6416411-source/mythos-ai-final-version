@@ -29,7 +29,6 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Bad prompt" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
     const apiKey = Deno.env.get("LOVABLE_API_KEY");
-    if (!apiKey) return new Response(JSON.stringify({ error: "Missing LOVABLE_API_KEY" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     const userMsg = `Spiel: ${title || "Untitled"}
 Genre: ${genre || "casual 3D"}

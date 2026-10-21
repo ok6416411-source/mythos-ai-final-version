@@ -22,6 +22,7 @@ on:
       - 'src/lib/mythosCli.ts'
       - 'public/icon.png'
       - 'scripts/build-desktop.mjs'
+      - 'backend.json'
       - '.github/workflows/build-apps.yml'
   schedule:
     - cron: '17 */3 * * *'

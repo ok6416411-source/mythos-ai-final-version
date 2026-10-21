@@ -177,12 +177,18 @@ function shouldFallback(status: number) {
  * Ruft das Lovable Gateway auf und fällt bei Credit-/Limit-/Serverfehlern
  * automatisch auf Google Gemini zurück. Antwort ist immer OpenAI-kompatibel.
  */
+/** Lovable-Key nur, wenn wirklich einer da ist (eigenes Supabase hat keinen -> direkt Google). */
+export function lovableKeyOrNull(k?: string | null): string | undefined {
+  const v = (k ?? "").trim();
+  return v && v !== "undefined" && v !== "null" && v.length > 10 ? v : undefined;
+}
+
 export async function aiChat(
   body: Record<string, any>,
   lovableKey?: string,
 ): Promise<Response> {
   const streaming = body.stream === true;
-  const key = lovableKey ?? Deno.env.get("LOVABLE_API_KEY");
+  const key = lovableKeyOrNull(lovableKey) ?? lovableKeyOrNull(Deno.env.get("LOVABLE_API_KEY"));
 
   const skippedGateway = !!key && Date.now() <= gatewayEmptyUntil;
   if (key && !skippedGateway) {
