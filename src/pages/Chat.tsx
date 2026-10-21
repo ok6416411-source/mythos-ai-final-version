@@ -27,7 +27,7 @@ import {
   PanelLeftClose, PanelLeft, LogOut, Key, Shield, Bot, Users, BarChart3,
   Crown, Gamepad2, Server, Ticket, User as UserIcon, Search, Puzzle,
   ArrowLeft, ArrowRight, FolderOpen, Shapes, Clock, Briefcase, Target, Square, Code2, Wrench, ChevronRight,
-  Globe2, Compass, ArrowUp, MoreHorizontal, Monitor, Clapperboard, Phone,
+  Globe2, Compass, ArrowUp, MoreHorizontal, Monitor, Clapperboard, Phone, Pencil,
 } from "lucide-react";
 import { LegalLinks } from "@/components/CookieConsent";
 import { DayDivider, SuggestionBar, StepsTimeline, ThinkingBlock, TimelineRow, dayKey, dayLabel, relTime, useMinuteTick } from "@/components/chat/ChatTimeline";
@@ -54,6 +54,11 @@ import { getInstructions, getMcpServers, getProjects, projectOfChat, setProjects
 import { callTool, collectTools, connectorStates } from "@/lib/mcpClient";
 import { FILE_PROMPT } from "@/lib/chatFiles";
 import { capabilitiesPrompt } from "@/lib/mythosCapabilities";
+import { fallbackTitle, generateChatTitle } from "@/lib/chatTitle";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const SLASH_COMMANDS = [
   { cmd: "/goal",      args: "<ziel>",          icon: Target,    desc: "Ziel setzen – Mythos arbeitet selbstständig Schritt für Schritt, bis es erreicht ist" },
@@ -151,6 +156,10 @@ const Chat = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   // Chat, der gerade beim Senden neu angelegt wurde – dessen URL-Wechsel darf die laufende Antwort nicht neu laden.
   const createdIdRef = useRef<string | null>(null);
+  // Neu angelegter Chat, der nach der ersten Antwort noch seinen KI-Titel bekommt (temp = vorläufiger Titel).
+  const pendingTitleRef = useRef<{ id: string; temp: string } | null>(null);
+  const [renaming, setRenaming] = useState<{ id: string; value: string } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<Conv | null>(null);
   const sub = useSubscription();
   const [paywall, setPaywall] = useState<{ open: boolean; reason?: string }>({ open: false });
   const [convs, setConvs] = useState<Conv[]>([]);
@@ -315,9 +324,37 @@ const Chat = () => {
   };
 
   const deleteChat = async (id: string) => {
-    await supabase.from("conversations").delete().eq("id", id);
+    const { error } = await supabase.from("conversations").delete().eq("id", id);
+    if (error) { toast.error("Chat konnte nicht gelöscht werden"); return; }
+    if (pendingTitleRef.current?.id === id) pendingTitleRef.current = null;
+    setConvs(prev => prev.filter(c => c.id !== id));
+    if (getProjects().some(p => p.chatIds.includes(id))) setProjects(getProjects().map(p => ({ ...p, chatIds: p.chatIds.filter(x => x !== id) })));
     if (activeId === id) { setActiveId(null); setMessages([]); nav("/app", { replace: true }); }
+    toast.success("Chat gelöscht");
     loadConvs();
+  };
+
+  const renameChat = async (id: string, value: string) => {
+    setRenaming(null);
+    const title = value.replace(/\s+/g, " ").trim().slice(0, 80);
+    const old = convs.find(c => c.id === id);
+    if (!title || title === old?.title) return;
+    // Selbst benannt: der KI-Titel überschreibt das nicht mehr.
+    if (pendingTitleRef.current?.id === id) pendingTitleRef.current = null;
+    setConvs(prev => prev.map(c => c.id === id ? { ...c, title } : c));
+    const { error } = await supabase.from("conversations").update({ title }).eq("id", id);
+    if (error) { toast.error("Umbenennen fehlgeschlagen"); loadConvs(); }
+  };
+
+  // Nach der ersten Antwort: passenden Titel von der KI holen, außer der Chat wurde inzwischen umbenannt.
+  const autoTitle = async (convId: string, userText: string, answer: string) => {
+    const pending = pendingTitleRef.current;
+    if (!pending || pending.id !== convId) return;
+    pendingTitleRef.current = null;
+    const title = await generateChatTitle(userText, answer);
+    if (!title || title === pending.temp) return;
+    const { data } = await supabase.from("conversations").update({ title }).eq("id", convId).eq("title", pending.temp).select("id");
+    if (data?.length) setConvs(prev => prev.map(c => c.id === convId ? { ...c, title } : c));
   };
 
   const send = async (override?: string) => {
@@ -532,10 +569,11 @@ const Chat = () => {
     let convId = activeId;
     if (!convId) {
       const { data, error } = await supabase.from("conversations")
-        .insert({ user_id: user!.id, title: text.slice(0, 50), mode })
+        .insert({ user_id: user!.id, title: fallbackTitle(text), mode })
         .select().single();
       if (error || !data) { toast.error("Chat konnte nicht erstellt werden"); setSending(false); return; }
       convId = data.id;
+      pendingTitleRef.current = { id: data.id, temp: data.title };
       setActiveId(convId);
       createdIdRef.current = convId;
       // Im geöffneten Projekt angelegt -> gehört zu diesem Projekt.
@@ -969,6 +1007,7 @@ const Chat = () => {
     if (!final) return;
     if (adDue(isAdmin ? "admin" : sub.tier)) { const o = window.location.origin; pickAd(o).then(ad => setMessages(prev => [...prev, { role: "assistant", content: adMarkdown(ad, o), ad: true } as any])); }
     supabase.functions.invoke("extract-memory", { body: { text: userText } }).catch(() => {});
+    autoTitle(convId, userText, final).catch(() => {});
     if (goalText) return;
     suggestBodyRef.current = { messages: [...history.slice(-6).map(m => ({ role: m.role, content: typeof m.content === "string" ? m.content : userText })), { role: "assistant", content: final }] };
     loadSuggestions();
@@ -1179,16 +1218,48 @@ const Chat = () => {
               className={`group flex items-center gap-2 rounded-lg pl-3 pr-1 py-2 text-sm cursor-pointer transition-colors ${
                 activeId === c.id ? "bg-white/10 text-foreground" : "hover:bg-white/5 text-foreground/80"
               }`}
-              onClick={() => openChat(c.id)}
+              onClick={() => renaming?.id !== c.id && openChat(c.id)}
             >
-              <span className="truncate flex-1">{c.title}</span>
-              <button
-                onClick={(e) => { e.stopPropagation(); deleteChat(c.id); }}
-                className="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity p-1"
-                aria-label="Chat löschen"
-              >
-                <Trash2 className="h-3.5 w-3.5 hover:text-destructive" />
-              </button>
+              {renaming?.id === c.id ? (
+                <input
+                  autoFocus
+                  value={renaming.value}
+                  maxLength={80}
+                  onFocus={(e) => e.currentTarget.select()}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => setRenaming({ id: c.id, value: e.target.value })}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") renameChat(c.id, renaming.value);
+                    if (e.key === "Escape") setRenaming(null);
+                  }}
+                  onBlur={() => renameChat(c.id, renaming.value)}
+                  className="flex-1 min-w-0 bg-white/10 rounded px-1.5 py-0.5 text-sm outline-none ring-1 ring-primary/50"
+                  aria-label="Neuer Chatname"
+                />
+              ) : (
+                <span className="truncate flex-1" onDoubleClick={(e) => { e.stopPropagation(); setRenaming({ id: c.id, value: c.title }); }}>{c.title}</span>
+              )}
+              {renaming?.id !== c.id && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      onClick={(e) => e.stopPropagation()}
+                      className="md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 data-[state=open]:opacity-100 transition-opacity p-1 rounded hover:bg-white/10"
+                      aria-label="Chat-Optionen"
+                    >
+                      <MoreHorizontal className="h-3.5 w-3.5" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                    <DropdownMenuItem onSelect={() => setTimeout(() => setRenaming({ id: c.id, value: c.title }), 0)}>
+                      <Pencil className="h-4 w-4 mr-2" /> Umbenennen
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setConfirmDelete(c)} className="text-destructive focus:text-destructive">
+                      <Trash2 className="h-4 w-4 mr-2" /> Löschen
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             </div>
           ))}
         </div>
@@ -1786,6 +1857,25 @@ const Chat = () => {
         />
         <ArtifactsDialog open={dialog === "artifacts"} onOpenChange={(o) => setDialog(o ? "artifacts" : null)} onOpenChat={openChat} />
         <CustomizeDialog open={dialog === "customize"} onOpenChange={(o) => setDialog(o ? "customize" : null)} />
+        <AlertDialog open={!!confirmDelete} onOpenChange={(o) => { if (!o) setConfirmDelete(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Chat löschen?</AlertDialogTitle>
+              <AlertDialogDescription>
+                „{confirmDelete?.title}“ und alle Nachrichten darin werden endgültig gelöscht.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => { if (confirmDelete) deleteChat(confirmDelete.id); setConfirmDelete(null); }}
+              >
+                Löschen
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
         <Paywall open={paywall.open} onOpenChange={(o) => setPaywall({ open: o })} reason={paywall.reason} />
       </div>
     </TooltipProvider>

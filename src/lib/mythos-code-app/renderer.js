@@ -341,7 +341,7 @@ function paintModePill() { const p = $("modePill"); if (p) { p.textContent = $("
 // Neue Nutzer-Nachricht anhängen (beim Bearbeiten wird der Chat vorher ab dort abgeschnitten).
 function pushUser(c, display, content, extra) {
   if (c === chat && editing != null) { const it = c.view[editing]; c.history.length = it.h; c.view.length = editing; editing = null; renderEdit(); renderChat(); }
-  if (!c.history.length) { c.title = (extra.q || display).replace(/\s+/g, " ").slice(0, 48); c.folder = c.folder || cfg.folder || ""; }
+  if (!c.history.length) { c.title = (extra.q || display).replace(/\s+/g, " ").slice(0, 48); c.autoTitle = c.title; c.folder = c.folder || cfg.folder || ""; }
   addTo(c, "u", display, Object.assign({ h: c.history.length }, extra));
   const images = (extra.att || []).filter((a) => a.image).map((a) => a.image);
   c.history.push(images.length ? { role: "user", content: content, images: images } : { role: "user", content: content });
@@ -558,6 +558,7 @@ async function runAgent(c, opts) {
   window.mythos.working(runs.size > 0);
   if (c === chat) { setBusyUI(); renderTokens(); }
   saveChat(c); usage();
+  if (c.autoTitle && !run.stopped) titleChat(c);
   if (run.folder === cfg.folder) { refreshGit(); if (treeOpen()) renderTree(); }
   const status = run.stopped ? "stopped" : reached ? "reached" : finished ? "done" : "interrupted";
   window.mythos.hooks.run("Stop", { status: status, chat: c.title, took: took, summary: summary }, run.folder).then((hs) =>
@@ -1176,7 +1177,7 @@ async function command(q) {
   if (cmd === "/design") { setTheme(/^hell|light/i.test(arg) ? "light" : /^dunkel|dark/i.test(arg) ? "dark" : cfg.theme === "light" ? "dark" : "light"); return; }
   if (cmd === "/umbenennen") {
     if (!arg) return note("So geht's: /umbenennen <neuer Name>");
-    chat.title = arg.slice(0, 80); note("✎ Chat heißt jetzt „" + chat.title + "“."); return chat.history.length ? saveChat(chat) : renderSide();
+    chat.title = arg.slice(0, 80); chat.autoTitle = false; note("✎ Chat heißt jetzt „" + chat.title + "“."); return chat.history.length ? saveChat(chat) : renderSide();
   }
   if (cmd === "/vollzugriff") { const on = !/^(aus|off|0)$/i.test(arg); setAuto(on); return note(on ? "Vollzugriff ist an – Mythos fragt nicht mehr nach." : "Vollzugriff ist aus – Mythos fragt vor Befehlen nach."); }
   if (cmd === "/hilfe" || cmd === "/help") return note(COMMANDS.map((c) => c[0] + (c[1] ? " " + c[1] : "") + " – " + c[2]).join("\n"));
@@ -1336,6 +1337,23 @@ async function openChat(id) {
   if (c.folder && c.folder !== cfg.folder) await setFolder(c.folder);
   renderChat(); renderSide();
 }
+// KI-Chatname: nach der ersten Antwort ein kurzer, passender Titel statt der abgeschnittenen ersten Nachricht.
+async function titleChat(c) {
+  const temp = c.autoTitle; c.autoTitle = false;
+  const first = (cls) => (c.view.find((v) => cls.includes(v.cls)) || {}).text || "";
+  const q = first(["u"]), a = first(["a", "sum"]);
+  if (!q) return;
+  const run = { stopped: false, ctl: null, model: cfg.model || "mythos-code", chat: c };
+  const t0 = setTimeout(() => { run.stopped = true; if (run.ctl) run.ctl.abort(); }, 30000);
+  try {
+    const raw = (await call(run, [{ role: "user", content: "Erste Nachricht:\n" + q.slice(0, 1200) + "\n\nAntwort:\n" + a.slice(0, 1200) + "\n\nGib diesem Chat einen Titel." }],
+      "Du gibst Chats kurze, treffende Titel: 2 bis 5 Wörter, Sprache des Nutzers, keine Anführungszeichen, kein Punkt am Ende, keine Emojis. Antworte NUR mit dem Titel, ohne Werkzeuge.")).text;
+    const t = raw.replace(TOOL_BLOCK_RE, "").replace(/<think>[\s\S]*?<\/think>/gi, "").trim().split("\n")[0]
+      .replace(/^\s*(titel|title)\s*:\s*/i, "").replace(/[*_#`]+/g, "").replace(/^["'„“”«»\s]+|["'„“”«»\s]+$/g, "").replace(/[.!]+$/, "").trim().slice(0, 60);
+    // Inzwischen selbst umbenannt? Dann bleibt der eigene Name.
+    if (t && c.title === temp) { c.title = t; await saveChat(c); }
+  } catch (e) { /* Titel bleibt die erste Nachricht */ } finally { clearTimeout(t0); }
+}
 async function deleteChat(c) {
   if (runs.has(c.id)) return note("Dieser Chat arbeitet gerade – erst stoppen, dann löschen.");
   if (!confirm("Chat „" + (c.title || "Chat") + "“ löschen?")) return;
@@ -1350,7 +1368,7 @@ function renameChat(c, span) {
     if (done) return; done = true; const t = inp.value.trim().slice(0, 80);
     if (ok && t) {
       const full = chat.id === c.id ? chat : runs.has(c.id) ? runs.get(c.id).chat : await window.mythos.chats.get(c.id);
-      if (full) { full.title = t; await saveChat(full); }
+      if (full) { full.title = t; full.autoTitle = false; await saveChat(full); }
     }
     renderSide();
   };
