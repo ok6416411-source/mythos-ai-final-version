@@ -37,7 +37,7 @@ async function playStream(
   const queue: Uint8Array[] = [];
   const pump = () => {
     if (sb && !sb.updating && queue.length) {
-      try { sb.appendBuffer(queue.shift()!); } catch { sb = null; }
+      try { sb.appendBuffer(queue.shift()! as BufferSource); } catch { sb = null; }
     }
   };
   if (canStream) {
@@ -60,7 +60,7 @@ async function playStream(
     while (queue.length || sb.updating) { await new Promise((r) => setTimeout(r, 50)); pump(); }
     try { ms.endOfStream(); } catch { /* bereits beendet */ }
   }
-  return new Blob(chunks, { type: "audio/mpeg" });
+  return new Blob(chunks as BlobPart[], { type: "audio/mpeg" });
 }
 
 export default function SongPlayer({ request }: { request: SongRequest }) {

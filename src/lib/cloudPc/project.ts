@@ -80,7 +80,7 @@ export function makeZip(files: [string, string][]): Blob {
   end.setUint32(0, 0x06054b50, true);
   end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
   end.setUint32(12, size, true); end.setUint32(16, offset, true);
-  return new Blob([...parts, ...central, new Uint8Array(end.buffer)], { type: "application/zip" });
+  return new Blob([...parts, ...central, new Uint8Array(end.buffer)] as BlobPart[], { type: "application/zip" });
 }
 
 export function download(blob: Blob, name: string) {
