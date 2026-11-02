@@ -11,6 +11,8 @@ import SplashScreen from "@/components/SplashScreen";
 import { Loader2 } from "lucide-react";
 import Home from "./pages/Home";
 import CookieConsent from "./components/CookieConsent";
+import { ThemeProvider } from "next-themes";
+import ThemeToggle from "@/components/ThemeToggle";
 
 /** Lädt eine Seite erst bei Bedarf. Fehlt nach einem Update eine alte Datei, wird die Seite einmal neu geladen. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- lazy() erwartet beliebige Props
@@ -74,6 +76,7 @@ const PageLoading = () => (
 );
 
 const App = () => (
+  <ThemeProvider attribute="class" defaultTheme="dark" enableSystem storageKey="mythos.theme">
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
@@ -83,6 +86,7 @@ const App = () => (
           <SplashScreen />
           <CookieConsent />
           <MythosBackground />
+          <ThemeToggle />
           <Suspense fallback={<PageLoading />}>
           <Routes>
             <Route path="/" element={<Home />} />
@@ -136,6 +140,7 @@ const App = () => (
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
+  </ThemeProvider>
 );
 
 export default App;

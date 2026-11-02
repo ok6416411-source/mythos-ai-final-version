@@ -1,5 +1,6 @@
 import { copyText } from "@/lib/copyText";
 import { MAX_CONTINUE, CONTINUE_PROMPT, looksCut, stitch } from "@/lib/codeContinue";
+import { readChatRecovery, writeChatRecovery, shouldFollowChat } from "@/lib/chatRecovery";
 import { useState, useEffect, useRef } from "react";
 import ImageGeneration, { type GeneratedImage } from "@/components/chat/ImageGeneration";
 import { isImageRequest } from "@/lib/imageIntent";
@@ -149,7 +150,7 @@ const forDisplay = (text: string) =>
   text.replace(TOOL_BLOCK, "").replace(/<\/(?:tool_call|tool_use|tool)\s*>/gi, "").replace(GOAL_DONE, "").trimEnd();
 
 const Chat = () => {
-  const { user, profile, isAdmin, signOut } = useAuth();
+  const { user, session, profile, isAdmin, signOut } = useAuth();
   const nav = useNavigate();
   // Eine Route (/app/*) für alle Chats, damit die Seite beim Wechsel nicht neu startet.
   const splat = useParams()["*"] || "";
@@ -202,6 +203,9 @@ const Chat = () => {
   const [goal, setGoal] = useState<GoalState | null>(null);
   const stopRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
+  const sendingRef = useRef(false);
+  const loadEpochRef = useRef(0);
+  const followRef = useRef(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -258,13 +262,18 @@ const Chat = () => {
   };
 
   const loadMessages = async (id: string) => {
+    if (!user) return;
+    const epoch = ++loadEpochRef.current;
     setActiveId(id);
     setMobileSidebar(false);
-    setMessages([]);
-    const { data: conv } = await supabase.from("conversations").select("id,mode").eq("id", id).maybeSingle();
-    if (!conv) { toast.error("Chat nicht gefunden"); nav("/app", { replace: true }); return; }
+    const cached = readChatRecovery<Msg>(user.id, id);
+    setMessages(cached);
+    const { data: conv, error } = await supabase.from("conversations").select("id,mode").eq("id", id).maybeSingle();
+    if (epoch !== loadEpochRef.current) return;
+    if (!conv) { toast.error(error ? "Chat derzeit nicht erreichbar. Gesicherter Verlauf bleibt erhalten." : "Chat nicht gefunden"); return; }
     setMode((conv as { mode: string }).mode);
     const { data } = await supabase.from("messages").select("*").eq("conversation_id", id).order("created_at");
+    if (epoch !== loadEpochRef.current) return;
     if (data) {
       const enriched = (data as any[]).map(m => ({
         ...m,
@@ -280,13 +289,14 @@ const Chat = () => {
         thinkingMs: m.metadata?.thinkingMs,
         steps: m.metadata?.steps,
       })) as Msg[];
-      setMessages(enriched);
+      setMessages(cached.length > enriched.length ? cached : enriched);
     }
   };
 
   // Die URL bestimmt den offenen Chat: /app = neuer Chat, /app/c/<id> = genau dieser Chat.
   useEffect(() => {
     if (!user) return;
+    ++loadEpochRef.current;
     if (chatId) {
       if (createdIdRef.current === chatId) { createdIdRef.current = null; return; }
       if (sending) stop();
@@ -299,7 +309,7 @@ const Chat = () => {
       setMessages([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chatId, user]);
+  }, [chatId, user?.id]);
 
   const openChat = (id: string) => {
     setMobileSidebar(false);
@@ -315,7 +325,19 @@ const Chat = () => {
     }
   }, [messages]);
 
-  useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }); }, [messages]);
+  useEffect(() => {
+    const box = scrollRef.current;
+    if (box && followRef.current) box.scrollTop = box.scrollHeight;
+  }, [messages]);
+
+  useEffect(() => {
+    if (!user || !activeId || !messages.length) return;
+    const save = () => writeChatRecovery(user.id, activeId, messages);
+    const timer = window.setTimeout(save, 200);
+    window.addEventListener("pagehide", save);
+    document.addEventListener("visibilitychange", save);
+    return () => { window.clearTimeout(timer); window.removeEventListener("pagehide", save); document.removeEventListener("visibilitychange", save); };
+  }, [messages, activeId, user?.id]);
 
   const newChat = () => {
     setActiveId(null);
@@ -360,7 +382,7 @@ const Chat = () => {
 
   const send = async (override?: string) => {
     let text = (override ?? input).trim();
-    if (!text || sending) return;
+    if (!text || sending || sendingRef.current || !user) return;
     // Auto-detect generation commands
     const lowerText = text.toLowerCase();
     // „Dreh mir einen Kurzfilm über …“ → Filmstudio
@@ -565,12 +587,19 @@ const Chat = () => {
     if (/^\/agent\b/i.test(text) && !sub.isPro) { setPaywall({ open: true, reason: "Der Browser-Agent ist eine Pro-Funktion." }); return; }
     if (/^\/browser\b/i.test(text) && !sub.isPro) { setPaywall({ open: true, reason: "Browser-Steuerung ist eine Pro-Funktion." }); return; }
     if (!override) setInput("");
+    sendingRef.current = true;
     setSending(true);
+    followRef.current = true;
+    const displayContent = attachments.length
+      ? text + "\n" + attachments.map(a => `📎 ${a.name}`).join("\n")
+      : text;
+    setMessages(prev => [...prev, { role: "user", content: displayContent, attachments: [...attachments] }]);
 
+    try {
     let convId = activeId;
     if (!convId) {
       const { data, error } = await supabase.from("conversations")
-        .insert({ user_id: user!.id, title: fallbackTitle(text), mode })
+        .insert({ user_id: user.id, title: fallbackTitle(text), mode })
         .select().single();
       if (error || !data) { toast.error("Chat konnte nicht erstellt werden"); setSending(false); return; }
       convId = data.id;
@@ -578,7 +607,7 @@ const Chat = () => {
       setActiveId(convId);
       createdIdRef.current = convId;
       // Im geöffneten Projekt angelegt -> gehört zu diesem Projekt.
-      if (projectId) setProjects(getProjects().map(p => p.id === projectId ? { ...p, chatIds: [convId!, ...p.chatIds] } : p));
+      if (projectId) setProjects(getProjects().map(p => p.id === projectId ? { ...p, chatIds: [data.id, ...p.chatIds] } : p));
       nav(`/app/c/${convId}`, { replace: true });
       loadConvs();
     }
@@ -593,7 +622,7 @@ const Chat = () => {
         content: "🧩 **Browser Control** — ich steuere deinen echten Browser: klicken, tippen, Seiten öffnen. Beim ersten Mal einmalig die Erweiterung installieren, danach reicht `/browser <anweisung>`.",
         ext: { task: t },
       };
-      setMessages(prev => [...prev, userMsg, aiMsg]);
+      setMessages(prev => [...prev, aiMsg]);
       await supabase.from("messages").insert([
         { conversation_id: convId, role: "user", content: text },
         { conversation_id: convId, role: "assistant", content: aiMsg.content, metadata: { ext: { task: t } } },
@@ -608,7 +637,7 @@ const Chat = () => {
       const task = agentMatch[1].trim();
       const userMsg: Msg = { role: "user", content: text };
       const aiMsg: Msg = { role: "assistant", content: "", agent: { task } };
-      setMessages(prev => [...prev, userMsg, aiMsg]);
+      setMessages(prev => [...prev, aiMsg]);
       await supabase.from("messages").insert([
         { conversation_id: convId, role: "user", content: text },
       ]);
@@ -627,7 +656,7 @@ const Chat = () => {
         content: `🎵 **Song wird erzeugt:** _${prompt}_\n\nEchter Track mit Gesang, ${Math.round(song.duration! / 6) / 10} Minuten.`,
         song,
       };
-      setMessages(prev => [...prev, userMsg, aiMsg]);
+      setMessages(prev => [...prev, aiMsg]);
       await supabase.from("messages").insert([
         { conversation_id: convId, role: "user", content: text },
         { conversation_id: convId, role: "assistant", content: aiMsg.content, metadata: { song } },
@@ -646,7 +675,7 @@ const Chat = () => {
         content: `🎬 **AI-Video wird vorbereitet:** _${prompt}_\n\nKlick „Generieren" — die KI erstellt ein Schlüsselbild und animiert es zu einem kurzen Clip. Komplett im Browser, kostenlos.`,
         video,
       };
-      setMessages(prev => [...prev, userMsg, aiMsg]);
+      setMessages(prev => [...prev, aiMsg]);
       await supabase.from("messages").insert([
         { conversation_id: convId, role: "user", content: text },
         { conversation_id: convId, role: "assistant", content: aiMsg.content, metadata: { video } },
@@ -662,7 +691,7 @@ const Chat = () => {
       const aiContent = await nvidiaLLM("meta/llama-3.3-70b-instruct", [{ role: "user", content: prompt }]);
       const userMsg: Msg = { role: "user", content: text };
       const aiMsg: Msg = { role: "assistant", content: aiContent };
-      setMessages(prev => [...prev, userMsg, aiMsg]);
+      setMessages(prev => [...prev, aiMsg]);
       await supabase.from("messages").insert([
         { conversation_id: convId, role: "user", content: text },
         { conversation_id: convId, role: "assistant", content: aiContent },
@@ -684,12 +713,7 @@ const Chat = () => {
       return parts;
     };
     const userContentForAI = buildContent(text);
-    const displayContent = attachments.length
-      ? text + "\n" + attachments.map(a => `📎 ${a.name}`).join("\n")
-      : text;
-
-    const userMsg: Msg = { role: "user", content: displayContent };
-    setMessages(prev => [...prev, userMsg, { role: "assistant", content: "" }]);
+    setMessages(prev => [...prev, { role: "assistant", content: "" }]);
     // Nicht auf das Speichern warten: die KI-Anfrage startet sofort (spart eine Server-Runde).
     supabase.from("messages").insert({
       conversation_id: convId, role: "user", content: displayContent,
@@ -700,13 +724,13 @@ const Chat = () => {
     if (goalText) setGoal({ text: goalText, step: 1, status: "läuft" });
     const history: ApiMsg[] = messages.filter(m => !(m as any).ad).map(toApi);
     history.push({ role: "user", content: userContentForAI });
-    try {
-      await runAgent(convId!, history, text, goalText);
+      if (convId) await runAgent(convId, history, text, goalText);
     } catch (e) {
       console.error(e);
       toast.error("Verbindungsfehler");
     } finally {
       abortRef.current = null;
+      sendingRef.current = false;
       setSending(false);
     }
   };
@@ -718,11 +742,11 @@ const Chat = () => {
     // Bild-Wünsche laufen immer über die Chat-Funktion (dort sitzen Erkennung und Backup-Kette).
     const lastUser = [...apiMessages].reverse().find(m => m.role === "user");
     const lastUserText = typeof lastUser?.content === "string" ? lastUser.content
-      : Array.isArray(lastUser?.content) ? (lastUser!.content as { type?: string; text?: string }[]).find(p => p.type === "text")?.text ?? "" : "";
+      : Array.isArray(lastUser?.content) ? (lastUser.content as { type?: string; text?: string }[]).find(p => p.type === "text")?.text ?? "" : "";
     const toChat = /^\/image\b/i.test(lastUserText) || isImageRequest(lastUserText);
     // Bild-Wunsch erkannt: Text vom Sprachmodell erst zeigen, wenn der Server das Bild übernommen hat.
     // Sonst antwortet eine alte Server-Version „nutze /image“, obwohl das Bild trotzdem kommt.
-    const hasPicture = Array.isArray(lastUser?.content) && (lastUser!.content as { type?: string }[]).some(p => p.type === "image_url");
+    const hasPicture = Array.isArray(lastUser?.content) && (lastUser.content as { type?: string }[]).some(p => p.type === "image_url");
     const expectImage = !hasPicture && (/^\/image\s+\S/i.test(lastUserText) || isImageRequest(lastUserText));
     const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${mode === "agent" && !toChat ? "agent" : "chat"}`;
     const ctrl = new AbortController();
@@ -735,7 +759,7 @@ const Chat = () => {
     const doFetch = () => fetch(fnUrl, {
       method: "POST",
       signal: ctrl.signal,
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
       body: JSON.stringify({
         conversationId: convId,
         userId: user?.id,
@@ -821,11 +845,9 @@ const Chat = () => {
             if (p.search) { setLast({ search: p.search }); continue; }
             if (p.image) { imageData = p.image; pendingImage = null; setLast({ image: p.image, imagePending: undefined }); continue; }
             if (p.music) { musicData = p.music; setLast({ music: p.music }); continue; }
-            // Gedanken des Modells (je nach Anbieter unterschiedlich benannt) live mitschreiben.
+            // Only explicit public work summaries may be displayed, never raw model reasoning.
             const d = p.choices?.[0]?.delta;
-            const r = typeof d?.reasoning === "string" ? d.reasoning
-              : typeof d?.reasoning_content === "string" ? d.reasoning_content
-              : Array.isArray(d?.reasoning_details) ? d.reasoning_details.map((x: any) => x?.text || x?.summary || "").join("") : "";
+            const r = typeof p.activity === "string" ? p.activity : "";
             if (r) {
               if (!thinkStart) thinkStart = Date.now();
               thinking += r; setLast({ thinking });
@@ -836,7 +858,7 @@ const Chat = () => {
               full += c;
               if (!expectImage || pendingImage || imageData) setLast({ content: prefix + stitch(prefix, full) });
             }
-          } catch { buf = line + "\n" + buf; break; }
+          } catch { /* Ignore malformed events rather than blocking every later token. */ }
         }
       }
       if (thinkStart && !thinkingMs) { thinkingMs = Date.now() - thinkStart; setLast({ thinkingMs }); }
@@ -862,6 +884,10 @@ const Chat = () => {
       if ((e as Error)?.name === "AbortError") {
         // Gestoppt: was schon da ist, bleibt stehen.
         if (!full && !imageData) { setMessages(prev => prev.slice(0, -1)); return null; }
+        return { full, image: imageData, music: musicData, agents: agentsData, thinking, thinkingMs, steps, aborted: true };
+      }
+      if (full || imageData) {
+        toast.warning("Verbindung unterbrochen. Die Teilantwort bleibt erhalten; du kannst weitermachen.");
         return { full, image: imageData, music: musicData, agents: agentsData, thinking, thinkingMs, steps, aborted: true };
       }
       setMessages(prev => prev.slice(0, -1));
@@ -1480,7 +1506,7 @@ const Chat = () => {
           )}
 
           {/* Messages */}
-          <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0">
+          <div ref={scrollRef} onScroll={() => { const box = scrollRef.current; if (box) followRef.current = shouldFollowChat(box.scrollTop, box.scrollHeight, box.clientHeight); }} className="flex-1 overflow-y-auto min-h-0">
             {messages.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center px-4">
                 <div className="mb-6"><Logo size="lg" /></div>
@@ -1710,7 +1736,7 @@ const Chat = () => {
                 onClose={() => setSuggestions([])}
               />
 
-              <div className="rounded-[28px] border border-white/10 bg-[hsl(0_0%_9%)] focus-within:border-white/20 transition-colors shadow-[0_8px_32px_hsl(0_0%_0%/0.4)]">
+              <div className="rounded-lg border border-input bg-card focus-within:border-ring transition-colors">
                 <Textarea ref={textareaRef}
                   value={input}
                   onChange={(e) => { setInput(e.target.value); setSlashIndex(0); }}
@@ -1745,7 +1771,6 @@ const Chat = () => {
                     mode === "agent" ? "Was soll der Agent tun?" : "Frag mich alles…"
                   }
                   className="min-h-[52px] max-h-[200px] overflow-y-auto resize-none border-0 bg-transparent focus-visible:ring-0 text-[16px] px-5 pt-4 pb-1 shadow-none placeholder:text-muted-foreground/70"
-                                    style={{ height: 'auto' }}
                 />
                 {/* Aktionszeile wie bei Lovable: + · … · Modus links, Mikro und Senden rechts */}
                 <div className="flex items-center gap-2 px-3 pb-3 pt-1">
