@@ -1,7 +1,9 @@
-# Roadmap
-- [x] Sichere Live-Arbeitsansicht in Mythos Code
-- [x] MCP- und Plugin-Zentrale in Mythos Code
-- [x] Lokale, gekoppelte App–Browser-Brücke
-- [x] Browser-Erweiterung neu gestalten und koppeln
-- [x] Website-Browserpanel angleichen
-- [x] Erweiterung packen und zentrale Abläufe prüfen
+# Upgrade roadmap
+- [ ] 1. Stability: immediate send, auth refresh without chat reset, partial response recovery, controlled scrolling; test core flow.
+- [ ] 2. Mobile: remove expensive effects, input sizing, light/dark tokens and switch; inspect mobile.
+- [ ] 3. AI: consistent model names, complete HTML continuation, inline interactive UI and quiz; tests.
+- [ ] 4. CLI/desktop: audit tools and continuation, repair concrete errors; packaged builds require external release runner.
+- [ ] 5. Builders: preserve files, downloadable HTML/ZIP and honest publishing results; verify.
+- [ ] 6. Integrations: audit existing integrations, speech and media, identify credential/hosting blockers; no fake connections.
+- [ ] 7. Verification: selective tests, live browser checks, usage guide and explicit remaining blockers.
+- [ ] External backend/data migration: blocked until database export, storage files, destination deployment access and provider configuration are available; do not cut over prematurely.
