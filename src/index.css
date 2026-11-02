@@ -7,8 +7,8 @@
 
 @layer base {
   :root {
-    --background: 0 0% 4%;
-    --foreground: 0 0% 98%;
+    --background: 150 12% 97%;
+    --foreground: 150 12% 12%;
 
     --card: 0 0% 7%;
     --card-foreground: 0 0% 98%;
@@ -62,11 +62,25 @@
     --background: 0 0% 4%;
     --foreground: 0 0% 98%;
   }
+  :root:not(.dark) {
+    --card: 0 0% 100%; --card-foreground: 150 12% 12%;
+    --popover: 0 0% 100%; --popover-foreground: 150 12% 12%;
+    --primary: 145 45% 28%; --primary-foreground: 0 0% 100%;
+    --secondary: 150 10% 91%; --secondary-foreground: 150 12% 12%;
+    --muted: 150 10% 93%; --muted-foreground: 150 6% 38%;
+    --accent: 145 25% 88%; --accent-foreground: 145 45% 22%;
+    --border: 150 8% 82%; --input: 150 8% 82%; --ring: 145 45% 28%;
+    --sidebar-background: 150 10% 94%; --sidebar-foreground: 150 12% 12%;
+    --sidebar-primary: 145 45% 28%; --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 150 10% 89%; --sidebar-accent-foreground: 150 12% 12%;
+    --sidebar-border: 150 8% 82%;
+  }
 }
 
 @layer base {
   * { @apply border-border; }
-  html { color-scheme: dark; }
+  html { color-scheme: light; }
+  html.dark { color-scheme: dark; }
   html, body, #root {
     min-height: 100%;
   }
@@ -75,19 +89,14 @@
     font-family: 'Inter', system-ui, sans-serif;
     font-feature-settings: "ss01", "cv11";
     min-height: 100dvh;
-    background-color: hsl(0 0% 3%);
-    background-image:
-      radial-gradient(ellipse 70% 50% at 50% 0%, hsl(0 0% 100% / 0.06), transparent 60%),
-      radial-gradient(ellipse 50% 40% at 100% 100%, hsl(0 0% 100% / 0.04), transparent 60%),
-      radial-gradient(ellipse 50% 40% at 0% 100%, hsl(0 0% 100% / 0.03), transparent 60%);
-    background-attachment: fixed;
+    background-color: hsl(var(--background));
   }
   #root {
     min-height: 100dvh;
   }
   h1, h2, h3, .font-display {
     font-family: 'Instrument Serif', 'Inter', serif;
-    letter-spacing: -0.01em;
+    letter-spacing: 0;
     font-weight: 400;
   }
   .font-mono { font-family: 'JetBrains Mono', monospace; }
@@ -246,7 +255,24 @@ input, textarea, [contenteditable="true"], .prose-mythos, p, pre, code {
 }
 /* iOS zoomt bei < 16px Font in Inputs — global verhindern */
 input, textarea, select, [contenteditable="true"] {
-  font-size: max(16px, 1rem);
+  font-size: 16px !important;
+}
+
+html:not(.dark) .glass, html:not(.dark) .glass-strong, html:not(.dark) .glass-liquid {
+  background: hsl(var(--card) / 0.95);
+  border-color: hsl(var(--border));
+  box-shadow: none;
+}
+html:not(.dark) .gradient-text {
+  background: none;
+  -webkit-text-fill-color: currentColor;
+}
+@media (max-width: 767px) {
+  .glass, .glass-strong, .glass-liquid { backdrop-filter: none; background: hsl(var(--card)); box-shadow: none; }
+  .glass-liquid::before { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
 }
 
 /* Safe-Area-Helfer */

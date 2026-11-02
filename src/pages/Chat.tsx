@@ -1736,7 +1736,7 @@ const Chat = () => {
                 onClose={() => setSuggestions([])}
               />
 
-              <div className="rounded-[28px] border border-white/10 bg-[hsl(0_0%_9%)] focus-within:border-white/20 transition-colors shadow-[0_8px_32px_hsl(0_0%_0%/0.4)]">
+              <div className="rounded-lg border border-input bg-card focus-within:border-ring transition-colors">
                 <Textarea ref={textareaRef}
                   value={input}
                   onChange={(e) => { setInput(e.target.value); setSlashIndex(0); }}
@@ -1771,7 +1771,6 @@ const Chat = () => {
                     mode === "agent" ? "Was soll der Agent tun?" : "Frag mich alles…"
                   }
                   className="min-h-[52px] max-h-[200px] overflow-y-auto resize-none border-0 bg-transparent focus-visible:ring-0 text-[16px] px-5 pt-4 pb-1 shadow-none placeholder:text-muted-foreground/70"
-                                    style={{ height: 'auto' }}
                 />
                 {/* Aktionszeile wie bei Lovable: + · … · Modus links, Mikro und Senden rechts */}
                 <div className="flex items-center gap-2 px-3 pb-3 pt-1">
