@@ -103,7 +103,10 @@ const EFFORT_STYLE: Record<string, string> = {
 };
 
 function resolveMythos(id: unknown): Resolved {
-  const key = typeof id === "string" && MYTHOS_MAP[id] ? id : "v1:normal";
+  // Auch Kurzformen wie "v2", "mythos-v2" oder "v2-high" akzeptieren statt still auf v1 zu fallen.
+  let s = typeof id === "string" ? id.toLowerCase().replace(/^mythos-?/, "").replace(/[-_ ]/g, ":") : "";
+  if (s && !s.includes(":")) s += ":normal";
+  const key = MYTHOS_MAP[s] ? s : "v1:normal";
   const [fam, eff] = key.split(":");
   const m = MYTHOS_MAP[key];
   return {
