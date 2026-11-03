@@ -1,7 +1,7 @@
 # Upgrade roadmap
 - [ ] 1. Stability: immediate send, auth refresh without chat reset, partial response recovery, controlled scrolling; test core flow.
 - [ ] 2. Mobile: remove expensive effects, input sizing, light/dark tokens and switch; inspect mobile.
-- [ ] 3. AI: consistent model names, complete HTML continuation, inline interactive UI and quiz; tests.
+- [ ] 3. AI: consistent model names (done), complete HTML continuation (tested), inline interactive UI and quiz (open); tests.
 - [ ] 4. CLI/desktop: audit tools and continuation, repair concrete errors; packaged builds require external release runner.
 - [ ] 5. Builders: preserve files, downloadable HTML/ZIP and honest publishing results; verify.
 - [ ] 6. Integrations: audit existing integrations, speech and media, identify credential/hosting blockers; no fake connections.
