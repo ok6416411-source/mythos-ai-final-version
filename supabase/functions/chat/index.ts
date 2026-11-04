@@ -522,17 +522,41 @@ Bilder & PDFs: Du kannst hochgeladene Bilder direkt sehen und analysieren.${memo
       return new Response(stream, { headers: { ...corsHeaders, "Content-Type": "text/event-stream" } });
     }
 
-    const resp = await startUpstream();
-
-    if (!resp.ok) {
-      if (resp.status === 429) return new Response(JSON.stringify({ error: "Rate limit" }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      if (resp.status === 402) return new Response(JSON.stringify({ error: "Credits exhausted" }), { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      const t = await resp.text();
-      console.error("Gateway error:", resp.status, t);
-      return new Response(JSON.stringify({ error: "AI gateway error" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
-    return new Response(resp.body, { headers: { ...corsHeaders, "Content-Type": "text/event-stream" } });
+    // Sofort antworten und Verbindung mit Pings offen halten, während das Modell startet/nachdenkt.
+    // So wartet der Browser nie auf leere Leitung, und jedes Wort erscheint, sobald es da ist.
+    const enc = new TextEncoder();
+    const live = new ReadableStream({
+      async start(c) {
+        let open = true;
+        const ping = setInterval(() => { if (open) try { c.enqueue(enc.encode(": ping\n\n")); } catch { /* closed */ } }, 4000);
+        c.enqueue(enc.encode(": start\n\n"));
+        try {
+          const resp = await startUpstream();
+          if (!resp.ok || !resp.body) {
+            const t = await resp.text().catch(() => "");
+            console.error("Gateway error:", resp.status, t.slice(0, 300));
+            const msg = resp.status === 429 ? "⏳ Gerade sehr viele Anfragen – bitte gleich nochmal senden."
+              : resp.status === 402 ? "⚠️ KI-Guthaben aufgebraucht und die Reserve hat nicht geantwortet."
+              : "❌ Antwort fehlgeschlagen. Bitte nochmal versuchen.";
+            c.enqueue(sse({ choices: [{ delta: { content: msg } }] })); c.enqueue(sseDone());
+          } else {
+            const reader = resp.body.getReader();
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              c.enqueue(value);
+            }
+          }
+        } catch (e) {
+          console.error("stream error:", e);
+          try { c.enqueue(sse({ choices: [{ delta: { content: "\n\n❌ Verbindung zur KI unterbrochen." } }] })); c.enqueue(sseDone()); } catch { /* closed */ }
+        } finally {
+          open = false; clearInterval(ping);
+          try { c.close(); } catch { /* closed */ }
+        }
+      },
+    });
+    return new Response(live, { headers: { ...corsHeaders, "Content-Type": "text/event-stream", "Cache-Control": "no-cache" } });
   } catch (e) {
     console.error("chat error:", e);
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown" }), {
