@@ -229,7 +229,7 @@ export async function aiChat(
   // Beim Streamen die ersten drei Kandidaten gleichzeitig starten: der erste, der antwortet, gewinnt.
   // Google-Free-Tier ist oft überlastet; nacheinander probieren kostet sonst 20–50 s bis zum ersten Wort.
   if (streaming && order.length > 1) {
-    const racers = order.slice(0, 3).map(([m, k]) => {
+    const racers = order.slice(0, 6).map(([m, k]) => {
       const ctrl = new AbortController();
       const p = fetch(`${GOOGLE_BASE}/${m}:streamGenerateContent?alt=sse`, {
         method: "POST", signal: ctrl.signal,
@@ -252,7 +252,7 @@ export async function aiChat(
       return new Response(googleSseToOpenAi(win.body!), { headers: { "Content-Type": "text/event-stream" } });
     } catch { /* alle drei gescheitert -> restliche nacheinander */ }
   }
-  for (const [gModel, gk] of (streaming && order.length > 1 ? order.slice(3) : order)) {
+  for (const [gModel, gk] of (streaming && order.length > 1 ? order.slice(6) : order)) {
     {
       try {
         const r = await googleFetch(gModel, streaming, payload, gk);
