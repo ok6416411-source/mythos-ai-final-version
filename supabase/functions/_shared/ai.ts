@@ -183,6 +183,8 @@ export function lovableKeyOrNull(k?: string | null): string | undefined {
   return v && v !== "undefined" && v !== "null" && v.length > 10 ? v : undefined;
 }
 
+const googleCooldown = new Map<string, number>();
+
 export async function aiChat(
   body: Record<string, any>,
   lovableKey?: string,
@@ -218,11 +220,17 @@ export async function aiChat(
   let lastStatus = 503;
   let lastText = "no google key configured";
 
-  for (const gModel of chain) {
-    for (const gk of keys) {
+  // Überlastete (503) oder ausgeschöpfte (429) Modell/Key-Paare ein paar Minuten überspringen,
+  // statt bei jeder Anfrage erneut sekundenlang daran zu scheitern.
+  const now = Date.now();
+  const pairs = chain.flatMap(m => keys.map(k => [m, k] as const));
+  const fresh = pairs.filter(([m, k]) => (googleCooldown.get(m + k.slice(-6)) ?? 0) <= now);
+  for (const [gModel, gk] of (fresh.length ? fresh : pairs)) {
+    {
       try {
         const r = await googleFetch(gModel, streaming, payload, gk);
         if (!r.ok) {
+          if (r.status === 429 || r.status === 503) googleCooldown.set(gModel + gk.slice(-6), Date.now() + (r.status === 429 ? 10 : 2) * 60_000);
           lastStatus = r.status;
           lastText = (await r.text().catch(() => "")).slice(0, 300);
           console.warn("[ai] google failed", gModel, r.status, lastText.slice(0, 120));
