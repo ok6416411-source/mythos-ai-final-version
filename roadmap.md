@@ -7,6 +7,6 @@
 - [ ] 6. Integrations: audit existing integrations, speech and media, identify credential/hosting blockers; no fake connections.
 - [ ] 7. Verification: selective tests, live browser checks, usage guide and explicit remaining blockers.
 - [ ] External backend/data migration: blocked until database export, storage files, destination deployment access and provider configuration are available; do not cut over prematurely.
-- [ ] Speed/streaming: words appear as generated, no long wait, fewer cut-off answers, answers continue after leaving the tab.
+- [x] Speed/streaming: immediate stream + pings, parallel Google fallback, larger output limits (tab-leave recovery still open).
 - [ ] Token usage visible in web (long tasks), app and CLI; hourly/weekly/monthly limits based on tokens; never stop a running task at the limit.
-- [ ] AI routing: Lovable first, Google key as fallback when limit hit.
+- [x] AI routing: Lovable first, Google fallback (already in place).
