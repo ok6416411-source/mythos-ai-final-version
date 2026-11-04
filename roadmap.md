@@ -1,9 +1,12 @@
 # Upgrade roadmap
 - [ ] 1. Stability: immediate send, auth refresh without chat reset, partial response recovery, controlled scrolling; test core flow.
 - [ ] 2. Mobile: remove expensive effects, input sizing, light/dark tokens and switch; inspect mobile.
-- [ ] 3. AI: consistent model names (done), complete HTML continuation (tested), inline interactive UI and quiz (open); tests.
+- [ ] 3. AI: consistent model names (done), complete HTML continuation (tested), inline interactive UI and quiz (exists, tested); tests.
 - [ ] 4. CLI/desktop: audit tools and continuation, repair concrete errors; packaged builds require external release runner.
 - [ ] 5. Builders: preserve files, downloadable HTML/ZIP and honest publishing results; verify.
 - [ ] 6. Integrations: audit existing integrations, speech and media, identify credential/hosting blockers; no fake connections.
 - [ ] 7. Verification: selective tests, live browser checks, usage guide and explicit remaining blockers.
 - [ ] External backend/data migration: blocked until database export, storage files, destination deployment access and provider configuration are available; do not cut over prematurely.
+- [x] Speed/streaming: immediate stream + pings, parallel Google fallback, larger output limits (tab-leave recovery still open).
+- [ ] Token usage visible in web (long tasks), app and CLI; hourly/weekly/monthly limits based on tokens; never stop a running task at the limit.
+- [x] AI routing: Lovable first, Google fallback (already in place).

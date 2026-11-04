@@ -53,32 +53,32 @@ const MYTHOS_MAP: Record<string, Tune> = {
   // --- Mythos v1: Allrounder ---
   "v1:instant": { model: "google/gemini-3.1-flash-lite", maxOut: 220, web: false, temperature: 0.3, lean: true },
   "v1:low": { model: "google/gemini-3.1-flash-lite", maxOut: 550, web: false, temperature: 0.5, lean: true },
-  "v1:normal": { model: "google/gemini-3.6-flash", maxOut: 1600, web: true, temperature: 0.7 },
-  "v1:high": { model: "google/gemini-3.1-pro-preview", maxOut: 3500, web: true, temperature: 0.7, depth: true },
-  "v1:ultra": { model: "openai/gpt-5.5", reasoning: "medium", maxOut: 5000, web: true, depth: true },
+  "v1:normal": { model: "google/gemini-3.6-flash", maxOut: 3200, web: true, temperature: 0.7 },
+  "v1:high": { model: "google/gemini-3.1-pro-preview", maxOut: 7000, web: true, temperature: 0.7, depth: true },
+  "v1:ultra": { model: "openai/gpt-5.5", reasoning: "medium", maxOut: 10000, web: true, depth: true },
 
   // --- MythosCode v1.1 ---
   "code11:instant": { model: "openai/gpt-5.4-nano", reasoning: "none", maxOut: 300, web: false, lean: true },
   "code11:low": { model: "openai/gpt-5.4-mini", reasoning: "none", fast: true, maxOut: 700, web: false, lean: true },
-  "code11:normal": { model: "openai/gpt-5.4", reasoning: "low", maxOut: 2200, web: true },
-  "code11:high": { model: "openai/gpt-5.4", reasoning: "high", maxOut: 4000, web: true, depth: true },
-  "code11:ultra": { model: "openai/gpt-5.5", reasoning: "medium", maxOut: 6000, web: true, depth: true },
-  "code11:ultracode": { model: "openai/gpt-5.5", reasoning: "high", maxOut: 9000, web: true, depth: true },
+  "code11:normal": { model: "openai/gpt-5.4", reasoning: "low", maxOut: 4400, web: true },
+  "code11:high": { model: "openai/gpt-5.4", reasoning: "high", maxOut: 8000, web: true, depth: true },
+  "code11:ultra": { model: "openai/gpt-5.5", reasoning: "medium", maxOut: 12000, web: true, depth: true },
+  "code11:ultracode": { model: "openai/gpt-5.5", reasoning: "high", maxOut: 18000, web: true, depth: true },
 
   // --- Mythos v2 (Pro) — mehr Denk-Tiefe ---
   "v2:instant": { model: "openai/gpt-5.6-luna", reasoning: "none", maxOut: 300, web: false, lean: true },
   "v2:low": { model: "openai/gpt-5.6-luna", reasoning: "none", fast: true, maxOut: 750, web: false, lean: true },
-  "v2:normal": { model: "openai/gpt-5.6-sol", reasoning: "medium", fast: true, maxOut: 3500, web: true, depth: true },
-  "v2:high": { model: "openai/gpt-5.6-sol", reasoning: "high", fast: true, maxOut: 7000, web: true, depth: true },
-  "v2:ultra": { model: "openai/gpt-5.6-sol", reasoning: "high", maxOut: 14000, web: true, depth: true },
+  "v2:normal": { model: "openai/gpt-5.6-sol", reasoning: "medium", fast: true, maxOut: 7000, web: true, depth: true },
+  "v2:high": { model: "openai/gpt-5.6-sol", reasoning: "high", fast: true, maxOut: 14000, web: true, depth: true },
+  "v2:ultra": { model: "openai/gpt-5.6-sol", reasoning: "high", maxOut: 28000, web: true, depth: true },
 
   // --- MythosCode v1.5 (Pro) ---
   "code15:instant": { model: "openai/gpt-5.6-luna", reasoning: "none", maxOut: 400, web: false, lean: true },
   "code15:low": { model: "openai/gpt-5.6-terra", reasoning: "none", fast: true, maxOut: 900, web: false, lean: true },
-  "code15:normal": { model: "openai/gpt-5.6-sol", reasoning: "low", fast: true, maxOut: 3000, web: true },
-  "code15:high": { model: "openai/gpt-5.6-sol", reasoning: "medium", fast: true, maxOut: 5500, web: true, depth: true },
-  "code15:ultra": { model: "openai/gpt-5.5", reasoning: "high", maxOut: 9000, web: true, depth: true },
-  "code15:giga": { model: "openai/gpt-5.5", reasoning: "high", maxOut: 16000, web: true, depth: true },
+  "code15:normal": { model: "openai/gpt-5.6-sol", reasoning: "low", fast: true, maxOut: 6000, web: true },
+  "code15:high": { model: "openai/gpt-5.6-sol", reasoning: "medium", fast: true, maxOut: 11000, web: true, depth: true },
+  "code15:ultra": { model: "openai/gpt-5.5", reasoning: "high", maxOut: 18000, web: true, depth: true },
+  "code15:giga": { model: "openai/gpt-5.5", reasoning: "high", maxOut: 32000, web: true, depth: true },
 };
 
 
@@ -522,17 +522,41 @@ Bilder & PDFs: Du kannst hochgeladene Bilder direkt sehen und analysieren.${memo
       return new Response(stream, { headers: { ...corsHeaders, "Content-Type": "text/event-stream" } });
     }
 
-    const resp = await startUpstream();
-
-    if (!resp.ok) {
-      if (resp.status === 429) return new Response(JSON.stringify({ error: "Rate limit" }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      if (resp.status === 402) return new Response(JSON.stringify({ error: "Credits exhausted" }), { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      const t = await resp.text();
-      console.error("Gateway error:", resp.status, t);
-      return new Response(JSON.stringify({ error: "AI gateway error" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
-    return new Response(resp.body, { headers: { ...corsHeaders, "Content-Type": "text/event-stream" } });
+    // Sofort antworten und Verbindung mit Pings offen halten, während das Modell startet/nachdenkt.
+    // So wartet der Browser nie auf leere Leitung, und jedes Wort erscheint, sobald es da ist.
+    const enc = new TextEncoder();
+    const live = new ReadableStream({
+      async start(c) {
+        let open = true;
+        const ping = setInterval(() => { if (open) try { c.enqueue(enc.encode(": ping\n\n")); } catch { /* closed */ } }, 4000);
+        c.enqueue(enc.encode(": start\n\n"));
+        try {
+          const resp = await startUpstream();
+          if (!resp.ok || !resp.body) {
+            const t = await resp.text().catch(() => "");
+            console.error("Gateway error:", resp.status, t.slice(0, 300));
+            const msg = resp.status === 429 ? "⏳ Gerade sehr viele Anfragen – bitte gleich nochmal senden."
+              : resp.status === 402 ? "⚠️ KI-Guthaben aufgebraucht und die Reserve hat nicht geantwortet."
+              : "❌ Antwort fehlgeschlagen. Bitte nochmal versuchen.";
+            c.enqueue(sse({ choices: [{ delta: { content: msg } }] })); c.enqueue(sseDone());
+          } else {
+            const reader = resp.body.getReader();
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              c.enqueue(value);
+            }
+          }
+        } catch (e) {
+          console.error("stream error:", e);
+          try { c.enqueue(sse({ choices: [{ delta: { content: "\n\n❌ Verbindung zur KI unterbrochen." } }] })); c.enqueue(sseDone()); } catch { /* closed */ }
+        } finally {
+          open = false; clearInterval(ping);
+          try { c.close(); } catch { /* closed */ }
+        }
+      },
+    });
+    return new Response(live, { headers: { ...corsHeaders, "Content-Type": "text/event-stream", "Cache-Control": "no-cache" } });
   } catch (e) {
     console.error("chat error:", e);
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown" }), {

@@ -183,6 +183,8 @@ export function lovableKeyOrNull(k?: string | null): string | undefined {
   return v && v !== "undefined" && v !== "null" && v.length > 10 ? v : undefined;
 }
 
+const googleCooldown = new Map<string, number>();
+
 export async function aiChat(
   body: Record<string, any>,
   lovableKey?: string,
@@ -218,11 +220,44 @@ export async function aiChat(
   let lastStatus = 503;
   let lastText = "no google key configured";
 
-  for (const gModel of chain) {
-    for (const gk of keys) {
+  // Überlastete (503) oder ausgeschöpfte (429) Modell/Key-Paare ein paar Minuten überspringen,
+  // statt bei jeder Anfrage erneut sekundenlang daran zu scheitern.
+  const now = Date.now();
+  const pairs = chain.flatMap(m => keys.map(k => [m, k] as const));
+  const fresh = pairs.filter(([m, k]) => (googleCooldown.get(m + k.slice(-6)) ?? 0) <= now);
+  const order = fresh.length ? fresh : pairs;
+  // Beim Streamen die ersten drei Kandidaten gleichzeitig starten: der erste, der antwortet, gewinnt.
+  // Google-Free-Tier ist oft überlastet; nacheinander probieren kostet sonst 20–50 s bis zum ersten Wort.
+  if (streaming && order.length > 1) {
+    const racers = order.slice(0, 6).map(([m, k]) => {
+      const ctrl = new AbortController();
+      const p = fetch(`${GOOGLE_BASE}/${m}:streamGenerateContent?alt=sse`, {
+        method: "POST", signal: ctrl.signal,
+        headers: { "Content-Type": "application/json", "x-goog-api-key": k },
+        body: JSON.stringify(payload),
+      }).then(r => {
+        if (!r.ok || !r.body) {
+          if (r.status === 429 || r.status === 503) googleCooldown.set(m + k.slice(-6), Date.now() + (r.status === 429 ? 10 : 2) * 60_000);
+          console.warn("[ai] google race failed", m, r.status);
+          r.body?.cancel().catch(() => {});
+          throw new Error(String(r.status));
+        }
+        return r;
+      });
+      return { ctrl, p };
+    });
+    try {
+      const win = await Promise.any(racers.map(x => x.p));
+      racers.forEach(x => x.p.then(r => { if (r !== win) { x.ctrl.abort(); } }).catch(() => {}));
+      return new Response(googleSseToOpenAi(win.body!), { headers: { "Content-Type": "text/event-stream" } });
+    } catch { /* alle drei gescheitert -> restliche nacheinander */ }
+  }
+  for (const [gModel, gk] of (streaming && order.length > 1 ? order.slice(6) : order)) {
+    {
       try {
         const r = await googleFetch(gModel, streaming, payload, gk);
         if (!r.ok) {
+          if (r.status === 429 || r.status === 503) googleCooldown.set(gModel + gk.slice(-6), Date.now() + (r.status === 429 ? 10 : 2) * 60_000);
           lastStatus = r.status;
           lastText = (await r.text().catch(() => "")).slice(0, 300);
           console.warn("[ai] google failed", gModel, r.status, lastText.slice(0, 120));
