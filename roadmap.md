@@ -8,5 +8,6 @@
 - [ ] 7. Verification: selective tests, live browser checks, usage guide and explicit remaining blockers.
 - [ ] External backend/data migration: blocked until database export, storage files, destination deployment access and provider configuration are available; do not cut over prematurely.
 - [x] Speed/streaming: immediate stream + pings, parallel Google fallback, larger output limits (tab-leave recovery still open).
-- [ ] Token usage visible in web (long tasks), app and CLI; hourly/weekly/monthly limits based on tokens; never stop a running task at the limit.
+- [ ] MythosAI token usage per USER (not per API key) visible in web, app and CLI; hourly/weekly/monthly token limits; never stop an admitted running task at the limit.
+- [ ] Continue all seven phases in order, including remaining stability, builders, integrations and practical verification; report blockers honestly.
 - [x] AI routing: Lovable first, Google fallback (already in place).

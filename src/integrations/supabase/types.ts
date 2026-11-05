@@ -786,6 +786,69 @@ export type Database = {
           },
         ]
       }
+      mythos_tasks: {
+        Row: {
+          created_at: string
+          id: string
+          last_seen_at: string
+          source: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id: string
+          last_seen_at?: string
+          source: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_seen_at?: string
+          source?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      mythos_token_usage: {
+        Row: {
+          created_at: string
+          id: string
+          input_tokens: number | null
+          measured: boolean
+          model: string | null
+          output_tokens: number | null
+          source: string
+          task_id: string | null
+          total_tokens: number | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          input_tokens?: number | null
+          measured?: boolean
+          model?: string | null
+          output_tokens?: number | null
+          source: string
+          task_id?: string | null
+          total_tokens?: number | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          input_tokens?: number | null
+          measured?: boolean
+          model?: string | null
+          output_tokens?: number | null
+          source?: string
+          task_id?: string | null
+          total_tokens?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       phone_chats: {
         Row: {
           ai_identity: string | null
@@ -1073,6 +1136,16 @@ export type Database = {
         Returns: boolean
       }
       is_pro: { Args: { _user_id: string }; Returns: boolean }
+      mythos_admit_task: {
+        Args: {
+          _source: string
+          _task_id: string
+          _tier: string
+          _user_id: string
+        }
+        Returns: Json
+      }
+      mythos_token_summary: { Args: { _user_id: string }; Returns: Json }
     }
     Enums: {
       app_role: "admin" | "user"

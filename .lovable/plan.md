@@ -3,7 +3,7 @@
 ## Nächster Arbeitsschritt
 - Verbrauchsdaten des KI-Anbieters statt geschätzter Textlängen in Website, Coding-App und CLI übernehmen.
 - Eingabe-, Ausgabe- und Gesamtverbrauch anzeigen. Fehlende Anbieterwerte ausdrücklich als unbekannt kennzeichnen.
-- Verbrauch zentral pro Benutzer erfassen und für Stunde, Woche und Monat auswerten.
+- MythosAI-Verbrauch zentral pro Benutzer erfassen (nicht pro API-Key) und für Stunde, Woche und Monat auswerten.
 - Vorhandene Limits erhalten, bis Token-Grenzen festgelegt sind; keine erfundenen Tarifgrenzen aktivieren.
 - Neue Aufgaben bei ausgeschöpften Token-Grenzen sperren, bereits zugelassene Aufgaben einschließlich ihrer Fortsetzungen weiterlaufen lassen.
 
@@ -17,3 +17,6 @@
 - Tests für echte Verbrauchswerte, unbekannte Werte, Zeitfenster und Fortsetzung nach ausgeschöpftem Limit.
 - Angemeldeten Website-Chat mit echter Antwort prüfen; App/CLI soweit ausführbar testen und übrige Prüfungen benennen.
 - Danach kurzer Fortschrittsbericht mit offenen Punkten; Backend-Umzug und Tab-Hintergrundfortsetzung bleiben getrennte offene Aufgaben.
+
+## Übriger Gesamtauftrag
+Die sieben Phasen bleiben in der vorgegebenen Reihenfolge auf der Aufgabenliste: Stabilität, mobile Bedienung, KI, Coding-App/CLI, Builder, Integrationen und Abschlussprüfung. Jede Phase erhält einen tatsächlichen Zwischenstand; externe Veröffentlichung, fehlende Zugangsdaten und ungetestete Funktionen werden nicht als erledigt gemeldet.
