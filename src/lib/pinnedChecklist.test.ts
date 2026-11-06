@@ -24,3 +24,12 @@ describe("angeheftete Checkliste", () => {
     expect(latestChecklist([{ role: "assistant", content: "hallo" }])).toBeNull();
   });
 });
+
+import { needsAgent } from "@/pages/Chat";
+describe("Agent-Weiche", () => {
+  it("erkennt Recherche und viele Aufgaben", () => {
+    expect(needsAgent("recherchier mir die neuesten Paper-Versionen")).toBe(true);
+    expect(needsAgent("mach mir 5 verschiedene Hüte als bbmodel")).toBe(true);
+    expect(needsAgent("schreib mir ein Gedicht über Katzen")).toBe(false);
+  });
+});

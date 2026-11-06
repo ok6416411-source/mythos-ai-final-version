@@ -105,11 +105,41 @@ export function TimelineRow({ label, detail, children }: { label: ReactNode; det
 }
 
 /** Schritte, die der Server während einer Antwort meldet (Bild erzeugen, Suche …). */
-export function StepsTimeline({ steps }: { steps: string[] }) {
+const fmtDur = (ms: number) => {
+  const s = Math.max(1, Math.round(ms / 1000));
+  return s < 60 ? `${s} Sek.` : `${Math.floor(s / 60)} Min. ${s % 60} Sek.`;
+};
+
+/** Arbeits-Protokoll wie bei Claude: eine Kopfzeile (aktueller Schritt + Zeit), aufklappbar zu allen Schritten. */
+export function StepsTimeline({ steps, live, ms }: { steps: string[]; live?: boolean; ms?: number }) {
+  const [start] = useState(() => Date.now());
+  const [now, setNow] = useState(Date.now());
+  const [open, setOpen] = useState<boolean | null>(null);
+  useEffect(() => { if (!live) return; const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, [live]);
   if (!steps.length) return null;
+  const isOpen = open ?? (!!live || steps.length <= 2);
+  const dur = live ? now - start : ms;
+  const head = live ? steps[steps.length - 1] : `${steps.length} ${steps.length === 1 ? "Schritt" : "Schritte"} erledigt`;
   return (
     <div className="not-prose mb-3">
-      {steps.map((s, i) => <TimelineRow key={i} label={s} />)}
+      <button type="button" onClick={() => setOpen(!isOpen)} className="flex max-w-full items-center gap-2 text-[14px] text-muted-foreground hover:text-foreground">
+        <span className={`grid h-4 w-4 shrink-0 grid-cols-2 gap-[2px] p-[1px] ${live ? "animate-pulse" : ""}`} aria-hidden>
+          {[0, 1, 2, 3].map(i => <span key={i} className="rounded-full bg-current" style={{ opacity: [1, 0.55, 0.55, 0.3][i] }} />)}
+        </span>
+        <span className={`truncate ${live ? "mythos-shimmer" : ""}`}>{head}</span>
+        {!!dur && dur > 1500 && <span className="shrink-0 tabular-nums opacity-70">{fmtDur(dur)}</span>}
+        <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform ${isOpen ? "" : "-rotate-90"}`} />
+      </button>
+      {isOpen && (
+        <div className="mt-2 overflow-hidden rounded-xl border border-border">
+          {steps.map((s, i) => (
+            <div key={i} className={`flex items-center gap-2 px-3.5 py-2.5 text-[13.5px] ${i ? "border-t border-border" : ""} ${live && i === steps.length - 1 ? "text-foreground" : "text-muted-foreground"}`}>
+              <span className="min-w-0 flex-1 truncate">{s}</span>
+              {live && i === steps.length - 1 && <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-foreground" />}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

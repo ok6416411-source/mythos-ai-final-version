@@ -114,6 +114,15 @@ const MODES = [
 
 const SIDEBAR_KEY = "mythos.sidebar.collapsed";
 
+/** Braucht die Anfrage Werkzeuge/Helfer? Recherche, Aktuelles, Vergleiche, mehrere gleichartige Ergebnisse. */
+export function needsAgent(text: string): boolean {
+  const t = text.toLowerCase();
+  if (t.length < 12) return false;
+  return /recherchier|such(e)? (im|nach)|im internet|im web|quellen|aktuell|neueste|news|heute|preis(e)? |vergleich|unterschied zwischen|was kostet|wer ist (der|die) (aktuelle|neue)/.test(t)
+    || /\b([2-9]|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn)\s+(verschiedene\s+)?(modelle|hüte|dateien|seiten|webseiten|plugins|skins|ideen|varianten|versionen|items|texturen|level|bilder|logos|songs|rezepte)\b/.test(t)
+    || /\bjeweils\b|\bfür jede[nrs]?\b|\bfür alle\b/.test(t);
+}
+
 /** Echte Fehlermeldung einer Edge Function (statt „Edge Function returned a non-2xx status code“). */
 async function fnErrorText(error: unknown, data?: { error?: string } | null): Promise<string> {
   if (data?.error) return data.error;
@@ -144,7 +153,7 @@ const MAX_BAD_TOOLS = 2;
 type ApiMsg = { role: string; content: any };
 type GoalState = { text: string; step: number; status: "läuft" | "erreicht" | "gestoppt" | "limit" };
 type MythosUsage = { input_tokens?: number; output_tokens?: number; total_tokens?: number; measured: boolean };
-type StreamResult = { full: string; image?: GeneratedImage; music?: FunkPattern; agents?: AgentStatus[]; thinking: string; thinkingMs?: number; steps?: string[]; aborted: boolean; usage?: MythosUsage; interrupted?: boolean; videoNotes?: { name: string; text: string }[] };
+type StreamResult = { full: string; image?: GeneratedImage; music?: FunkPattern; agents?: AgentStatus[]; thinking: string; thinkingMs?: number; steps?: string[]; aborted: boolean; usage?: MythosUsage; interrupted?: boolean; videoNotes?: { name: string; text: string }[]; workMs?: number };
 
 /** Nachricht aus dem Verlauf so umwandeln, wie das Modell sie bekommt. */
 const toApi = (m: Msg): ApiMsg =>
@@ -787,7 +796,11 @@ const Chat = () => {
     // Sonst antwortet eine alte Server-Version „nutze /image“, obwohl das Bild trotzdem kommt.
     const hasPicture = Array.isArray(lastUser?.content) && (lastUser.content as { type?: string }[]).some(p => p.type === "image_url");
     const expectImage = !hasPicture && (/^\/image\s+\S/i.test(lastUserText) || isImageRequest(lastUserText));
-    const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${mode === "agent" && !toChat ? "agent" : "chat"}`;
+    // Agent mit Werkzeugen & Helfern: im Agent-Modus immer, im General-Modus automatisch bei Recherche
+    // oder vielen/gleichartigen Aufgaben (wie Claude). Anhänge (Bilder/Videos) laufen über die Chat-Funktion.
+    const hasAttachmentParts = Array.isArray(lastUser?.content) && (lastUser.content as { type?: string }[]).some(p => p.type !== "text");
+    const autoAgent = mode === "general" && !hasAttachmentParts && !lastUserText.startsWith("/") && needsAgent(lastUserText);
+    const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${(mode === "agent" || autoAgent) && !toChat ? "agent" : "chat"}`;
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     const setLast = (patch: Partial<Msg>) => setMessages(prev => {
@@ -821,6 +834,7 @@ const Chat = () => {
     let musicData: FunkPattern | undefined;
     let agentsData: AgentStatus[] | undefined;
     let videoNotes: { name: string; text: string }[] = [];
+    const t0 = Date.now();
     try {
       // Automatisch neu versuchen: 429 (zu viele Anfragen) und kurze Server-Aussetzer (5xx, Zeitlimit, Netz).
       // Passiert still im Hintergrund – der User merkt davon nichts.
@@ -931,7 +945,7 @@ const Chat = () => {
       // Stream endete ohne [DONE] (z. B. Zeitlimit der Server-Funktion bei langer Arbeit): als unterbrochen
       // melden – runAgent setzt dann unauffällig an derselben Stelle fort.
       const interrupted = !sawDone && !!full && !imageData && !musicData;
-      return { full, image: imageData, music: musicData, agents: agentsData, thinking, thinkingMs, steps, aborted: false, usage: measuredUsage, interrupted, videoNotes: videoNotes.length ? videoNotes : undefined };
+      return { full, image: imageData, music: musicData, agents: agentsData, thinking, thinkingMs, steps, aborted: false, usage: measuredUsage, interrupted, videoNotes: videoNotes.length ? videoNotes : undefined, workMs: Date.now() - t0 };
     } catch (e) {
       if ((e as Error)?.name === "AbortError") {
         // Gestoppt: was schon da ist, bleibt stehen.
@@ -1041,7 +1055,7 @@ const Chat = () => {
       if (res.full || res.image || res.music) {
         await supabase.from("messages").insert({
           conversation_id: convId, role: "assistant", content: res.full,
-          metadata: { videoNotes: res.videoNotes, image: res.image, music: res.music, agents: res.agents, thinking: res.thinking || undefined, thinkingMs: res.thinkingMs || undefined, steps: res.steps?.length ? res.steps : undefined, goal: goalText ? step : undefined, mythos_usage: res.usage },
+          metadata: { workMs: res.steps?.length ? res.workMs : undefined, videoNotes: res.videoNotes, image: res.image, music: res.music, agents: res.agents, thinking: res.thinking || undefined, thinkingMs: res.thinkingMs || undefined, steps: res.steps?.length ? res.steps : undefined, goal: goalText ? step : undefined, mythos_usage: res.usage },
         });
       }
       history.push({ role: "assistant", content: res.full });
@@ -1701,7 +1715,7 @@ const Chat = () => {
                             {m.thinking && (
                               <ThinkingBlock ms={m.thinkingMs} live={!m.content && sending && i === messages.length - 1} />
                             )}
-                            {m.steps && m.steps.length > 0 && <StepsTimeline steps={m.steps} />}
+                            {m.steps && m.steps.length > 0 && <StepsTimeline steps={m.steps} live={sending && i === messages.length - 1} ms={m.metadata?.workMs} />}
                             {m.videoNotes?.map((v, k) => (
                               <div key={k} className="not-prose mb-3">
                                 <TimelineRow label={`Video angesehen: ${v.name}`} detail="Was Mythos gesehen hat">
