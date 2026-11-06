@@ -91,7 +91,7 @@ function draw(it, i) {
     const b = el("div", "body"); if (it.think) b.appendChild(thinkBox(it.think)); md(b, it.text);
     const sp = el("button", "speak", "🔊"); sp.title = "Vorlesen";
     sp.onclick = () => { const S = window.MythosVoice.speaker; S.setVoice(cfg.voice || window.MythosVoice.VOICES[0].id); S.prepare(); S.speak(it.text); };
-    d.append(img, b, sp);
+    b.appendChild(feedbackBar(it)); d.append(img, b, sp);
   } else if (it.cls === "u") {
     d = el("div", "m u glass"); d.appendChild(document.createTextNode(it.text));
     const imgs = (it.att || []).filter((a) => a.image);
@@ -107,6 +107,15 @@ function draw(it, i) {
     const sv = el("button", "chip", "💾 Speichern"); sv.style.marginTop = "8px";
     sv.onclick = () => { const a = document.createElement("a"); a.href = it.src; a.download = "mythos-bild.jpg"; a.click(); };
     b.appendChild(sv); d.append(ic, b);
+  }
+  else if (it.cls === "link") {
+    // Gut sichtbare Adresse, sobald etwas läuft (Server/Webseite) – mit Öffnen-Knöpfen.
+    d = el("div", "linkcard"); const dot = el("span", "ldot"); const t = el("div", "ltxt");
+    t.append(el("div", "lname", it.text.replace(/^https?:\/\//, "")), el("div", "lsub", "Läuft – klicken zum Öffnen"));
+    const o1 = el("button", "chip", "In Mythos ansehen"); o1.onclick = () => inappOpen("preview", "Vorschau", it.text);
+    const o2 = el("button", "chip", "Im Browser ↗"); o2.onclick = () => window.mythos.open(it.text);
+    t.onclick = () => window.mythos.open(it.text); t.style.cursor = "pointer";
+    d.append(dot, t, o1, o2);
   }
   else if (it.cls === "check") {
     // Seitenprüfung: Ergebnis + Screenshot, den Mythos gesehen hat.
@@ -638,6 +647,7 @@ async function runAgent(c, opts) {
         finally { run.out = null; paintRun(run); }
         (r.hooks || []).filter((h) => h.out || h.code).forEach((h) => noteTo(c, "🪝 " + h.event + ": " + h.command + " → Exit " + h.code + (h.out ? "\n" + h.out.slice(0, 600) : "")));
         if (t.name === "run" || t.name === "start" || t.name === "verify") addTo(c, "out", r.result.slice(-4000), { cmd: t.cmd || "Projektprüfung" });
+        if (t.name === "start" || t.name === "serve") { const u = (String(r.result || "").match(/https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)(?::\d+)?[^\s"')<>]*/) || [])[0]; if (u) addTo(c, "link", u.replace("0.0.0.0", "localhost")); }
         if (t.name === "check") showCheck(c, r);
         if (r.bg && r.bg.url) noteTo(c, "▶ Läuft im Hintergrund: " + r.bg.url + " (" + t.cmd + ")");
         if (r.diff && r.diff.lines.length) { addTo(c, "diff", "", { path: t.path, d: r.diff }); changed = true; }
@@ -1694,6 +1704,25 @@ setTimeout(() => {
     renderFiles(); grow();
   });
 }, 0);
+// Daumen hoch/runter unter Antworten (wie auf der Website): „runter“ fragt kurz nach, was falsch war.
+const THUMB_UP = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/></svg>';
+const THUMB_DOWN = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 14V2"/><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"/></svg>';
+function feedbackBar(it) {
+  const bar = el("div", "fbar");
+  const up = el("button", "fb"); up.innerHTML = THUMB_UP; up.title = "Gute Antwort";
+  const down = el("button", "fb"); down.innerHTML = THUMB_DOWN; down.title = "Schlechte Antwort";
+  const sendFb = (vote, comment) => { bar.classList.add("sent"); (vote === "up" ? up : down).classList.add("on");
+    post("cli-auth", { action: "feedback", api_key: cfg.key, vote, comment: comment || "", question: "", answer: String(it.text || "").slice(0, 6000) }).catch(() => {}); };
+  up.onclick = () => { if (!bar.classList.contains("sent")) sendFb("up"); };
+  down.onclick = () => {
+    if (bar.classList.contains("sent") || bar.querySelector("input")) return;
+    const f = el("form", "fbform"); const inp = el("input"); inp.placeholder = "Was war falsch?"; inp.maxLength = 400; const ok = el("button", "chip", "Senden");
+    f.onsubmit = (e) => { e.preventDefault(); f.remove(); sendFb("down", inp.value.trim()); note("Danke! Mythos lernt daraus."); };
+    f.append(inp, ok); bar.appendChild(f); inp.focus();
+  };
+  bar.append(up, down);
+  return bar;
+}
 function renderFiles() {
   const f = $("files"); f.textContent = "";
   attach.forEach((a, i) => { const c = el("button", "chip", (a.image ? "🖼 " : a.video ? "🎬 " : a.pasted ? "📄 " : "📎 ") + a.name + (a.pasted ? " · " + a.content.split("\n").length + " Zeilen" : "") + "  ✕"); c.title = "Entfernen"; c.onclick = () => { attach.splice(i, 1); renderFiles(); }; f.appendChild(c); });

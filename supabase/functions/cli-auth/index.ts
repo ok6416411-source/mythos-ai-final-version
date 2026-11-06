@@ -91,9 +91,17 @@ Deno.serve(async (req) => {
     // Feedback zu einer Antwort (Website). Bei „schlecht“ schlägt die KI direkt eine Regel vor;
     // gespeichert als unveröffentlichter Knowledge-Artikel (Kategorie „feedback“) → Admin übernimmt per Klick.
     if (action === "feedback") {
-      const jwt = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
-      const { data: u } = await db.auth.getUser(jwt);
-      if (!u?.user) return json({ error: "Nicht angemeldet" }, 401);
+      // Website: angemeldet per Login · Code-App: per API-Key
+      let ok = false;
+      if (body.api_key) {
+        const { data: k } = await db.from("api_keys").select("id,revoked").eq("key_hash", await sha256(String(body.api_key))).maybeSingle();
+        ok = !!k && !k.revoked;
+      } else {
+        const jwt = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+        const { data: u } = await db.auth.getUser(jwt);
+        ok = !!u?.user;
+      }
+      if (!ok) return json({ error: "Nicht angemeldet" }, 401);
       const vote = body.vote === "up" ? "up" : "down";
       if (vote === "up") return json({ ok: true });
       const q = String(body.question || "").slice(0, 2000), a = String(body.answer || "").slice(0, 6000), c = String(body.comment || "").slice(0, 400);

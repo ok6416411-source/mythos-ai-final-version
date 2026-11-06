@@ -153,7 +153,7 @@ export default defineConfig(({ mode }) => ({
       },
       workbox: {
         maximumFileSizeToCacheInBytes: 30 * 1024 * 1024,
-        globIgnores: ["**/ort-wasm*", "**/*.wasm"],
+        globIgnores: ["**/ort-wasm*", "**/*.wasm", "**/*.mp4"],
         navigateFallbackDenylist: [/^\/~oauth/, /^\/api/, /^\/supabase/],
         cleanupOutdatedCaches: true,
         // Neue Version wartet, bis die Seite sie übernimmt (main.tsx): beim Öffnen sofort,
