@@ -1,7 +1,7 @@
 // Abgeschnittene Code-Antworten erkennen und nahtlos fortsetzen lassen (Chat und App-Builder).
 
 /** Wie oft eine abgeschnittene Code-Antwort automatisch fortgesetzt wird. */
-export const MAX_CONTINUE = 3;
+export const MAX_CONTINUE = 6;
 
 /** Sieht die Antwort nach mittendrin abgebrochenem Code aus? */
 export function looksCut(text: string): boolean {

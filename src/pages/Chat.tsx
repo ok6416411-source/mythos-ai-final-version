@@ -110,6 +110,22 @@ const MODES = [
 
 const SIDEBAR_KEY = "mythos.sidebar.collapsed";
 
+/** Echte Fehlermeldung einer Edge Function (statt „Edge Function returned a non-2xx status code“). */
+async function fnErrorText(error: unknown, data?: { error?: string } | null): Promise<string> {
+  if (data?.error) return data.error;
+  const e = error as { message?: string; context?: Response } | null;
+  const res = e?.context;
+  if (res && typeof res.clone === "function") {
+    const status = res.status;
+    let msg = "";
+    try { const j = await res.clone().json(); msg = j?.error || j?.message || ""; } catch { try { msg = (await res.clone().text()).slice(0, 200); } catch { /* egal */ } }
+    if (status === 404) return "Server-Funktion nicht gefunden (404) – sie ist noch nicht bereitgestellt. In Lovable einmal „Publish“ bzw. die Funktion deployen.";
+    if (status === 401) return "Nicht angemeldet (401) – bitte neu einloggen.";
+    return (msg || e?.message || "Unbekannter Fehler") + (status ? ` (HTTP ${status})` : "");
+  }
+  return e?.message || "Unbekannter Fehler";
+}
+
 // /goal: so viele Arbeitsschritte darf Mythos höchstens machen, bevor es von selbst anhält.
 const GOAL_MAX_STEPS = 20;
 // Obergrenze für alle Antworten einer Runde (Schritte + Werkzeug-Aufrufe).
@@ -124,7 +140,7 @@ const MAX_BAD_TOOLS = 2;
 type ApiMsg = { role: string; content: any };
 type GoalState = { text: string; step: number; status: "läuft" | "erreicht" | "gestoppt" | "limit" };
 type MythosUsage = { input_tokens?: number; output_tokens?: number; total_tokens?: number; measured: boolean };
-type StreamResult = { full: string; image?: GeneratedImage; music?: FunkPattern; agents?: AgentStatus[]; thinking: string; thinkingMs?: number; steps?: string[]; aborted: boolean; usage?: MythosUsage };
+type StreamResult = { full: string; image?: GeneratedImage; music?: FunkPattern; agents?: AgentStatus[]; thinking: string; thinkingMs?: number; steps?: string[]; aborted: boolean; usage?: MythosUsage; interrupted?: boolean };
 
 /** Nachricht aus dem Verlauf so umwandeln, wie das Modell sie bekommt. */
 const toApi = (m: Msg): ApiMsg =>
@@ -437,7 +453,7 @@ const Chat = () => {
       const reply = (content: string) => setMessages(prev => [...prev, { role: "user", content: `/apikeyadmin ${which === "google2" ? "2 " : ""}${value ? "AIza••••" : ""}` }, { role: "assistant", content }]);
       if (!value) { reply("So geht's:\n```\n/apikeyadmin AIza…      (Google-AI-Ausweichschlüssel, gratis)\n/apikeyadmin 2 AIza…    (zweiter, falls der erste ausgeschöpft ist)\n```\nGratis-Schlüssel: aistudio.google.com → „Get API key“ → „Create API key“.\nDer Schlüssel wird nur geschützt auf dem Server gespeichert und nie wieder angezeigt."); return; }
       const { data, error } = await supabase.functions.invoke("nvidia", { body: { kind: "setkey", which, value } });
-      if (error || data?.error) { toast.error("Speichern fehlgeschlagen: " + (data?.error || error?.message)); reply("✗ " + (data?.error || error?.message)); return; }
+      if (error || data?.error) { const why = await fnErrorText(error, data); toast.error("Speichern fehlgeschlagen: " + why); reply("✗ " + why); return; }
       reply(`✓ Google-AI-Ausweichschlüssel${which === "google2" ? " #2" : ""} sicher auf dem Server gespeichert. Wird automatisch genutzt, wenn Lovable-Credits leer sind.`);
       return;
     }
@@ -448,7 +464,7 @@ const Chat = () => {
       const reply = (content: string) => setMessages(prev => [...prev, { role: "user", content: `/musikkeyadmin ${value ? "sk_••••" : ""}` }, { role: "assistant", content }]);
       if (!value) { reply("So geht's:\n```\n/musikkeyadmin sk_…\n```\nSchlüssel: elevenlabs.io → Developers → API Keys → „Create API Key“ (Musik braucht einen bezahlten Plan).\nDer Schlüssel wird nur geschützt auf dem Server gespeichert und nie wieder angezeigt."); return; }
       const { data, error } = await supabase.functions.invoke("nvidia", { body: { kind: "setkey", which: "elevenlabs", value } });
-      if (error || data?.error) { toast.error("Speichern fehlgeschlagen: " + (data?.error || error?.message)); reply("✗ " + (data?.error || error?.message)); return; }
+      if (error || data?.error) { const why = await fnErrorText(error, data); toast.error("Speichern fehlgeschlagen: " + why); reply("✗ " + why); return; }
       reply("✓ ElevenLabs-Schlüssel gespeichert. Songs mit /music werden ab jetzt echte Tracks mit Gesang (1–3 Minuten).");
       return;
     }
@@ -462,7 +478,7 @@ const Chat = () => {
       const reply = (content: string) => setMessages(prev => [...prev, { role: "user", content: `/nvidiakeyadmin ${which === "image" ? "bild " : ""}${value ? "nvapi-••••" : ""}` }, { role: "assistant", content }]);
       if (!value) { reply("So geht's:\n```\n/nvidiakeyadmin nvapi-…        (Chat & Vorlesen, auch Bilder)\n/nvidiakeyadmin bild nvapi-…   (nur Bilder)\n```\nDer Schlüssel wird nur geschützt auf dem Server gespeichert und nie wieder angezeigt."); return; }
       const { data, error } = await supabase.functions.invoke("nvidia", { body: { kind: "setkey", which, value } });
-      if (error || data?.error) { toast.error("Speichern fehlgeschlagen: " + (data?.error || error?.message)); reply("✗ " + (data?.error || error?.message)); return; }
+      if (error || data?.error) { const why = await fnErrorText(error, data); toast.error("Speichern fehlgeschlagen: " + why); reply("✗ " + why); return; }
       reply(`✓ NVIDIA-Schlüssel${which === "image" ? " für Bilder" : ""} sicher auf dem Server gespeichert.`);
       return;
     }
@@ -788,14 +804,17 @@ const Chat = () => {
     let musicData: FunkPattern | undefined;
     let agentsData: AgentStatus[] | undefined;
     try {
-      // Auto-retry on 429 with backoff (1s, 3s) — fixes "zu viele Anfragen"
-      let resp = await doFetch();
-      for (let attempt = 0; resp.status === 429 && attempt < 2; attempt++) {
-        const wait = attempt === 0 ? 1000 : 3000;
-        toast.info(`Kurz Pause… (${wait / 1000}s)`);
-        await new Promise(r => setTimeout(r, wait));
-        resp = await doFetch();
+      // Automatisch neu versuchen: 429 (zu viele Anfragen) und kurze Server-Aussetzer (5xx, Zeitlimit, Netz).
+      // Passiert still im Hintergrund – der User merkt davon nichts.
+      const transient = (st: number) => st === 429 || st >= 500;
+      let resp: Response | null = null;
+      for (let attempt = 0; attempt < 4; attempt++) {
+        try { resp = await doFetch(); }
+        catch (e) { if ((e as Error)?.name === "AbortError") throw e; resp = null; }
+        if (resp && !transient(resp.status)) break;
+        if (attempt < 3) await new Promise(r => setTimeout(r, [800, 2000, 4000][attempt]));
       }
+      if (!resp) throw new Error("Netzwerkfehler");
 
       if (!resp.ok || !resp.body) {
         if (resp.status === 429) {
@@ -812,16 +831,18 @@ const Chat = () => {
             console.error("Fallback error:", e);
             toast.error(`NVIDIA fallback failed: ${(e as Error)?.message || "unknown"}`);
           }
-        } else {
+        } else if (!prefix) {
           toast.error("Fehler beim Senden");
         }
-        setMessages(prev => prev.slice(0, -1));
+        // Bei einer Fortsetzung die schon geschriebene Antwort nie wegwerfen.
+        if (!prefix) setMessages(prev => prev.slice(0, -1));
         return null;
       }
 
       const reader = resp.body.getReader();
       const decoder = new TextDecoder();
       let buf = "";
+      let sawDone = false;
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -832,7 +853,7 @@ const Chat = () => {
           if (line.endsWith("\r")) line = line.slice(0, -1);
           if (!line.startsWith("data: ")) continue;
           const json = line.slice(6).trim();
-          if (json === "[DONE]") break;
+          if (json === "[DONE]") { sawDone = true; break; }
           try {
             const p = JSON.parse(json);
             if (p.mythos_usage) { measuredUsage = p.mythos_usage; setLast({ metadata: { mythos_usage: measuredUsage } }); continue; }
@@ -888,17 +909,21 @@ const Chat = () => {
           : { url: "", prompt, reasons: [...serverReasons, ...(body?.reasons ?? []), ...(body?.reasons?.length ? [] : [body?.error || error?.message || "Kein Anbieter hat ein Bild geliefert."])] };
         setLast({ image: imageData, imagePending: undefined });
       }
-      return { full, image: imageData, music: musicData, agents: agentsData, thinking, thinkingMs, steps, aborted: false, usage: measuredUsage };
+      // Stream endete ohne [DONE] (z. B. Zeitlimit der Server-Funktion bei langer Arbeit): als unterbrochen
+      // melden – runAgent setzt dann unauffällig an derselben Stelle fort.
+      const interrupted = !sawDone && !!full && !imageData && !musicData;
+      return { full, image: imageData, music: musicData, agents: agentsData, thinking, thinkingMs, steps, aborted: false, usage: measuredUsage, interrupted };
     } catch (e) {
       if ((e as Error)?.name === "AbortError") {
         // Gestoppt: was schon da ist, bleibt stehen.
-        if (!full && !imageData) { setMessages(prev => prev.slice(0, -1)); return null; }
+        if (!full && !imageData) { if (!prefix) setMessages(prev => prev.slice(0, -1)); return null; }
         return { full, image: imageData, music: musicData, agents: agentsData, thinking, thinkingMs, steps, aborted: true };
       }
       if (full || imageData) {
-        toast.warning("Verbindung unterbrochen. Die Teilantwort bleibt erhalten; du kannst weitermachen.");
-        return { full, image: imageData, music: musicData, agents: agentsData, thinking, thinkingMs, steps, aborted: true };
+        // Verbindung mitten in der Antwort weg: Teilantwort behalten, runAgent macht automatisch weiter.
+        return { full, image: imageData, music: musicData, agents: agentsData, thinking, thinkingMs, steps, aborted: false, interrupted: !!full };
       }
+      if (prefix) return null; // Fortsetzung fehlgeschlagen: bisherige Antwort bleibt stehen
       setMessages(prev => prev.slice(0, -1));
       throw e;
     }
@@ -980,7 +1005,8 @@ const Chat = () => {
       const res = await streamOnce(apiMessages, convId);
       if (!res) { if (goalText) setGoal(g => g && { ...g, status: "gestoppt" }); break; }
       // Abgeschnittener Code (offener ```-Block, HTML ohne </html>): automatisch an derselben Stelle weiterschreiben lassen.
-      for (let more = 0; more < MAX_CONTINUE && !res.aborted && !stopRef.current && looksCut(res.full); more++) {
+      // Auch nach Verbindungsabbruch/Zeitlimit (interrupted) unauffällig weiterschreiben lassen.
+      for (let more = 0; more < MAX_CONTINUE && !res.aborted && !stopRef.current && (res.interrupted || looksCut(res.full)); more++) {
         const next = await streamOnce([
           ...apiMessages,
           { role: "assistant", content: res.full },
@@ -989,6 +1015,7 @@ const Chat = () => {
         if (!next || !next.full) break;
         res.full = res.full + stitch(res.full, next.full);
         if (next.usage?.measured) res.usage = { measured: true, input_tokens: (res.usage?.input_tokens ?? 0) + (next.usage.input_tokens ?? 0), output_tokens: (res.usage?.output_tokens ?? 0) + (next.usage.output_tokens ?? 0), total_tokens: (res.usage?.total_tokens ?? 0) + (next.usage.total_tokens ?? 0) };
+        res.interrupted = next.interrupted;
         if (next.aborted) { res.aborted = true; break; }
       }
       if (res.full || res.image || res.music) {
