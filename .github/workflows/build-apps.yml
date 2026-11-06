@@ -48,6 +48,7 @@ concurrency:
 
 env:
   FORCE: ${{ inputs.force || 'false' }}
+  HAS_RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN != '' }}
   # Ziel der Releases (öffentlich). release-check.sh / release-publish.sh nutzen RELEASE_REPO.
   RELEASE_REPO: lluananonym-cloud/ai-mythoscraft
 
@@ -144,6 +145,8 @@ jobs:
 
       # Auf npm veröffentlichen (unabhängig vom Release-Check: nur wenn die Version auf npm fehlt).
       - name: Auf npm veröffentlichen
+        # Läuft auch, wenn das GitHub-Release fehlschlägt (z. B. RELEASE_TOKEN fehlt).
+        if: ${{ !cancelled() }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           PKG: ${{ steps.src.outputs.cli_package }}

@@ -4,6 +4,10 @@
 # Argumente: Dateien – in dieser Reihenfolge hochgeladen (Update-Feed latest.yml also zuletzt angeben).
 set -euo pipefail
 REPO="${RELEASE_REPO:-$GITHUB_REPOSITORY}"
+if [ "$REPO" != "${GITHUB_REPOSITORY:-}" ] && [ "${HAS_RELEASE_TOKEN:-true}" != "true" ]; then
+  echo "::error::Secret RELEASE_TOKEN fehlt – ohne ihn darf GitHub nicht in $REPO hochladen. Settings > Secrets and variables > Actions > New repository secret."
+  exit 1
+fi
 NOTES="Automatisch gebaut. Download über https://mythos-ai-final-version.lovable.app/downloads
 
 <!-- version: $VER -->
