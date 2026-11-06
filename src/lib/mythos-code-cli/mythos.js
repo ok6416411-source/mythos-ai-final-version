@@ -62,27 +62,44 @@ async function autoUpdate(force = false) {
   await new Promise(() => {}); // hier nicht weiterlaufen – der neue Prozess übernimmt
 }
 
-// ---------- Startbildschirm mit Maskottchen „Myth“ ----------
-// Kleiner Block-Charakter (Minecraft-Stil) – das Logo der Website bleibt unverändert.
+// ---------- Startbildschirm im Claude-Code-Stil: Maskottchen „Myth“ links, Infos rechts ----------
+// Farben aus dem Mythos-Logo (Magenta → Violett → Blau → Türkis), 24-Bit-Farbe wenn möglich.
+const TRUE = process.env.COLORTERM === "truecolor" || process.env.COLORTERM === "24bit" || process.platform === "win32" || !!process.env.WT_SESSION;
+const rgb = (r, g, b) => (TRUE ? `\x1b[38;2;${r};${g};${b}m` : "\x1b[35m");
+const GRAD = [[217, 70, 239], [168, 85, 247], [99, 102, 241], [59, 130, 246], [34, 211, 238]];
+const grad = (t) => { const x = Math.max(0, Math.min(1, t)) * (GRAD.length - 1), i = Math.min(GRAD.length - 2, Math.floor(x)), f = x - i; const [a, b] = [GRAD[i], GRAD[i + 1]]; return rgb(...a.map((v, k) => Math.round(v + (b[k] - v) * f))); };
+// Myth: kleiner Kristall-Geist mit Augen – 11 Zeichen breit, 4 Zeilen
 const MASCOT = [
-  "  ▄█████▄  ",
-  " ██▀███▀██ ",
+  "    ▄█▄    ",
+  "  ▄█▀█▀█▄  ",
   " ▀███████▀ ",
-  "   ▀▀ ▀▀   ",
+  "   ▀▄ ▄▀   ",
 ];
+const paintMascot = (line, row) => [...line].map((ch, i) => (ch === " " ? ch : grad((i + row) / 13) + ch)).join("") + C.x;
+const modelLabel = () => { const m = (typeof MODELS !== "undefined" ? MODELS : []).find((x) => x.id === (cfg.model || "mythos-code")); return m ? m.label : "MythosCode"; };
 function banner(info) {
-  const tip = ["/hilfe zeigt alle Befehle", "Dateien mit @name anhängen", "Bilder einfach ins Terminal ziehen", "/goal <ziel> – Mythos bleibt dran, bis es fertig ist"][Math.floor(Math.random() * 4)];
-  const w = Math.min((process.stdout.columns || 80) - 4, 64);
-  const line = C.d + "─".repeat(w) + C.x;
+  const tips = ["/hilfe zeigt alle Befehle", "Dateien mit @name anhängen", "Bilder einfach ins Terminal ziehen", "/goal <ziel> – Mythos bleibt dran, bis es fertig ist", "/modell wechselt das Modell"];
   const right = [
     C.b + "Mythos Code" + C.x + C.d + " v" + VERSION + C.x,
+    C.d + modelLabel() + " · " + (cfg.name ? cfg.name : "Mythoscraft") + C.x,
     C.d + info.dir + C.x,
-    C.d + info.extra + C.x,
-    C.c + "✦ " + C.x + C.d + tip + C.x,
+    "",
   ];
-  console.log("\n" + line);
-  MASCOT.forEach((m, i) => console.log(C.m + m + C.x + "  " + (right[i] || "")));
-  console.log(line + "\n");
+  console.log("");
+  MASCOT.forEach((m, i) => console.log(" " + paintMascot(m, i) + "  " + (right[i] || "")));
+  console.log("");
+  console.log(" " + grad(0.15) + "✦" + C.x + " " + C.d + tips[Math.floor(Math.random() * tips.length)] + (info.extra ? " · " + info.extra : "") + C.x + "\n");
+}
+// Eingabe wie bei Claude Code: Hinweis links + Modell rechts, Linie, dann „❯“.
+// (Unter der Eingabe zeichnen geht nicht – readline löscht beim Tippen alles unterhalb.)
+async function framedAsk(goal) {
+  const w = Math.max(30, (process.stdout.columns || 80) - 1);
+  const leftTxt = autoYes ? "▸▸ Vollzugriff an" : "? fragt vor Befehlen · /hilfe";
+  const left = autoYes ? rgb(250, 204, 21) + leftTxt + C.x : C.d + leftTxt + C.x;
+  const rightTxt = "● " + modelLabel() + " · /modell";
+  const gap = Math.max(1, w - leftTxt.length - rightTxt.length);
+  process.stdout.write("\n" + left + " ".repeat(gap) + C.d + rightTxt + C.x + "\n" + C.d + "─".repeat(w) + C.x + "\n");
+  return ask((goal ? "🎯 " : "") + C.b + "❯ " + C.x);
 }
 const FN = process.env.MYTHOS_FN_URL || API.replace(/\/v1-messages$/, "");
 const authPost = async (body) => (await fetch(FN + "/cli-auth", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })).json();
@@ -126,12 +143,15 @@ const fmt = (ms) => { const s = Math.floor(ms / 1000); return (s >= 60 ? Math.fl
 let T0 = 0, tick = null, activity = "";
 const clearLine = () => process.stdout.write("\r\x1b[K");
 // Zeigt live, was Mythos gerade tut (z. B. „✍ schreibt src/main.js · 12 KB“) – auf Terminalbreite gekürzt.
+const SPIN = ["✦", "✧", "✶", "✷", "✸", "✹", "✸", "✷", "✶", "✧"];
+let spinI = 0;
 const tickLine = () => {
-  const s = "⏳ Mythos arbeitet… " + fmt(Date.now() - T0) + (activity ? " · " + activity : "") + "  (Strg+C = stoppen)";
-  const w = (process.stdout.columns || 100) - 2;
+  const what = activity ? activity.charAt(0).toUpperCase() + activity.slice(1) : "Arbeitet…";
+  const s = what + " (" + fmt(Date.now() - T0) + " · Strg+C zum Stoppen)";
+  const w = (process.stdout.columns || 100) - 4;
   return s.length > w ? s.slice(0, w - 1) + "…" : s;
 };
-const startTick = () => { if (tick || !working) return; tick = setInterval(() => process.stdout.write("\r\x1b[K" + C.d + tickLine() + C.x), 250); };
+const startTick = () => { if (tick || !working) return; tick = setInterval(() => { spinI = (spinI + 1) % SPIN.length; process.stdout.write("\r\x1b[K" + grad((spinI % 5) / 4) + SPIN[spinI] + C.x + " " + rgb(203, 213, 225) + tickLine() + C.x); }, 120); };
 const stopTick = () => { if (tick) { clearInterval(tick); tick = null; } clearLine(); };
 let adN = 0, adTier = null, adAdminDay = "";
 async function maybeAd() {
@@ -670,7 +690,7 @@ async function main() {
   const history = [];
   if (args.length) { const { text, images } = extractImages(args.join(" ")); await turn(history, text, images); }
   while (true) {
-    const q = (await ask(C.c + (goal ? "🎯 " : "") + "› " + C.x)).trim();
+    const q = (await framedAsk(goal)).trim();
     if (!q) continue;
     if (q === "/exit") break;
     if (q.startsWith("/")) { await command(q, history); continue; }
