@@ -1,6 +1,8 @@
 import { aiChat } from "../_shared/ai.ts";
 import { buildSystemMessages } from "../_shared/identity.ts";
 import { MYTHOS_CATALOG } from "../_shared/catalog.ts";
+import { admitTask, recordUsage, validTaskId, limitMessage } from "../_shared/tokens.ts";
+import { usageFromOpenAi, type TokenUsage } from "../_shared/usageParse.ts";
 // Claude-compatible /v1/messages endpoint, backed by Lovable AI Gateway.
 // MythosAI identity is locked: regardless of any client-supplied system prompt,
 // the model is instructed to identify as MythosAI and never claim to be another assistant.
@@ -122,7 +124,6 @@ Deno.serve(async (req) => {
   ]);
   const isPro = !!roleRows?.some((r: any) => r.role === "admin") ||
     (subRow?.tier === "pro" && (!subRow.expires_at || new Date(subRow.expires_at) > new Date()));
-  if (!isPro && (count || 0) >= keyRow.daily_limit) return err("rate_limit_error", `Daily limit of ${keyRow.daily_limit} reached`, 429);
 
   let body: any;
   try { body = await req.json(); } catch { return err("invalid_request_error", "Invalid JSON", 400); }
@@ -131,6 +132,12 @@ Deno.serve(async (req) => {
   // Aufwand aus der Code-App (wie bei Claude): low | normal | high | max
   const effort = ["low", "normal", "high", "max"].includes(body.effort) ? body.effort as string : "";
   if (!Array.isArray(messages) || messages.length === 0) return err("invalid_request_error", "messages required", 400);
+  const taskId = validTaskId(body.task_id) ?? crypto.randomUUID();
+  let admission;
+  try { admission = await admitTask(supabase, keyRow.user_id, taskId, "code"); }
+  catch { return err("api_error", "Verbrauchsprüfung derzeit nicht erreichbar", 503); }
+  if (!admission.allowed) return err("rate_limit_error", limitMessage, 429);
+  if (!admission.continued && !isPro && (count || 0) >= keyRow.daily_limit) return err("rate_limit_error", `Daily limit of ${keyRow.daily_limit} reached`, 429);
 
   // Identity lock ALWAYS comes first; the user's system prompt comes after but cannot override identity.
   const userSystem = system
@@ -216,6 +223,7 @@ Deno.serve(async (req) => {
       if (!text) { from = got.index + 1; continue; }
       const usage = data.usage || {};
       await logUsage(200, usage.prompt_tokens, usage.completion_tokens);
+      await recordUsage(supabase, { userId: keyRow.user_id, taskId, source: "code", model: usedModel, usage: usageFromOpenAi(data) });
       return new Response(JSON.stringify({
         id: `msg_${crypto.randomUUID().replace(/-/g, "")}`,
         type: "message",
@@ -224,7 +232,8 @@ Deno.serve(async (req) => {
         content: [{ type: "text", text }],
         stop_reason: "end_turn",
         stop_sequence: null,
-        usage: { input_tokens: usage.prompt_tokens || 0, output_tokens: usage.completion_tokens || 0 },
+        task_id: taskId,
+        usage: { input_tokens: usage.prompt_tokens ?? null, output_tokens: usage.completion_tokens ?? null, total_tokens: usage.total_tokens ?? null },
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
     await logUsage(lastStatus);
@@ -244,6 +253,8 @@ Deno.serve(async (req) => {
       send("message_start", { type: "message_start", message: { id: respId, type: "message", role: "assistant", content: [], model, stop_reason: null, stop_sequence: null, usage: { input_tokens: 0, output_tokens: 0 } } });
 
       let emitted = 0;
+      let actualUsage: TokenUsage | null = null;
+      send("mythos_task", { type: "mythos_task", task_id: taskId });
       let blockOpen = false;
       let thinkOpen = false;
       // Gedanken (falls das Modell welche liefert) als eigener Block VOR dem Text, live Wort für Wort.
@@ -263,7 +274,8 @@ Deno.serve(async (req) => {
         const got = await nextUpstream(from, true);
         if (!got) break;
         from = got.index + 1;
-        const reader = got.resp.body!.getReader();
+        if (!got.resp.body) continue;
+        const reader = got.resp.body.getReader();
         const dec = new TextDecoder();
         let buf = "";
         try {
@@ -279,11 +291,10 @@ Deno.serve(async (req) => {
               const json = line.slice(6).trim();
               if (json === "[DONE]") continue;
               try {
-                const d = JSON.parse(json).choices?.[0]?.delta;
-                const think = typeof d?.reasoning === "string" ? d.reasoning
-                  : typeof d?.reasoning_content === "string" ? d.reasoning_content
-                  : Array.isArray(d?.reasoning_details) ? d.reasoning_details.map((x: any) => x?.text || x?.summary || "").join("") : "";
-                if (think) emitThink(think);
+                const chunk = JSON.parse(json);
+                actualUsage = usageFromOpenAi(chunk) ?? actualUsage;
+                const d = chunk.choices?.[0]?.delta;
+                // Never expose private provider reasoning; the app displays concrete work activity.
                 if (d?.content) emit(d.content);
               } catch { buf = line + "\n" + buf; break; }
             }
@@ -300,9 +311,10 @@ Deno.serve(async (req) => {
         controller.close();
         return;
       }
-      await logUsage(200, undefined, Math.ceil(emitted / 4));
+      await logUsage(200, actualUsage?.input, actualUsage?.output);
+      await recordUsage(supabase, { userId: keyRow.user_id, taskId, source: "code", model: usedModel, usage: actualUsage });
       send("content_block_stop", { type: "content_block_stop", index: thinkOpen ? 1 : 0 });
-      send("message_delta", { type: "message_delta", delta: { stop_reason: "end_turn", stop_sequence: null }, usage: { output_tokens: Math.ceil(emitted / 4) } });
+      send("message_delta", { type: "message_delta", delta: { stop_reason: "end_turn", stop_sequence: null }, usage: { input_tokens: actualUsage?.input ?? null, output_tokens: actualUsage?.output ?? null, total_tokens: actualUsage?.total ?? null, measured: !!actualUsage } });
       send("message_stop", { type: "message_stop" });
       controller.close();
     },

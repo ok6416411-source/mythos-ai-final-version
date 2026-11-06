@@ -18,7 +18,7 @@ export async function tierOf(db: any, userId: string): Promise<string> {
 export async function admitTask(db: any, userId: string, taskId: string, source: string) {
   const tier = await tierOf(db, userId);
   const { data, error } = await db.rpc("mythos_admit_task", { _user_id: userId, _task_id: taskId, _source: source, _tier: tier });
-  if (error) { console.error("[tokens] admit failed", error.message); return { allowed: true, tier, degraded: true }; }
+  if (error) { console.error("[tokens] admit failed", error.message); throw new Error("MythosAI-Verbrauch konnte nicht geprüft werden. Bitte gleich erneut versuchen."); }
   return { ...(data as Record<string, unknown>), tier };
 }
 
@@ -38,7 +38,7 @@ export async function usageSummary(db: any, userId: string) {
     db.from("app_settings").select("key,value").like("key", `token_limit_${tier}_%`),
   ]);
   const limits: Record<string, number | null> = { hour: null, week: null, month: null };
-  for (const r of lim ?? []) { const k = String(r.key).split("_").pop()!; const n = Number(r.value); if (k in limits && r.value && Number.isFinite(n)) limits[k] = n; }
+  for (const r of lim ?? []) { const k = String(r.key).split("_").pop(); const n = Number(r.value); if (k && k in limits && r.value && Number.isFinite(n)) limits[k] = n; }
   return { tier, usage: data ?? { hour: 0, week: 0, month: 0, unmeasured: 0 }, limits };
 }
 

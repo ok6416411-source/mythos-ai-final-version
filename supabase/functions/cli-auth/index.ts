@@ -2,6 +2,7 @@
 // actions: start (App) -> approve (Website, eingeloggt) -> poll (App) ; usage (App, mit API-Key)
 import { createClient } from "npm:@supabase/supabase-js@2.103.3";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { usageSummary } from "../_shared/tokens.ts";
 
 const json = (d: unknown, status = 200) =>
   new Response(JSON.stringify(d), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -76,7 +77,8 @@ Deno.serve(async (req) => {
       const admin = !!roles?.some((r: any) => r.role === "admin");
       const pro = admin ||
         (sub?.tier === "pro" && (!sub.expires_at || new Date(sub.expires_at) > new Date()));
-      return json({ used: count || 0, limit: pro ? null : k.daily_limit, tier: pro ? "pro" : (sub?.tier || "free"), admin });
+      const tokens = await usageSummary(db, k.user_id);
+      return json({ used: count || 0, limit: pro ? null : k.daily_limit, tier: pro ? "pro" : (sub?.tier || "free"), admin, tokens });
     }
 
     return json({ error: "Unbekannte Aktion" }, 400);
