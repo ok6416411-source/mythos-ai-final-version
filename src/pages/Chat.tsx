@@ -120,7 +120,8 @@ const MAX_BAD_TOOLS = 2;
 
 type ApiMsg = { role: string; content: any };
 type GoalState = { text: string; step: number; status: "läuft" | "erreicht" | "gestoppt" | "limit" };
-type StreamResult = { full: string; image?: GeneratedImage; music?: FunkPattern; agents?: AgentStatus[]; thinking: string; thinkingMs?: number; steps?: string[]; aborted: boolean };
+type MythosUsage = { input_tokens?: number; output_tokens?: number; total_tokens?: number; measured: boolean };
+type StreamResult = { full: string; image?: GeneratedImage; music?: FunkPattern; agents?: AgentStatus[]; thinking: string; thinkingMs?: number; steps?: string[]; aborted: boolean; usage?: MythosUsage };
 
 /** Nachricht aus dem Verlauf so umwandeln, wie das Modell sie bekommt. */
 const toApi = (m: Msg): ApiMsg =>
@@ -158,6 +159,7 @@ const Chat = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   // Chat, der gerade beim Senden neu angelegt wurde – dessen URL-Wechsel darf die laufende Antwort nicht neu laden.
   const createdIdRef = useRef<string | null>(null);
+  const taskIdRef = useRef<string | null>(null);
   // Neu angelegter Chat, der nach der ersten Antwort noch seinen KI-Titel bekommt (temp = vorläufiger Titel).
   const pendingTitleRef = useRef<{ id: string; temp: string } | null>(null);
   const [renaming, setRenaming] = useState<{ id: string; value: string } | null>(null);
@@ -762,6 +764,7 @@ const Chat = () => {
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
       body: JSON.stringify({
         conversationId: convId,
+        taskId: taskIdRef.current,
         userId: user?.id,
         personaId: personaId !== "none" ? personaId : undefined,
         model: modelForCall,
@@ -772,6 +775,7 @@ const Chat = () => {
     });
 
     let full = "", thinking = "";
+    let measuredUsage: MythosUsage | undefined;
     let thinkStart = 0, thinkingMs = 0;
     let steps: string[] = [];
     let pendingImage: string | null = null;
@@ -827,6 +831,7 @@ const Chat = () => {
           if (json === "[DONE]") break;
           try {
             const p = JSON.parse(json);
+            if (p.mythos_usage) { measuredUsage = p.mythos_usage; setLast({ metadata: { mythos_usage: measuredUsage } }); continue; }
             if (p.imagePending) { pendingImage = p.imagePending.prompt; setLast({ imagePending: p.imagePending }); continue; }
             if (p.imageFailed) {
               const { prompt, reasons } = p.imageFailed as { prompt: string; reasons?: string[] };
@@ -879,7 +884,7 @@ const Chat = () => {
           : { url: "", prompt, reasons: [...serverReasons, ...(body?.reasons ?? []), ...(body?.reasons?.length ? [] : [body?.error || error?.message || "Kein Anbieter hat ein Bild geliefert."])] };
         setLast({ image: imageData, imagePending: undefined });
       }
-      return { full, image: imageData, music: musicData, agents: agentsData, thinking, thinkingMs, steps, aborted: false };
+      return { full, image: imageData, music: musicData, agents: agentsData, thinking, thinkingMs, steps, aborted: false, usage: measuredUsage };
     } catch (e) {
       if ((e as Error)?.name === "AbortError") {
         // Gestoppt: was schon da ist, bleibt stehen.
@@ -954,6 +959,7 @@ const Chat = () => {
   /** Arbeitet so lange weiter, wie Werkzeug-Aufrufe oder ein /goal es verlangen. */
   const runAgent = async (convId: string, history: ApiMsg[], userText: string, goalText?: string) => {
     stopRef.current = false;
+    taskIdRef.current = crypto.randomUUID();
     const servers = getMcpServers().filter(s => s.enabled);
     const tools = servers.length ? await collectTools(servers) : [];
     let step = 1;
@@ -976,12 +982,13 @@ const Chat = () => {
         ], convId, res.full);
         if (!next || !next.full) break;
         res.full = res.full + stitch(res.full, next.full);
+        if (next.usage?.measured) res.usage = { measured: true, input_tokens: (res.usage?.input_tokens ?? 0) + (next.usage.input_tokens ?? 0), output_tokens: (res.usage?.output_tokens ?? 0) + (next.usage.output_tokens ?? 0), total_tokens: (res.usage?.total_tokens ?? 0) + (next.usage.total_tokens ?? 0) };
         if (next.aborted) { res.aborted = true; break; }
       }
       if (res.full || res.image || res.music) {
         await supabase.from("messages").insert({
           conversation_id: convId, role: "assistant", content: res.full,
-          metadata: { image: res.image, music: res.music, agents: res.agents, thinking: res.thinking || undefined, thinkingMs: res.thinkingMs || undefined, steps: res.steps?.length ? res.steps : undefined, goal: goalText ? step : undefined },
+          metadata: { image: res.image, music: res.music, agents: res.agents, thinking: res.thinking || undefined, thinkingMs: res.thinkingMs || undefined, steps: res.steps?.length ? res.steps : undefined, goal: goalText ? step : undefined, mythos_usage: res.usage },
         });
       }
       history.push({ role: "assistant", content: res.full });
@@ -1617,6 +1624,7 @@ const Chat = () => {
                               />
                             )}
                           </div>
+                          {m.metadata?.mythos_usage && <div className="mt-2 text-xs text-muted-foreground">{m.metadata.mythos_usage.measured ? `${Number(m.metadata.mythos_usage.total_tokens).toLocaleString("de-DE")} MythosAI Tokens · ${Number(m.metadata.mythos_usage.input_tokens).toLocaleString("de-DE")} Eingabe · ${Number(m.metadata.mythos_usage.output_tokens).toLocaleString("de-DE")} Ausgabe` : "MythosAI Tokens: Anbieterwerte nicht verfügbar"}</div>}
                           {forDisplay(m.content) && !(sending && i === messages.length - 1) && (
                             <div className="flex items-center gap-0.5 mt-2 -ml-1.5 text-muted-foreground">
                               <span className="px-1.5 text-xs">{relTime(m.created_at)}</span>

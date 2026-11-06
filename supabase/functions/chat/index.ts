@@ -4,7 +4,10 @@ import { classifyImageRequest, isImageRequest, maybeImageRequest, resolveImagePr
 import { mythosIdentity, mythosIdentityReminder } from "../_shared/identity.ts";
 import { MYTHOS_CATALOG, MYTHOS_FILES } from "../_shared/catalog.ts";
 import { PLUGIN_CATEGORY_PREFIX, formatServerArticles, isServerQuestion, relevantServerArticles, serverKnowledgeText } from "../_shared/serverKnowledge.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { createClient } from "npm:@supabase/supabase-js@2.103.3";
+import { admitTask, recordUsage, validTaskId, limitMessage } from "../_shared/tokens.ts";
+import { forwardUsageStream } from "../_shared/usageStream.ts";
+import type { TokenUsage } from "../_shared/usageParse.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -137,7 +140,8 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { messages, mode = "support", conversationId, personaId, userId: clientUserId, model: requestedModel, mythos, voice: voiceMode, build } = await req.json();
+    const { messages, mode = "support", conversationId, personaId, taskId: requestedTaskId, model: requestedModel, mythos, voice: voiceMode, build } = await req.json();
+    if (!Array.isArray(messages) || !messages.length || messages.length > 200) return new Response(JSON.stringify({ error: "Nachrichten fehlen oder Verlauf zu groß" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     const resolved = resolveMythos(mythos);
     const ALLOWED_MODELS = new Set([
       "openai/gpt-5.5-pro",
@@ -154,6 +158,17 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
+    const bearer = req.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") || "";
+    const { data: claims } = await supabase.auth.getClaims(bearer);
+    const clientUserId = claims?.claims?.sub;
+    if (!clientUserId) return new Response(JSON.stringify({ error: "Bitte zuerst anmelden." }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    if (conversationId) {
+      const { data: own } = await supabase.from("conversations").select("user_id").eq("id", conversationId).maybeSingle();
+      if (!own || own.user_id !== clientUserId) return new Response(JSON.stringify({ error: "Chat nicht gefunden." }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    const taskId = validTaskId(requestedTaskId) ?? crypto.randomUUID();
+    const admission = await admitTask(supabase, clientUserId, taskId, "web");
+    if (!admission.allowed) return new Response(JSON.stringify({ error: limitMessage }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     const lastUser = [...messages].reverse().find((m: any) => m.role === "user");
     const lastTextRaw = lastUser?.content;
@@ -490,6 +505,10 @@ Bilder & PDFs: Du kannst hochgeladene Bilder direkt sehen und analysieren.${memo
       });
       return r;
     };
+    const finishUsage = async (c: ReadableStreamDefaultController<Uint8Array>, usage: TokenUsage | null) => {
+      await recordUsage(supabase, { userId: clientUserId, taskId, source: "web", model: chatModel, usage });
+      c.enqueue(sse({ mythos_usage: usage ? { input_tokens: usage.input, output_tokens: usage.output, total_tokens: usage.total, measured: true } : { measured: false }, task_id: taskId }));
+    };
 
     if (searchQuery) {
       const stream = new ReadableStream({
@@ -510,12 +529,8 @@ Bilder & PDFs: Du kannst hochgeladene Bilder direkt sehen und analysieren.${memo
             c.enqueue(sse({ choices: [{ delta: { content: "❌ Antwort fehlgeschlagen. Bitte nochmal versuchen." } }] }));
             c.enqueue(sseDone()); c.close(); return;
           }
-          const reader = r.body.getReader();
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            c.enqueue(value);
-          }
+          const usage = await forwardUsageStream(r.body, value => c.enqueue(value));
+          await finishUsage(c, usage);
           c.close();
         },
       });
@@ -540,12 +555,8 @@ Bilder & PDFs: Du kannst hochgeladene Bilder direkt sehen und analysieren.${memo
               : "❌ Antwort fehlgeschlagen. Bitte nochmal versuchen.";
             c.enqueue(sse({ choices: [{ delta: { content: msg } }] })); c.enqueue(sseDone());
           } else {
-            const reader = resp.body.getReader();
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              c.enqueue(value);
-            }
+            const usage = await forwardUsageStream(resp.body, value => c.enqueue(value));
+            await finishUsage(c, usage);
           }
         } catch (e) {
           console.error("stream error:", e);

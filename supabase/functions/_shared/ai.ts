@@ -5,6 +5,7 @@
 // oder – falls in diesem Projekt keine Secrets-Verwaltung verfügbar ist – als per
 // /apikeyadmin gespeicherter Wert in der Tabelle app_secrets (siehe nvidia/index.ts).
 import { createClient } from "npm:@supabase/supabase-js@2.103.3";
+import { geminiUsageToOpenAi } from "./usageParse.ts";
 
 const GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const GOOGLE_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
@@ -153,8 +154,10 @@ function googleSseToOpenAi(src: ReadableStream<Uint8Array>): ReadableStream<Uint
             try {
               const j = JSON.parse(raw);
               const parts = j.candidates?.[0]?.content?.parts ?? [];
-              const text = parts.map((p: any) => p.text || "").join("");
+              const text = parts.filter((p: any) => !p.thought).map((p: any) => p.text || "").join("");
               if (text) c.enqueue(sse({ choices: [{ delta: { content: text } }] }));
+              const usage = geminiUsageToOpenAi(j.usageMetadata);
+              if (usage) c.enqueue(sse({ choices: [], usage }));
             } catch (_e) { /* ignore partial */ }
           }
         }
@@ -249,7 +252,8 @@ export async function aiChat(
     try {
       const win = await Promise.any(racers.map(x => x.p));
       racers.forEach(x => x.p.then(r => { if (r !== win) { x.ctrl.abort(); } }).catch(() => {}));
-      return new Response(googleSseToOpenAi(win.body!), { headers: { "Content-Type": "text/event-stream" } });
+      if (!win.body) throw new Error("Empty Google stream");
+      return new Response(googleSseToOpenAi(win.body), { headers: { "Content-Type": "text/event-stream" } });
     } catch { /* alle drei gescheitert -> restliche nacheinander */ }
   }
   for (const [gModel, gk] of (streaming && order.length > 1 ? order.slice(6) : order)) {
@@ -279,7 +283,7 @@ export async function aiChat(
           continue;
         }
         return new Response(
-          JSON.stringify({ choices: [{ message: { role: "assistant", content: text, ...(images.length ? { images } : {}) }, finish_reason: "stop" }] }),
+          JSON.stringify({ choices: [{ message: { role: "assistant", content: text, ...(images.length ? { images } : {}) }, finish_reason: "stop" }], usage: geminiUsageToOpenAi(j.usageMetadata) }),
           { headers: { "Content-Type": "application/json" } },
         );
       } catch (e) {
