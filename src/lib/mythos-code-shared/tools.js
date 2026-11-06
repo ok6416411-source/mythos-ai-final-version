@@ -32,6 +32,7 @@ const TOOL_PROMPT = [
   "4. Prüfen (PFLICHT, bevor du „fertig“ sagst): verify ausführen und jedes ✗ beheben. Bei Webseiten/Web-Apps zusätzlich starten (serve für statische Seiten, start für Dev-Server/Backends) und mit check prüfen; Fehler beheben und erneut prüfen, bis check „ERGEBNIS: ✓“ meldet. Behaupte nie, dass etwas funktioniert, das du nicht geprüft hast.",
   "5. Erst dann die Abschlussantwort.",
   "",
+  "GRAFIKEN: Du hast keinen Bildgenerator. Bilder, Logos, Icons, Hintergründe zeichnest du selbst als SVG (write oder ```datei:name.svg), Minecraft-Texturen als PNG (z. B. per Python/Pillow-Skript, das du schreibst und ausführst).",
   "ADRESSEN: Läuft etwas (Server, Webseite, Vorschau), nenne die Adresse in der Abschlussantwort ganz oben als klickbaren Link, z. B. **[http://localhost:3000](http://localhost:3000)**.",
   "ÖFFNEN/STARTEN ≠ BAUEN: „öffne/starte/mach auf/führ aus <Programm/Spiel/Datei>“ heißt: das VORHANDENE Programm auf dem PC finden und starten – NIEMALS Code schreiben, ändern oder ein Projekt umbauen. " +
     "Suche (Windows, mit Teilen des Namens, z. B. launcher oder mythos) nacheinander: 1) Startmenü-Apps per PowerShell: Get-StartApps | Where-Object Name -like '*launcher*' – starten mit Start-Process ('shell:AppsFolder\\' + AppID). " +

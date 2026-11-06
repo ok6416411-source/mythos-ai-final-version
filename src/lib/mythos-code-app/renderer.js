@@ -933,7 +933,6 @@ const COMMANDS = [
   ["/hooks", "[bearbeiten|global]", "Hooks anzeigen und einrichten"],
   ["/discord", "[token]|neu|aus", "💬 Mythos über Discord Aufgaben geben (eigener Bot, antwortet dort)"],
   ["/handy", "<url>|test|aus", "Handy-Benachrichtigung (ntfy.sh-Thema oder Discord-Webhook)"],
-  ["/bild", "<beschreibung>", "Bild generieren (wie /image auf der Website)"],
   ["/koppeln", "[neu|aus]", "📱 Mythos vom Handy schreiben: Link zum Antippen (auch per Discord/ntfy), kein Konto nötig"],
   ["/warteschlange", "[leeren]", "Warteschlange anzeigen oder leeren"],
   ["/suche", "<text>", "Alle Chats durchsuchen"],
@@ -1169,7 +1168,8 @@ async function dcCommand(arg) {
 async function command(q) {
   const cmd = q.split(/\s+/)[0].toLowerCase(), arg = q.slice(cmd.length).trim();
   if (cmd !== "/goal" && cmd !== "/ziel" && editing != null) { editing = null; renderEdit(); }
-  if (cmd === "/bild" || cmd === "/image") return generateImage(arg);
+  // Keine Bild-KI mehr: Grafiken zeichnet Mythos selbst als SVG.
+  if (cmd === "/bild" || cmd === "/image") return arg ? submit(chat, "Zeichne als Grafik (SVG-Datei): " + arg, []) : note("Beschreib einfach, was du willst – Mythos zeichnet es als Grafik (SVG).");
   if (cmd === "/discord") return dcCommand(arg);
   if (cmd === "/koppeln") {
     if (/^(aus|stop|trennen)$/i.test(arg)) { relayStop(); delete cfg.relayKey; delete cfg.relaySince; window.mythos.setCfg(cfg); note("📱 Kopplung getrennt. Der alte Link funktioniert nicht mehr."); return; }

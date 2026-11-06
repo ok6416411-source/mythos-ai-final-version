@@ -65,7 +65,7 @@ const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n+
 const crc32 = (b: Uint8Array) => { let c = 0xffffffff; for (let i = 0; i < b.length; i++) c = CRC[(c ^ b[i]) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
 const u32 = (n: number) => [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255];
 
-function png(w: number, h: number, rgba: Uint8Array): string {
+export function png(w: number, h: number, rgba: Uint8Array): string {
   // Rohdaten: pro Zeile Filter-Byte 0 + RGBA
   const raw = new Uint8Array(h * (w * 4 + 1));
   for (let y = 0; y < h; y++) raw.set(rgba.subarray(y * w * 4, (y + 1) * w * 4), y * (w * 4 + 1) + 1);
@@ -249,4 +249,22 @@ export function finishBBModel(text: string): { ok: true; content: string; cubes:
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
+}
+
+/** Pixel-Raster ({"size":16,"palette":{...},"rows":[...]}) → PNG (data-URL). Für Minecraft-Texturen. */
+export function buildTexture(text: string): { ok: true; dataUrl: string; size: number } | { ok: false; error: string } {
+  let d: { size?: number; palette?: Record<string, string>; rows?: string[]; pixels?: string[] };
+  try { d = JSON.parse(text.trim()); } catch { return { ok: false, error: "Textur ist kein gültiges JSON" }; }
+  const rows = d.rows || d.pixels;
+  if (!Array.isArray(rows) || !rows.length || !d.palette) return { ok: false, error: "Textur braucht palette und rows" };
+  const h = rows.length, w = Math.max(...rows.map((r) => [...String(r)].length));
+  if (w > 512 || h > 512) return { ok: false, error: "Textur zu groß (max. 512)" };
+  const rgba = new Uint8Array(w * h * 4);
+  rows.forEach((r, y) => [...String(r)].forEach((ch, x) => {
+    const c = d.palette![ch];
+    if (!c || /^(transparent|none)$/i.test(c) || ch === ".") return;
+    const [R, G, B, A] = parseColor(c);
+    const p = (y * w + x) * 4; rgba[p] = R; rgba[p + 1] = G; rgba[p + 2] = B; rgba[p + 3] = A;
+  }));
+  return { ok: true, dataUrl: png(w, h, rgba), size: w };
 }

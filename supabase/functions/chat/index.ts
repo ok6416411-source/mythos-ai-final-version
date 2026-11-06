@@ -204,12 +204,14 @@ Deno.serve(async (req) => {
 
     // /image <prompt> – oder automatisch erkannt ("generiere mir das als Bild").
     // Bezüge wie "das" werden mit dem Chatverlauf zu einem vollständigen Prompt aufgelöst.
-    const imgMatch = lastText.match(/^\/image\s+(.+)$/i);
+    // Keine Bild-KI mehr: Bild-Wünsche beantwortet Mythos selbst mit gezeichneten Grafiken (SVG/Canvas)
+    // im normalen Chat – siehe GRAPHICS im Fachwissen. Der alte Bild-Pfad bleibt aus.
+    const imgMatch = null as RegExpMatchArray | null;
     const hasImageAttachment = Array.isArray(lastTextRaw) && lastTextRaw.some((p: any) => p?.type === "image_url");
     // Im App-Builder ist "Bildergalerie" o. ä. ein Code-Wunsch, kein Bild-Wunsch.
-    const autoImage = !build && !imgMatch && !hasImageAttachment && isImageRequest(lastText);
+    const autoImage = false && !build && !hasImageAttachment && isImageRequest(lastText);
     // Unklar ("generiere das als Fußball Trikot"): die KI entscheidet mit dem Verlauf und liefert gleich den Prompt.
-    const classified = !build && !imgMatch && !autoImage && !hasImageAttachment && maybeImageRequest(lastText)
+    const classified = false && !build && !hasImageAttachment && maybeImageRequest(lastText)
       ? await classifyImageRequest(lastText, messages, LOVABLE_API_KEY)
       : null;
     if (imgMatch || autoImage || classified) {

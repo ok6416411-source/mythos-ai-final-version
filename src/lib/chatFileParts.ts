@@ -1,7 +1,7 @@
 // Datei-Blöcke aus Mythos-Antworten herauslösen und für Download/Vorschau vorbereiten.
 // Gemeinsam genutzt von Chat-Nachricht, „Dateien“-Liste und Artifacts.
 import { extOf, fileBlob, parseFileInfo } from "@/lib/chatFiles";
-import { finishBBModel } from "@/lib/bbmodel";
+import { buildTexture, finishBBModel } from "@/lib/bbmodel";
 
 /** Datei-Blöcke (```datei:…) aus der Antwort lösen: Sie erscheinen gesammelt als Karten am Ende.
  *  Ein noch offener Block (Antwort läuft noch) wird als „wird geschrieben“ angezeigt, nie als halbe Datei. */
@@ -34,6 +34,13 @@ export function prepareFile(name: string, content: string, base64: boolean): { b
     const r = finishBBModel(content);
     if (r.ok === false) return { blob: null, content, error: r.error };
     return { blob: fileBlob(name, r.content, false), content: r.content, note: `${r.cubes} Würfel` };
+  }
+  // Textur als Pixel-Raster → echte PNG
+  if (extOf(name) === "png" && !base64 && content.trim().startsWith("{")) {
+    const t = buildTexture(content);
+    if (t.ok === false) return { blob: null, content, error: t.error };
+    const b64 = t.dataUrl.split(",")[1];
+    return { blob: fileBlob(name, b64, true), content: b64, note: `${t.size}×${t.size} Pixel` };
   }
   try { return { blob: fileBlob(name, content, base64), content }; } catch { return { blob: null, content, error: "Datei ist beschädigt" }; }
 }

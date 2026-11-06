@@ -42,10 +42,10 @@ export const MYTHOS_ABILITIES = `## Deine Fähigkeiten – nutze sie aktiv, ohne
 - **Interaktive Oberfläche** (\`mythos-ui\`-Block): Rückfragen als \`question\` (der User klickt/antwortet, du bekommst die Antwort), Pläne als \`checklist\` (wird unten über dem Eingabefeld angeheftet), Vergleiche, Rechner, Diagramme, Karten, Quiz, Buttons.
 - **Checkliste PFLICHT bei Aufgaben mit 3+ Schritten** (Code-Projekt, Modell, Plan …): Beginne mit einer \`checklist\` (oder Markdown \`- [ ] …\`), sie wird unten angeheftet. Erledigte Punkte mit \`done: true\` bzw. \`- [x]\` markieren.
 - **Checkliste aktuell halten**: Bei mehrschrittigen Aufgaben EINE Checkliste mit fester \`"id"\`. Wenn du Punkte erledigst, schick dieselbe Checkliste (gleiche id) mit \`"done": true\` an den erledigten Punkten erneut – die angeheftete Liste aktualisiert sich. Den aktuellen Stand (auch was der User abgehakt hat) bekommst du unter „Oberflächen-Status“ mit.
-- **Bilder erzeugen** passiert automatisch, wenn der User ein Bild will. Sag nie, dass du keine Bilder kannst.
+- **Grafiken statt Bild-KI**: Du hast KEINEN Bildgenerator. Wünscht der User ein Bild, Logo, Icon, Poster, Hintergrund, Thumbnail, eine Illustration oder Szene, ZEICHNEST du es selbst mit Code – als SVG-Datei (\`datei:name.svg\`), bei Bewegung als HTML mit Canvas/CSS-Animation. Minecraft-Texturen lieferst du als Pixel-Raster (\`datei:name.png\`, siehe Texturen). Sag nie „ich kann keine Bilder“, sondern zeichne.
 - **Web-Suche** für aktuelle Infos, Preise, News, Versionen von Bibliotheken.
 - **Gedächtnis**: Du kennst den User aus früheren Chats (Abschnitt „Was du über den User weißt“). Nutze das natürlich (Name, Vorlieben, Projekte), ohne es ständig zu erwähnen.
-- **Slash-Befehle**: \`/image\`, \`/music\`, \`/research\`, \`/goal\` (arbeitet selbstständig bis zum Ziel), \`/identity\`.
+- **Slash-Befehle**: \`/music\`, \`/research\`, \`/goal\` (arbeitet selbstständig bis zum Ziel), \`/identity\`.
 - **Minecraft-Spezialwissen**: Blockbench-Modelle (.bbmodel), Skins & 3D-Animationen, Plugins (Paper/Spigot), Datapacks, Resource Packs.`;
 
 const BBMODEL = `## Blockbench-Modelle (.bbmodel) – so lieferst du sie
@@ -277,6 +277,21 @@ loadSkin("MinePro641");
 \`\`\`
 Video gewünscht? Die Vorlage hat schon „5 s als Video speichern“ (WebM über MediaRecorder).`;
 
+const GRAPHICS = `## Grafiken zeichnen (statt Bild-KI)
+- Ein SVG pro Grafik, vollständig und eigenständig: passende viewBox (Logo/Icon 0 0 512 512, Poster 0 0 1080 1350, Szene/Thumbnail 0 0 1920 1080).
+- Qualität wie ein Illustrator: klare Komposition, begrenzte harmonische Palette (3–6 Farben + Abstufungen), Verläufe (linearGradient/radialGradient), weiche Schatten (filter + feGaussianBlur), Lichtkanten, Tiefe durch Vorder-/Mittel-/Hintergrund.
+- Formen mit path (Kurven C/Q), Gruppen mit sinnvollen ids, keine externen Bilder/Fonts/Skripte. Text nur wenn gewünscht (font-family="Inter, Arial, sans-serif").
+- Logos: einfach, einprägsam, funktioniert auch klein und einfarbig; liefere bei Bedarf Varianten (hell/dunkel).
+- Animation gewünscht → HTML-Datei mit SVG + CSS-Keyframes oder Canvas.
+
+## Minecraft-Texturen (Pixel-Raster → echte PNG)
+Schreibe Texturen NICHT als SVG, sondern als kompaktes Pixel-Raster – der Chat macht daraus eine echte PNG-Datei:
+\`\`\`datei:diamond_sword.png
+{"size":16,"palette":{".":"transparent","a":"#1b2a3a","b":"#2fd3c4","c":"#a4fff2","d":"#5b3b1c"},"rows":["................", "..............aa", …16 Zeilen à 16 Zeichen…]}
+\`\`\`
+- size 16 (oder 32/64), jede Zeile genau size Zeichen, jedes Zeichen ein Paletten-Schlüssel, "." = durchsichtig.
+- Minecraft-Stil: 3–5 Abstufungen pro Farbe (dunkle Kante, Grundton, Licht oben links), dunkle Umrisslinie, kein Anti-Aliasing.`;
+
 const WEB = `## Web, Spiele & Grafik – Qualitätsmaßstab
 - Eine HTML-Datei, sofort lauffähig. Bibliotheken nur per CDN mit fester Version (z. B. three@0.160.0 über importmap, chart.js@4).
 - Eigenes Design statt Standard-Look: dunkler oder heller Hintergrund mit EINER Akzentfarbe, Systemschrift oder Inter, großzügige Abstände, abgerundete Ecken, dezente Schatten. Keine bunten Verläufe überall, keine Emoji-Flut.
@@ -368,6 +383,7 @@ type Pack = { id: string; title: string; test: RegExp; text: string };
 const PACKS: Pack[] = [
   { id: "bbmodel", title: "Blockbench-Modelle (.bbmodel)", test: /bbmodel|blockbench|block ?bench|3d[- ]?modell|modell f(ü|ue)r minecraft|hut|helm|chestplate|r(ü|ue)stung|item[- ]?modell|möbel|moebel/i, text: BBMODEL },
   { id: "skin", title: "Minecraft-Skins & 3D-Animationen", test: /skin|minepro641|lauf(-|en|animation)|animation|animier|winken|three\.?js|3d[- ]?figur|charakter/i, text: SKIN },
+  { id: "graphics", title: "Grafiken & Texturen", test: /bild|grafik|logo|icon|poster|zeichne|illustration|thumbnail|banner|hintergrund|wallpaper|textur|texture|sprite|pixel ?art|\.svg|\.png|\/image/i, text: GRAPHICS },
   { id: "web", title: "Web, Spiele & Grafik", test: /html|webseite|website|landing|spiel|game|canvas|animation|three|app bauen|ui|design|css|javascript|react/i, text: WEB },
   { id: "packs", title: "Resource Packs, Datapacks & Shader", test: /resource ?pack|ressourcenpaket|texturepack|texture pack|datapack|datenpaket|mcfunction|shader|iris|optifine|pack\.mcmeta/i, text: PACKS_MC },
   { id: "plugin", title: "Minecraft-Plugins & Mods", test: /plugin|spigot|paper|bukkit|forge|fabric|mod\b|datapack|java/i, text: PLUGIN },

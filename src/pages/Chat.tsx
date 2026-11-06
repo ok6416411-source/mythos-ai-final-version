@@ -72,7 +72,6 @@ import {
 
 const SLASH_COMMANDS = [
   { cmd: "/goal",      args: "<ziel>",          icon: Target,    desc: "Ziel setzen – Mythos arbeitet selbstständig Schritt für Schritt, bis es erreicht ist" },
-  { cmd: "/image",     args: "<beschreibung>",  icon: ImageIcon, desc: "Bild generieren (Nano Banana)" },
   { cmd: "/music",     args: "<stil/vibe>",     icon: Music,     desc: "Song mit Gesang erzeugen (1–3 Minuten)" },
   { cmd: "/video",     args: "<szene>",         icon: Film,      desc: "Kurzes KI-Video (Bild + Animation, kostenlos im Browser)" },
   { cmd: "/film",      args: "[idee]",          icon: Clapperboard, desc: "Mythos Filmstudio: aus einer Idee einen Kurzfilm mit Sprecher und Musik drehen (kostenlos)" },
@@ -466,7 +465,8 @@ const Chat = () => {
     }
     // Bild-Wünsche in normaler Sprache ("generiere mir das als Bild") erkennt der Server selbst
     // und löst "das" über den Chatverlauf auf. Hier nur für Paywall und Routing.
-    const wantsImage = /^\/image\b/i.test(text) || (!attachments.length && isImageRequest(text));
+    // Bilder zeichnet Mythos jetzt selbst als Grafik (SVG) im normalen Chat – kein Bild-Pfad mehr.
+    const wantsImage = false && !attachments.length && isImageRequest(text);
     const localReply = (content: string) => setMessages(prev => [...prev, { role: "user", content: text }, { role: "assistant", content }]);
     const downloadBlob = (blob: Blob, name: string) => {
       const a = document.createElement("a");
@@ -811,11 +811,11 @@ const Chat = () => {
     const lastUser = [...apiMessages].reverse().find(m => m.role === "user");
     const lastUserText = typeof lastUser?.content === "string" ? lastUser.content
       : Array.isArray(lastUser?.content) ? (lastUser.content as { type?: string; text?: string }[]).find(p => p.type === "text")?.text ?? "" : "";
-    const toChat = /^\/image\b/i.test(lastUserText) || isImageRequest(lastUserText);
+    const toChat = false;
     // Bild-Wunsch erkannt: Text vom Sprachmodell erst zeigen, wenn der Server das Bild übernommen hat.
     // Sonst antwortet eine alte Server-Version „nutze /image“, obwohl das Bild trotzdem kommt.
     const hasPicture = Array.isArray(lastUser?.content) && (lastUser.content as { type?: string }[]).some(p => p.type === "image_url");
-    const expectImage = !hasPicture && (/^\/image\s+\S/i.test(lastUserText) || isImageRequest(lastUserText));
+    const expectImage = false && !hasPicture;
     // Agent mit Werkzeugen & Helfern: im Agent-Modus immer, im General-Modus automatisch bei Recherche
     // oder vielen/gleichartigen Aufgaben (wie Claude). Anhänge (Bilder/Videos) laufen über die Chat-Funktion.
     const hasAttachmentParts = Array.isArray(lastUser?.content) && (lastUser.content as { type?: string }[]).some(p => p.type !== "text");
@@ -1993,7 +1993,7 @@ const Chat = () => {
                     <DropdownMenuContent align="start" side="top" className="w-60">
                       <DropdownMenuLabel>Erstellen</DropdownMenuLabel>
                       {[
-                        { cmd: "/image ", label: "Bild erstellen", icon: ImageIcon },
+                        { cmd: "Zeichne als Grafik (SVG): ", label: "Grafik zeichnen", icon: ImageIcon },
                         { cmd: "/music ", label: "Song mit Gesang", icon: Music },
                         { cmd: "/video ", label: "Kurzes Video", icon: Film },
                         { cmd: "/goal ", label: "Ziel selbstständig erledigen", icon: Target },

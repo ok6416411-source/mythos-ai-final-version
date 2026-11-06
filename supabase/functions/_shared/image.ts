@@ -1,4 +1,5 @@
-// Gemeinsame Bildgenerierung für Chat (/image), image-gen (Video, Code-App /bild).
+// Gemeinsame Grafik-Erzeugung für Chat, image-gen (Filmstudio, Code-App /bild), Labs.
+// Seit 2026-11: Grafiken werden als SVG gezeichnet (keine Bild-KI mehr) – siehe generateImage unten.
 // Reihenfolge: Nano Banana über das Lovable-Gateway (mit Google-Fallback aus ai.ts) -> FLUX.1 über NVIDIA.
 // Nur hochwertige Modelle: Pollinations und AI Horde sind bewusst raus (sahen zu schlecht aus).
 // Sind die Lovable-Credits aufgebraucht (402), springt die Kette sofort weiter, statt jedes
@@ -18,7 +19,7 @@ function admin() {
 async function storeBytes(bytes: Uint8Array, mime: string): Promise<string | null> {
   const sb = admin();
   if (!sb) return null;
-  const ext = mime.includes("jpeg") ? "jpg" : mime.includes("webp") ? "webp" : "png";
+  const ext = mime.includes("svg") ? "svg" : mime.includes("jpeg") ? "jpg" : mime.includes("webp") ? "webp" : "png";
   const path = `generated/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.${ext}`;
   const { error } = await sb.storage.from("chat-uploads").upload(path, bytes, { contentType: mime, upsert: false });
   if (error) { console.warn("[image] upload failed", error.message); return null; }
@@ -101,8 +102,9 @@ async function viaNvidia(prompt: string, errors: string[]): Promise<string | nul
   return null;
 }
 
-export type ImageProvider = "nano-banana" | "nvidia";
+export type ImageProvider = "nano-banana" | "nvidia" | "svg";
 export const PROVIDER_LABEL: Record<ImageProvider, string> = {
+  svg: "Mythos Grafik (SVG)",
   "nano-banana": "Nano Banana",
   nvidia: "FLUX.1 (NVIDIA)",
 };
@@ -121,23 +123,41 @@ export function explainErrors(error: string | undefined): string[] {
 }
 
 /** Erzeugt ein Bild und liefert eine anzeigbare URL (möglichst https aus dem Storage). */
+// Keine Bild-KI mehr: Mythos ZEICHNET Grafiken selbst als SVG (wie Claude) – scharf in jeder Größe,
+// bearbeitbar, ohne Bildgenerator. Alle Stellen, die bisher Bilder erzeugt haben (Chat, Filmstudio,
+// Code-App, Labs), bekommen über diese Funktion automatisch eine SVG-Grafik.
+const SVG_PROMPT = (prompt: string) =>
+  "Zeichne diese Grafik als EIN vollständiges, eigenständiges SVG (viewBox=\"0 0 1024 1024\" oder passendes Seitenverhältnis, z. B. 1920x1080 für Szenen).\n" +
+  "Qualität wie ein guter Illustrator: klare Komposition, harmonische Farbpalette, Verläufe (linearGradient/radialGradient), weiche Schatten (filter mit feGaussianBlur), " +
+  "Details und Tiefe (Vorder-/Mittel-/Hintergrund), saubere Formen mit path. Kein Text im Bild, außer er ist ausdrücklich gewünscht. Keine externen Bilder, Fonts oder Skripte.\n" +
+  "Antworte NUR mit dem SVG-Code (<svg …>…</svg>), ohne Erklärung, ohne Markdown.\n\nMotiv: " + prompt;
+
+export async function generateSvg(prompt: string, lovableKey?: string): Promise<string | null> {
+  lovableKey = lovableKey ?? Deno.env.get("LOVABLE_API_KEY");
+  for (const model of ["google/gemini-3.1-pro-preview", "google/gemini-3.6-flash"]) {
+    try {
+      const r = await aiFetch("gateway", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${lovableKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model, messages: [{ role: "user", content: SVG_PROMPT(prompt) }], max_tokens: 16000 }),
+      });
+      if (!r.ok) continue;
+      const text = String((await r.json()).choices?.[0]?.message?.content || "");
+      const svg = text.match(/<svg[\s\S]*<\/svg>/i)?.[0];
+      if (svg && svg.length > 200) return svg.replace(/<script[\s\S]*?<\/script>/gi, "");
+    } catch { /* nächstes Modell */ }
+  }
+  return null;
+}
+
 export async function generateImage(
   prompt: string,
   lovableKey?: string,
-  opts: { browserFallback?: boolean } = {},
-): Promise<{ url: string | null; provider?: ImageProvider; error?: string }> {
-  const errors: string[] = [];
-  lovableKey = lovableKey ?? Deno.env.get("LOVABLE_API_KEY");
-  const deadline = Date.now() + (opts.browserFallback ? 50_000 : 130_000);
-  const chain: [ImageProvider, () => Promise<string | null>][] = [
-    ["nano-banana", () => viaGateway(prompt, lovableKey, errors)],
-    ["nvidia", () => viaNvidia(prompt, errors)],
-  ];
-  for (const [provider, run] of chain) {
-    if (Date.now() > deadline - 10_000) { errors.push(`${provider}: keine Zeit mehr`); break; }
-    const url = await run();
-    if (url) return { url: await storeDataUrl(url), provider };
-  }
-  console.error("[image] all providers failed", errors.join(" | "));
-  return { url: null, error: errors.join(" | ") };
+  _opts: { browserFallback?: boolean } = {},
+): Promise<{ url: string | null; provider?: ImageProvider; error?: string; svg?: string }> {
+  const svg = await generateSvg(prompt, lovableKey);
+  if (!svg) return { url: null, error: "Grafik konnte nicht gezeichnet werden" };
+  const bytes = new TextEncoder().encode(svg);
+  const url = (await storeBytes(bytes, "image/svg+xml")) ?? `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`;
+  return { url, provider: "svg", svg };
 }
