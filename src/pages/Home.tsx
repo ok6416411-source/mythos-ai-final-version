@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import HeroVideo, { useForceDark } from "@/components/HeroVideo";
 import TopNav from "@/components/TopNav";
 import Landing from "./Landing";
 
@@ -43,6 +44,7 @@ const LoggedInHome = () => {
   const [input, setInput] = useState("");
   const [recent, setRecent] = useState<RecentConv[] | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  useForceDark();
 
   useEffect(() => {
     supabase.from("conversations").select("id,title,updated_at")
@@ -60,9 +62,9 @@ const LoggedInHome = () => {
 
   return (
     <div className="min-h-screen relative overflow-hidden">
-      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
-        <div className="absolute -top-40 -left-32 h-[420px] w-[420px] rounded-full bg-primary/25 blur-3xl animate-pulse-glow" />
-        <div className="absolute top-1/3 -right-24 h-[380px] w-[380px] rounded-full bg-accent/20 blur-3xl" />
+      {/* Gleicher Hintergrund wie auf der Startseite (auch eingeloggt) */}
+      <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 bg-black">
+        <HeroVideo />
       </div>
 
       <TopNav />

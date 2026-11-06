@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import HeroVideo, { useForceDark } from "@/components/HeroVideo";
 import { Link, useNavigate } from "react-router-dom";
 import { Download, Globe, Youtube, MessageCircle } from "lucide-react";
 import { LogoMark } from "@/components/Logo";
@@ -6,17 +7,12 @@ import { useAuth } from "@/hooks/useAuth";
 
 // Startseite im „Observe“-Stil: ein Bildschirm, ruhiges Hintergrundvideo (0,5×), Liquid-Glass,
 // Instrument Serif nur in der Überschrift, sonst schwarz/weiß. Das Mythos-Logo bleibt unverändert.
-// Eigenes Hintergrundvideo (public/hero.mp4): langsames, dunkles Polarlicht-Band in den Logo-Farben, 12 s nahtlose Schleife.
-// Große/hochauflösende Bildschirme bekommen die 4K-Fassung, alle anderen Full HD (lädt schneller).
-const VIDEO = typeof window !== "undefined" && window.screen.width * (window.devicePixelRatio || 1) > 2200 ? "/hero-4k.mp4" : "/hero.mp4";
 
 const Landing = () => {
   const nav = useNavigate();
   const { user, profile } = useAuth();
   const [q, setQ] = useState("");
-  const video = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => { if (video.current) video.current.playbackRate = 0.5; }, []);
+  useForceDark();
   useEffect(() => { if (user && profile?.start_in_chat) nav("/app", { replace: true }); }, [user, profile?.start_in_chat, nav]);
 
   const start = () => {
@@ -28,7 +24,7 @@ const Landing = () => {
   return (
     <div className="observe dark bg-black text-white min-h-[100dvh] selection:bg-white selection:text-black overflow-hidden">
       <section className="min-h-[100dvh] relative overflow-hidden flex flex-col">
-        <video ref={video} src={VIDEO} className="absolute inset-0 w-full h-full object-cover object-bottom" muted autoPlay loop playsInline preload="auto" />
+        <HeroVideo />
 
         <nav className="relative z-20 px-4 sm:px-6 py-6">
           <div className="liquid-glass rounded-full max-w-5xl mx-auto pl-5 sm:pl-6 pr-1.5 py-1.5 flex items-center justify-between">
