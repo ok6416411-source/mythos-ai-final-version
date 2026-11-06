@@ -271,7 +271,7 @@ function mcpPrompt() {
     tools.slice(0, 80).map((t) => "- " + t.server + " / " + t.name + ": " + (t.description || "").replace(/\s+/g, " ").slice(0, 160) + args(t)).join("\n");
 }
 function browserPrompt() {
-  if (!browserBridge.paired) return "";
+  if (!browserBridge.paired) return "\n\nBROWSER: Das Browser-Plugin ist gerade NICHT gekoppelt.";
   return '\n\nBROWSER: Das Mythos-Browser-Plugin ist mit dir VERBUNDEN – du kannst den echten Browser des Nutzers steuern (Seiten öffnen, lesen, klicken, Formulare ausfüllen). Fragt der Nutzer, ob du verbunden bist: ja. Aufruf: <tool>{"name":"browser","task":"konkrete Browser-Aufgabe"}</tool>. Nutze es, wenn die Aufgabe echte Webseiten bedienen oder lesen soll. Logins, Passwörter, Zahlungen und Captchas übernimmt immer der Nutzer.';
 }
 // Dateien schicken: Codeblöcke ```datei:name.ext werden im Chat zu Datei-Karten mit „Speichern“.
@@ -282,7 +282,7 @@ const FILES_PROMPT = "\n\nDateien schicken: Will der Nutzer eine Datei BEKOMMEN 
   "Dateien im Projekt änderst du weiterhin mit write/edit.";
 ipcMain.handle("bg:list", () => [...BG.values()].filter((j) => j.code == null).map((j) => ({ id: j.id, cmd: j.cmd, url: j.url, cwd: j.cwd })));
 ipcMain.handle("bg:stop", (_e, id) => bgStop(id));
-ipcMain.handle("prompt:system", (_e, folder, goal) => TOOL_PROMPT + FILES_PROMPT + mcpPrompt() + browserPrompt() + memoryPrompt(folder ? readMemory(folder) : "") + goalPrompt(goal));
+ipcMain.handle("prompt:system", (_e, folder, goal) => (browserBridge.paired ? "WICHTIG – LIVE-STATUS: Das Mythos-Browser-Plugin ist JETZT VERBUNDEN. Zusätzliches Werkzeug: browser. Auf „bist du mit dem Browser verbunden?“ antwortest du mit JA.\n\n" : "") + TOOL_PROMPT + FILES_PROMPT + mcpPrompt() + browserPrompt() + memoryPrompt(folder ? readMemory(folder) : "") + goalPrompt(goal));
 ipcMain.handle("prompts", () => ({ nudge: GOAL_NUDGE, summary: SUMMARY_PROMPT, review: REVIEW_PROMPT, memoryFile: MEMORY_FILE, models: MODELS }));
 
 // Laufende Prozesse je Kennung – mehrere Aufgaben (und das Terminal) laufen parallel.

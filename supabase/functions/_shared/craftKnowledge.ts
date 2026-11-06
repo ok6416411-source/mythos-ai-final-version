@@ -277,6 +277,89 @@ loadSkin("MinePro641");
 \`\`\`
 Video gewünscht? Die Vorlage hat schon „5 s als Video speichern“ (WebM über MediaRecorder).`;
 
+const THREE_D = `## 3D-Szenen & 3D-Objekte (Three.js) – NIE nur ein Würfel
+Ein einzelner Würfel/Quader ist IMMER falsch. Ein 3D-Wunsch (Auto, Haus, Raumschiff, Planet, Stadt, Figur, Szene) wird so gebaut:
+1. **Zerlegen:** Schreib dir vorher auf, aus welchen Teilen das Objekt real besteht (Auto: Karosserie unten, Kabine, Motorhaube, 4 Räder mit Felgen + Reifen, Scheinwerfer, Rücklichter, Scheiben, Spiegel, Stoßstangen, Auspuff). Mindestens 25–60 Meshes, in \`THREE.Group\`s verschachtelt (Gruppe pro Baugruppe).
+2. **Richtige Formen statt Boxen:** \`LatheGeometry\` (Flaschen, Felgen, Türme, Vasen), \`ExtrudeGeometry\` aus \`THREE.Shape\` mit \`bevelEnabled\` (Karosserie-Profil, Logos, Flügel), \`TubeGeometry\` auf \`CatmullRomCurve3\` (Kabel, Rohre, Schienen, Äste), \`CapsuleGeometry\`, \`TorusGeometry\`, \`SphereGeometry\` mit verschobenen Vertices (Felsen, Planeten). Kanten mit \`RoundedBoxGeometry\` (three/addons/geometries/RoundedBoxGeometry.js) abrunden.
+3. **Wiederholung:** Viele gleiche Dinge (Bäume, Fenster, Sterne, Gras, Gebäude) mit \`InstancedMesh\` + Zufall (Größe, Drehung, Farbe).
+4. **Materialien:** \`MeshPhysicalMaterial\` – Lack: clearcoat 1, metalness 0.6, roughness 0.25; Glas: transmission 1, roughness 0.05, thickness 0.5; Chrom: metalness 1, roughness 0.1; Leuchtteile: emissive + emissiveIntensity 2–4. Keine einfarbige Welt – 4–8 abgestimmte Farben.
+5. **Licht & Look:** \`RoomEnvironment\` + \`PMREMGenerator\` als scene.environment, DirectionalLight mit Schatten (mapSize 2048, castShadow/receiveShadow auf allen Meshes), \`ACESFilmicToneMapping\`, \`SRGBColorSpace\`, Nebel (\`scene.fog\`), Boden mit \`ShadowMaterial\` oder Gitter/Textur. Glühen: \`EffectComposer\` + \`UnrealBloomPass\` (strength 0.6–1.2).
+6. **Leben:** Immer animieren (Räder drehen, schweben, Partikel, Kamera langsam um das Objekt), \`OrbitControls\` mit damping, resize-Handler, Ladezeile.
+7. **Selbstprüfung vor dem Senden:** Zähle Meshes (≥25), prüfe: Würde ein Mensch das Objekt am Umriss erkennen? Wenn nein → mehr Details.
+
+Liefere eine einzige vollständige HTML-Datei mit importmap. Getestetes Gerüst (Teile durch dein Objekt ersetzen, Qualität beibehalten):
+\`\`\`html
+<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>3D</title><style>html,body{margin:0;height:100%;background:#0b0d12;overflow:hidden}</style>
+<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.169.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.169.0/examples/jsm/"}}</script>
+</head><body><script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x0b0d12); scene.fog = new THREE.Fog(0x0b0d12, 14, 40);
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 200); camera.position.set(6, 3.2, 7);
+const controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.target.set(0, 0.8, 0); controls.autoRotate = true; controls.autoRotateSpeed = 0.6;
+const sun = new THREE.DirectionalLight(0xffffff, 2.2); sun.position.set(5, 9, 4); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -8, right: 8, top: 8, bottom: -8 }); scene.add(sun, new THREE.HemisphereLight(0x9fb4ff, 0x20160f, 0.4));
+const ground = new THREE.Mesh(new THREE.CircleGeometry(20, 64), new THREE.MeshStandardMaterial({ color: 0x15181f, roughness: 0.9 }));
+ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+// --- Materialien ---
+const paint = new THREE.MeshPhysicalMaterial({ color: 0xc81d25, metalness: 0.6, roughness: 0.25, clearcoat: 1, clearcoatRoughness: 0.05 });
+const glass = new THREE.MeshPhysicalMaterial({ color: 0x88aacc, metalness: 0, roughness: 0.05, transmission: 0.9, thickness: 0.4, transparent: true, opacity: 0.6 });
+const chrome = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 1, roughness: 0.12 });
+const rubber = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.85 });
+const light = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff2cc, emissiveIntensity: 3 });
+const tail = new THREE.MeshStandardMaterial({ color: 0x330000, emissive: 0xff1a1a, emissiveIntensity: 2.5 });
+// --- Objekt: Beispiel Sportwagen aus Baugruppen ---
+const car = new THREE.Group(); scene.add(car);
+const profile = new THREE.Shape(); // Seitenprofil der Karosserie
+profile.moveTo(-2.1, 0.35); profile.lineTo(2.0, 0.35); profile.quadraticCurveTo(2.25, 0.4, 2.2, 0.7);
+profile.lineTo(1.2, 0.85); profile.quadraticCurveTo(0.5, 1.45, -0.6, 1.4); profile.quadraticCurveTo(-1.6, 1.3, -2.1, 0.95); profile.closePath();
+const body = new THREE.Mesh(new THREE.ExtrudeGeometry(profile, { depth: 1.7, bevelEnabled: true, bevelSize: 0.12, bevelThickness: 0.12, bevelSegments: 6, curveSegments: 24 }), paint);
+body.position.z = -0.85; car.add(body);
+const cabin = new THREE.Mesh(new RoundedBoxGeometry(1.5, 0.45, 1.5, 4, 0.18), glass); cabin.position.set(-0.3, 1.25, 0); car.add(cabin);
+const wheels = [];
+function wheel(x, z) {
+  const g = new THREE.Group(); g.position.set(x, 0.38, z);
+  const tire = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.13, 20, 40), rubber); g.add(tire);
+  const rim = new THREE.Mesh(new THREE.LatheGeometry([new THREE.Vector2(0, -0.08), new THREE.Vector2(0.28, -0.06), new THREE.Vector2(0.3, 0.06), new THREE.Vector2(0, 0.04)], 32), chrome);
+  rim.rotation.x = Math.PI / 2; g.add(rim);
+  for (let i = 0; i < 5; i++) { const s = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.42, 0.04), chrome); s.rotation.z = i * Math.PI * 2 / 5; s.position.z = z > 0 ? 0.06 : -0.06; g.add(s); }
+  car.add(g); wheels.push(g);
+}
+wheel(1.35, 0.9); wheel(1.35, -0.9); wheel(-1.4, 0.9); wheel(-1.4, -0.9);
+for (const z of [0.6, -0.6]) {
+  const hl = new THREE.Mesh(new THREE.CapsuleGeometry(0.07, 0.25, 6, 12), light); hl.rotation.x = Math.PI / 2; hl.position.set(2.27, 0.62, z); car.add(hl);
+  const tl = new THREE.Mesh(new RoundedBoxGeometry(0.06, 0.1, 0.45, 2, 0.03), tail); tl.position.set(-2.2, 0.85, z); car.add(tl);
+  const mirror = new THREE.Mesh(new RoundedBoxGeometry(0.18, 0.1, 0.12, 2, 0.04), paint); mirror.position.set(0.55, 1.05, z * 1.6); car.add(mirror);
+}
+const exhaust = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.3, 16), chrome); exhaust.rotation.z = Math.PI / 2; exhaust.position.set(-2.25, 0.35, 0.4); car.add(exhaust);
+// --- Umgebung: viele Details per InstancedMesh ---
+const posts = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.05, 0.05, 1.2, 8), new THREE.MeshStandardMaterial({ color: 0x8892a6, metalness: 0.5, roughness: 0.4 }), 40);
+const m = new THREE.Matrix4(); for (let i = 0; i < 40; i++) { const a = i / 40 * Math.PI * 2; m.makeTranslation(Math.cos(a) * 9, 0.6, Math.sin(a) * 9); posts.setMatrixAt(i, m); }
+scene.add(posts);
+scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+// --- Postprocessing & Animation ---
+const composer = new EffectComposer(renderer); composer.addPass(new RenderPass(scene, camera));
+composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.8, 0.4, 0.85)); composer.addPass(new OutputPass());
+addEventListener("resize", () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight); });
+const clock = new THREE.Clock();
+renderer.setAnimationLoop(() => { const t = clock.getElapsedTime(); wheels.forEach((w) => (w.rotation.z = -t * 4)); car.position.y = Math.sin(t * 2) * 0.01; controls.update(); composer.render(); });
+</script></body></html>
+\`\`\`
+Für andere Objekte gleiches Prinzip: Haus = Fundament, Wände (Extrude mit Fenster-Löchern über \`shape.holes\`), Dach (Extrude Dreieck), Fensterrahmen, Tür, Schornstein, Zaun (Instanced), Bäume (Instanced Stamm + Icosahedron-Kronen). Planet = Sphere mit Noise-verschobenen Vertices + Atmosphäre (BackSide, additive) + Ringe (RingGeometry) + Sternfeld (Points, 3000).`;
+
 const GRAPHICS = `## Grafiken zeichnen (statt Bild-KI)
 - Ein SVG pro Grafik, vollständig und eigenständig: passende viewBox (Logo/Icon 0 0 512 512, Poster 0 0 1080 1350, Szene/Thumbnail 0 0 1920 1080).
 - Qualität wie ein Illustrator: klare Komposition, begrenzte harmonische Palette (3–6 Farben + Abstufungen), Verläufe (linearGradient/radialGradient), weiche Schatten (filter + feGaussianBlur), Lichtkanten, Tiefe durch Vorder-/Mittel-/Hintergrund.
@@ -377,10 +460,11 @@ const PACKS_MC = `## Resource Packs, Datapacks & Shader
 
 /** Kategorie-Präfix der KI-Wissens-Artikel in knowledge_articles (Admin → „KI-Wissen einspielen“). */
 export const CRAFT_CATEGORY_PREFIX = "ki-";
-export const CRAFT_KNOWLEDGE_VERSION = "KI-Wissen 2026-11-06";
+export const CRAFT_KNOWLEDGE_VERSION = "KI-Wissen 2026-11-06b";
 
 type Pack = { id: string; title: string; test: RegExp; text: string };
 const PACKS: Pack[] = [
+  { id: "3d", title: "3D-Szenen & 3D-Objekte (Three.js)", test: /\b3d\b|3-d|three\.?js|webgl|dreidimensional|szene|raumschiff|planet|auto\b|rennwagen|sportwagen|haus\b|stadt|landschaft|welt\b|modell(?!.*minecraft)/i, text: THREE_D },
   { id: "bbmodel", title: "Blockbench-Modelle (.bbmodel)", test: /bbmodel|blockbench|block ?bench|3d[- ]?modell|modell f(ü|ue)r minecraft|hut|helm|chestplate|r(ü|ue)stung|item[- ]?modell|möbel|moebel/i, text: BBMODEL },
   { id: "skin", title: "Minecraft-Skins & 3D-Animationen", test: /skin|minepro641|lauf(-|en|animation)|animation|animier|winken|three\.?js|3d[- ]?figur|charakter/i, text: SKIN },
   { id: "graphics", title: "Grafiken & Texturen", test: /bild|grafik|logo|icon|poster|zeichne|illustration|thumbnail|banner|hintergrund|wallpaper|textur|texture|sprite|pixel ?art|\.svg|\.png|\/image/i, text: GRAPHICS },
