@@ -15,6 +15,11 @@ describe("angeheftete Checkliste", () => {
     expect(l.items).toEqual([{ text: "A", done: true }, { text: "B", done: false }]);
     expect(checklistStatusPrompt(l, null)).toContain("1 von 2 erledigt");
   });
+  it("erkennt Markdown-Aufgabenlisten", () => {
+    const l = latestChecklist([{ role: "assistant", content: "## Plan\n- [x] Krempe\n- [ ] Krone\n\nText" }])!;
+    expect(l.title).toBe("Plan");
+    expect(l.items).toEqual([{ text: "Krempe", done: true }, { text: "Krone", done: false }]);
+  });
   it("ohne Checkliste: null", () => {
     expect(latestChecklist([{ role: "assistant", content: "hallo" }])).toBeNull();
   });

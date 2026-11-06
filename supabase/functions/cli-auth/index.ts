@@ -64,6 +64,14 @@ Deno.serve(async (req) => {
       return json({ status: "ok", api_key: row.api_key, name: prof?.display_name || prof?.email || "Mythos-Nutzer" });
     }
 
+    // Website: eigener Verbrauch (angemeldet per Login, nicht per API-Key) – für „Nutzung“ im Profil-Menü.
+    if (action === "usage_me") {
+      const jwt = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+      const { data: u } = await db.auth.getUser(jwt);
+      if (!u?.user) return json({ error: "Nicht angemeldet" }, 401);
+      return json({ tokens: await usageSummary(db, u.user.id) });
+    }
+
     if (action === "usage") {
       const key = String(body.api_key || "");
       const { data: k } = await db.from("api_keys").select("id,user_id,daily_limit,revoked").eq("key_hash", await sha256(key)).maybeSingle();

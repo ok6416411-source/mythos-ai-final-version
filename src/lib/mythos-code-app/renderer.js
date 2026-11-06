@@ -321,11 +321,44 @@ async function call(run, h, system, onText, onThink) {
 }
 // Einzelne Anfrage außerhalb einer Aufgabe (z. B. Commit-Nachricht).
 const quickCall = async (content, system) => (await call({ stopped: false, ctl: null, model: cfg.model || "mythos-code", chat: chat }, [{ role: "user", content: content }], system)).text;
+let lastUsage = null;
 async function usage() { try { const j = await (await post("cli-auth", { action: "usage", api_key: cfg.key })).json();
+  lastUsage = j;
   window.__adTier = j.admin ? "admin" : (j.tier || "free");
   if (j.tokens) { const u = j.tokens.usage, l = j.tokens.limits; const fmtLimit = (k) => fmtTok(u[k]) + " / " + (l[k] == null ? "∞" : fmtTok(l[k]));
     $("usage").textContent = "MythosAI · Stunde " + fmtLimit("hour") + " · Woche " + fmtLimit("week") + " · Monat " + fmtLimit("month");
   } else $("usage").textContent = "Verbrauch nicht verfügbar"; } catch (e) {} }
+// „Nutzung“ wie bei Claude: Klick auf den Verbrauch zeigt Balken pro Zeitfenster.
+function showUsage() {
+  const j = lastUsage, t = j && j.tokens;
+  const bg = document.createElement("div");
+  bg.style.cssText = "position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:20px";
+  const box = document.createElement("div");
+  box.style.cssText = "max-width:480px;width:100%;background:var(--panel,#141414);border:1px solid var(--line2,rgba(255,255,255,.12));border-radius:18px;padding:22px 24px";
+  const h = document.createElement("div"); h.style.cssText = "font-size:18px;font-weight:650"; h.textContent = "Nutzung";
+  const sub = document.createElement("div"); sub.style.cssText = "opacity:.6;font-size:13px;margin:2px 0 18px";
+  sub.textContent = t ? "Plan: " + ({ free: "Free", plus: "Plus", pro: "Pro", ultra: "Ultra", admin: "Admin" }[t.tier] || t.tier) + " · MythosAI-Tokens über Website, App, CLI und API" : "Verbrauch gerade nicht abrufbar.";
+  box.append(h, sub);
+  if (t) [["hour", "Aktuelle Stunde", "letzte 60 Minuten"], ["week", "Diese Woche", "letzte 7 Tage"], ["month", "Dieser Monat", "letzte 30 Tage"]].forEach(([k, label, hint]) => {
+    const used = Number(t.usage[k] || 0), lim = t.limits[k], pct = lim ? Math.min(100, used / lim * 100) : 0;
+    const row = document.createElement("div"); row.style.marginBottom = "18px";
+    const top = document.createElement("div"); top.style.cssText = "display:flex;justify-content:space-between;gap:10px;font-size:14px";
+    const l = document.createElement("div"); l.innerHTML = "<b style='font-weight:600'></b><div style='opacity:.55;font-size:12px'></div>"; l.firstChild.textContent = label; l.lastChild.textContent = "Rollierend – " + hint;
+    const r = document.createElement("div"); r.textContent = lim ? Math.round(pct) + " % genutzt" : "kein Limit"; r.style.opacity = lim ? "1" : ".55";
+    top.append(l, r);
+    const bar = document.createElement("div"); bar.style.cssText = "height:8px;border-radius:99px;background:rgba(255,255,255,.1);overflow:hidden;margin:7px 0 4px";
+    const fill = document.createElement("div"); fill.style.cssText = "height:100%;border-radius:99px;background:" + (pct >= 90 ? "#ef4444" : pct >= 70 ? "#f59e0b" : "#fff") + ";width:" + (lim ? Math.max(pct, used ? 1.5 : 0) : 0) + "%";
+    bar.appendChild(fill);
+    const n = document.createElement("div"); n.style.cssText = "font-size:12px;opacity:.55"; n.textContent = fmtTok(used) + (lim ? " von " + fmtTok(lim) : "") + " Tokens";
+    row.append(top, bar, n); box.appendChild(row);
+  });
+  const ok = document.createElement("button"); ok.type = "button"; ok.textContent = "Schließen";
+  ok.style.cssText = "border:0;border-radius:10px;padding:8px 16px;font:inherit;font-weight:600;cursor:pointer;background:#fff;color:#0a0a0a";
+  const close = () => bg.remove(); ok.onclick = close; bg.onclick = (e) => { if (e.target === bg) close(); };
+  box.appendChild(ok); bg.appendChild(box); document.body.appendChild(bg);
+  usage().catch(() => {});
+}
+setTimeout(() => { const u = $("usage"); if (u) { u.style.cursor = "pointer"; u.title = "Nutzung anzeigen"; u.onclick = showUsage; } }, 0);
 function renderTokens() {
   const t = (chat && chat.tokens) || { in: 0, out: 0 };
   $("tokens").textContent = fmtTok(t.in + t.out) + " MythosAI Tokens" + (t.unknown ? " + unbekannt" : "");

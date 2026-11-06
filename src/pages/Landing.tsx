@@ -1,277 +1,94 @@
-import { useEffect, useState } from "react";
-import { LegalLinks } from "@/components/CookieConsent";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import TopNav from "@/components/TopNav";
-import Logo from "@/components/Logo";
-import {
-  Sparkles, Zap, Shield, Code2, Brain, MessageSquare, Server, Key, ArrowRight, Check, Crown,
-  Film, Music, AudioLines, Image as ImageIcon, Download, Monitor,
-} from "lucide-react";
-import { APPS } from "@/lib/downloads";
+import { Download, Globe, Youtube, MessageCircle } from "lucide-react";
+import { LogoMark } from "@/components/Logo";
 import { useAuth } from "@/hooks/useAuth";
-import UpgradeDialog from "@/components/UpgradeDialog";
-import { TIER_LIMITS } from "@/hooks/useSubscription";
 
-const Feature = ({ icon: Icon, title, desc }: any) => (
-  <div className="glass rounded-2xl p-6 hover:border-primary/40 transition-all duration-300 hover:-translate-y-1 group">
-    <div className="h-12 w-12 rounded-xl bg-gradient-primary/20 border border-primary/20 flex items-center justify-center mb-4 group-hover:glow-primary transition-shadow">
-      <Icon className="h-6 w-6 text-primary" />
-    </div>
-    <h3 className="font-display text-lg font-bold mb-2">{title}</h3>
-    <p className="text-sm text-muted-foreground leading-relaxed">{desc}</p>
-  </div>
-);
-
-const Stat = ({ value, label }: { value: string; label: string }) => (
-  <div className="text-center">
-    <div className="font-display text-2xl sm:text-3xl font-bold gradient-text">{value}</div>
-    <div className="text-[11px] uppercase tracking-wider text-muted-foreground mt-1">{label}</div>
-  </div>
-);
+// Startseite im „Observe“-Stil: ein Bildschirm, ruhiges Hintergrundvideo (0,5×), Liquid-Glass,
+// Instrument Serif nur in der Überschrift, sonst schwarz/weiß. Das Mythos-Logo bleibt unverändert.
+const VIDEO = "https://designerstephen.github.io/public-assets/videos/observe-hero.mp4";
 
 const Landing = () => {
-  const [upgradeOpen, setUpgradeOpen] = useState(false);
-  const [upgradeFeature, setUpgradeFeature] = useState<string>("");
-  const [upgradeReason, setUpgradeReason] = useState<string>("");
-  const { user, profile } = useAuth();
   const nav = useNavigate();
+  const { user, profile } = useAuth();
+  const [q, setQ] = useState("");
+  const video = useRef<HTMLVideoElement>(null);
 
-  useEffect(() => {
-    if (user && profile?.start_in_chat) nav("/app", { replace: true });
-  }, [user, profile?.start_in_chat, nav]);
+  useEffect(() => { if (video.current) video.current.playbackRate = 0.5; }, []);
+  useEffect(() => { if (user && profile?.start_in_chat) nav("/app", { replace: true }); }, [user, profile?.start_in_chat, nav]);
+
+  const start = () => {
+    const text = q.trim();
+    if (!user) { nav(`/auth${text ? `?next=${encodeURIComponent(`/app?q=${encodeURIComponent(text)}`)}` : ""}`); return; }
+    nav(text ? `/app?q=${encodeURIComponent(text)}` : "/app");
+  };
 
   return (
-    <div className="min-h-screen relative overflow-hidden">
-      {/* Aurora background — pure CSS, no extra deps */}
-      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
-        <div className="absolute -top-40 -left-32 h-[480px] w-[480px] rounded-full bg-primary/30 blur-3xl animate-pulse-glow" />
-        <div className="absolute top-1/3 -right-24 h-[420px] w-[420px] rounded-full bg-accent/25 blur-3xl" style={{ animation: "pulse-glow 6s ease-in-out infinite" }} />
-        <div className="absolute bottom-0 left-1/3 h-[360px] w-[360px] rounded-full bg-primary/20 blur-3xl" style={{ animation: "pulse-glow 8s ease-in-out infinite 1s" }} />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,transparent_0%,hsl(var(--background))_70%)]" />
-      </div>
+    <div className="observe dark bg-black text-white min-h-[100dvh] selection:bg-white selection:text-black overflow-hidden">
+      <section className="min-h-[100dvh] relative overflow-hidden flex flex-col">
+        <video ref={video} src={VIDEO} className="absolute inset-0 w-full h-full object-cover object-bottom" muted autoPlay loop playsInline preload="auto" />
 
-      <TopNav />
-
-      <main>
-        {/* Hero */}
-        <section className="container pt-12 sm:pt-20 pb-16 sm:pb-24 text-center relative">
-          <div className="inline-flex items-center gap-2 glass rounded-full px-4 py-1.5 mb-6 sm:mb-8 animate-fade-in">
-            <span className="h-2 w-2 rounded-full bg-accent animate-pulse" />
-            <span className="text-xs font-medium text-muted-foreground">Live Voice · Video · Musik · Bild — alles in einer App</span>
-          </div>
-          <h1 className="font-display text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold tracking-tight mb-5 sm:mb-6 animate-fade-in leading-[0.95]">
-            Eine KI.<br />
-            <span className="gradient-text">Alles drin.</span>
-          </h1>
-          <p className="text-base sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-8 sm:mb-10 animate-fade-in px-2">
-            Chat, Live-Sprache, Bild-, Musik- &amp; Video-Generierung — alles in einem schnellen, schönen Interface. Frei nutzbar für <span className="text-foreground font-medium">mythoscraft.online</span>.
-          </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 animate-fade-in mb-12">
-            <Link to={user ? "/app" : "/auth"}>
-              <Button size="lg" className="bg-gradient-primary text-primary-foreground hover:opacity-90 glow-primary text-base px-8 h-12">
-                <Sparkles className="h-5 w-5 mr-2" /> Mythos AI starten <ArrowRight className="h-4 w-4 ml-2" />
-              </Button>
-            </Link>
-            <Link to="/try">
-              <Button size="lg" variant="outline" className="glass border-glass-border text-base px-8 h-12">
-                <Zap className="h-5 w-5 mr-2" /> Try Mythos AI — ohne Anmeldung
-              </Button>
-            </Link>
-            <Link to="/docs">
-              <Button size="lg" variant="ghost" className="text-base px-6 h-12">
-                <Code2 className="h-5 w-5 mr-2" /> API-Docs
-              </Button>
-            </Link>
-          </div>
-
-          {/* Capability pills */}
-          <div className="flex flex-wrap items-center justify-center gap-2 max-w-2xl mx-auto animate-fade-in">
-            {[
-              { icon: MessageSquare, label: "Chat" },
-              { icon: AudioLines, label: "Live-Voice" },
-              { icon: ImageIcon, label: "Bilder" },
-              { icon: Music, label: "Musik" },
-              { icon: Film, label: "Video" },
-              { icon: Brain, label: "Agent" },
-            ].map(({ icon: Icon, label }) => (
-              <span key={label} className="inline-flex items-center gap-1.5 glass rounded-full px-3 py-1.5 text-xs text-foreground/80">
-                <Icon className="h-3.5 w-3.5 text-primary" /> {label}
-              </span>
-            ))}
-          </div>
-        </section>
-
-        {/* Stats strip */}
-        <section className="container pb-16 sm:pb-24">
-          <div className="glass-strong rounded-3xl px-6 py-6 sm:py-8 grid grid-cols-2 sm:grid-cols-4 gap-6">
-            <Stat value="6+" label="KI-Modalitäten" />
-            <Stat value="0 €" label="Free Forever Tier" />
-            <Stat value="<1s" label="Stream-Latenz" />
-            <Stat value="100%" label="Im Browser möglich" />
-          </div>
-        </section>
-
-        {/* Features */}
-        <section className="container pb-24">
-          <div className="text-center mb-12">
-            <h2 className="font-display text-3xl md:text-5xl font-bold mb-4">Was Mythos AI besonders macht</h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">Mehr als ein Chatbot. Eine vollwertige KI-Plattform — sauber, schnell, schön.</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            <Feature icon={MessageSquare} title="Server-Support" desc="Kennt mythoscraft.online in- und auswendig: Regeln, Commands, Plugins, FAQ — alles live aus der Knowledge Base." />
-            <Feature icon={Brain} title="Agent-Modus" desc="Mehrstufiges Reasoning mit Tools: Web-Suche, Live-Server-Status und Wissens-Lookup im Hintergrund." />
-            <Feature icon={AudioLines} title="Live-Sprachchat" desc="Tippen war gestern. Sprich direkt mit Mythos — ein animierter Mic-Orb reagiert auf deine Stimme." />
-            <Feature icon={Film} title="Video-Generierung" desc="Cinematic Clips aus reinem Text. Bild + Animation, gerendert im Browser, kostenlos & herunterladbar." />
-            <Feature icon={Music} title="Musik im Browser" desc="Echte KI-Komposition via MusicGen — läuft lokal nach einmaligem Modell-Download. Kein API-Key nötig." />
-            <Feature icon={Key} title="Claude-kompatible API" desc="Generiere kostenlose API-Keys im Format sk-ant-mythos-… für eigene Tools oder MythosBrowse." />
-          </div>
-        </section>
-
-        {/* Desktop apps showcase (Pro) */}
-        <section className="container pb-24" id="desktop">
-          <div className="text-center mb-12">
-            <div className="inline-flex items-center gap-2 glass rounded-full px-4 py-1.5 mb-5">
-              <Crown className="h-3.5 w-3.5 text-primary" />
-              <span className="text-xs font-medium text-muted-foreground">Browser &amp; Notch kostenlos · Code mit Pro</span>
-            </div>
-            <h2 className="font-display text-3xl md:text-5xl font-bold mb-4">Mythos auch auf deinem PC</h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">Browser und Notch gibt es für alle kostenlos, den Coding-Agent mit Pro. Mit einem Klick herunterladen, immer in der neuesten Version.</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {APPS.filter((a) => a.screenshot).map((a) => (
-              <Link key={a.id} to="/downloads" className="glass-strong rounded-3xl overflow-hidden group transition-all hover:-translate-y-1 hover:border-primary/40">
-                <div className="aspect-[16/10] overflow-hidden border-b border-border/40 bg-gradient-cosmic/20 flex items-center justify-center">
-                  <img src={a.screenshot} alt={`${a.name} Screenshot`} loading="lazy" className={a.screenshotFit === "contain" ? "h-[88%] w-auto rounded-lg shadow-xl translate-y-2" : "w-full h-full object-cover object-top group-hover:scale-[1.02] transition-transform"}
-                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
-                </div>
-                <div className="p-5">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Monitor className="h-4 w-4 text-primary" />
-                    <span className="font-display font-bold">{a.name}</span>
-                  </div>
-                  <p className="text-sm text-muted-foreground">{a.tagline}</p>
-                </div>
-              </Link>
-            ))}
-          </div>
-          <div className="text-center mt-8">
-            <Link to="/downloads">
-              <Button size="lg" className="bg-gradient-primary text-primary-foreground hover:opacity-90 glow-primary text-base px-8 h-12">
-                <Download className="h-5 w-5 mr-2" /> Zu den Downloads
-              </Button>
-            </Link>
-          </div>
-        </section>
-
-        {/* Pricing */}
-        <section className="container pb-24" id="pricing">
-          <div className="text-center mb-12">
-            <h2 className="font-display text-3xl md:text-5xl font-bold mb-4">Einfach. Fair. Drei Pläne.</h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">Starte kostenlos. Upgrade nur wenn du mehr willst.</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 max-w-5xl mx-auto">
-            {[{ key:"free",  name:"Free",  icon: Sparkles, accent:"from-zinc-400 to-zinc-600",
-                features:["20 Chats / Tag","Alle Standard-Personas","Server-Knowledge","Community-Support"] },
-              { key:"light", name:"Light", icon: Zap, accent:"from-sky-400 to-indigo-500", tag:"Mitte",
-                features:[`${TIER_LIMITS.light.chatsPerDay} Chats / Tag`,"Bilder generieren","Alle Personas","Keine Werbung"] },
-              { key:"pro",   name:"Pro",   icon: Crown, accent:"from-fuchsia-500 to-rose-500", tag:"Beliebt", highlight:true,
-                features:["Unbegrenzte Chats","Live-Sprachchat","Bilder · Musik · Video","Mythos Code App & CLI","Priorität bei Updates"] },
-            ].map((p:any) => (
-              <div key={p.key} className={`relative glass-strong rounded-3xl p-7 transition-all hover:-translate-y-1 ${p.highlight ? "border-primary/60 ring-1 ring-primary/30 glow-primary" : ""}`}>
-                {p.tag && (
-                  <span className={`absolute -top-3 right-5 text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-full text-white bg-gradient-to-r ${p.accent}`}>{p.tag}</span>
-                )}
-                <div className={`h-11 w-11 rounded-xl bg-gradient-to-br ${p.accent} flex items-center justify-center mb-4`}>
-                  <p.icon className="h-5 w-5 text-white" />
-                </div>
-                <div className="font-display text-2xl font-bold">{p.name}</div>
-                <div className="text-sm text-muted-foreground mb-5">{TIER_LIMITS[p.key as keyof typeof TIER_LIMITS].priceLabel}</div>
-                <ul className="space-y-2 text-sm mb-6">
-                  {p.features.map((f:string) => <li key={f} className="flex items-center gap-2"><Check className="h-4 w-4 text-primary shrink-0" />{f}</li>)}
-                </ul>
-                {p.key === "free" ? (
-                  <Link to={user ? "/app" : "/auth"} className="block">
-                    <Button variant={p.highlight ? "default" : "outline"} className={`w-full ${p.highlight ? "bg-gradient-primary text-primary-foreground" : ""}`}>
-                      Loslegen
-                    </Button>
-                  </Link>
-                ) : (
-                  <Button variant={p.highlight ? "default" : "outline"} className={`w-full ${p.highlight ? "bg-gradient-primary text-primary-foreground" : ""}`} onClick={() => { setUpgradeFeature(p.name); setUpgradeReason(`Upgrade zu ${p.name} gibt dir Zugriff auf: ${p.features.join(", ")}`); setUpgradeOpen(true); }}>
-                    Upgrade
-                  </Button>
-                )}
+        <nav className="relative z-20 px-4 sm:px-6 py-6">
+          <div className="liquid-glass rounded-full max-w-5xl mx-auto pl-5 sm:pl-6 pr-1.5 py-1.5 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <LogoMark size="sm" className="h-6 w-6" />
+              <span className="font-semibold text-lg tracking-tight">Mythos AI</span>
+              <div className="hidden md:flex gap-8 ml-8">
+                <Link to="/docs" className="text-white/80 hover:text-white text-sm font-medium transition-colors">Produkt</Link>
+                <Link to="/downloads" className="text-white/80 hover:text-white text-sm font-medium transition-colors">Downloads</Link>
+                <Link to="/impressum" className="text-white/80 hover:text-white text-sm font-medium transition-colors">Kontakt</Link>
               </div>
-            ))}
-          </div>
-        </section>
-
-        {/* Feature Comparison Table */}
-        <section className="container pb-24" id="comparison">
-          <div className="text-center mb-8">
-            <h2 className="font-display text-3xl md:text-4xl font-bold">Feature‑Vergleich</h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">Welche Funktionen in welchem Tarif enthalten sind.</p>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full table-auto border border-white/10 rounded-xl bg-background/50 backdrop-blur">
-              <thead className="bg-white/5">
-                <tr>
-                  <th className="px-4 py-2 text-left font-medium text-muted-foreground">Funktion</th>
-                  <th className="px-4 py-2 text-center font-medium text-muted-foreground">Free</th>
-                  <th className="px-4 py-2 text-center font-medium text-muted-foreground">Light</th>
-                  <th className="px-4 py-2 text-center font-medium text-muted-foreground">Pro</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {[
-                  { name: "Bild‑Generierung", free: false, light: true, pro: true },
-                  { name: "Musik‑Generierung", free: false, light: false, pro: true },
-                  { name: "Video‑Generierung", free: false, light: false, pro: true },
-                  { name: "Downloads/Modelle", free: false, light: true, pro: true },
-                  { name: "Browser‑Rendering", free: true, light: true, pro: true },
-                  { name: "Mythos Browser & Notch", free: true, light: true, pro: true },
-                  { name: "Mythos Code App & CLI", free: false, light: false, pro: true },
-                ].map((row, i) => (
-                  <tr key={i} className="bg-transparent hover:bg-white/5 transition-colors">
-                    <td className="px-4 py-2 font-medium text-foreground/80">{row.name}</td>
-                    {[row.free, row.light, row.pro].map((has, idx) => (
-                      <td key={idx} className="px-4 py-2 text-center">
-                        {has ? <Check className="inline-block h-4 w-4 text-primary" /> : "—"}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        {/* CTA */}
-        <section className="container pb-24">
-          <div className="glass-strong rounded-3xl p-10 md:p-16 text-center relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-cosmic opacity-20 pointer-events-none" />
-            <div className="relative">
-              <h2 className="font-display text-3xl md:text-5xl font-bold mb-4">Bereit für die volle Mythos-Erfahrung?</h2>
-              <p className="text-muted-foreground mb-8 max-w-xl mx-auto">Account erstellen, API-Key generieren, loslegen. Komplett kostenlos.</p>
-              <Link to={user ? "/app" : "/auth"}>
-                <Button size="lg" className="bg-gradient-primary text-primary-foreground hover:opacity-90 glow-primary text-base px-10 h-12">
-                  Jetzt starten <ArrowRight className="h-4 w-4 ml-2" />
-                </Button>
-              </Link>
+            </div>
+            <div className="flex items-center gap-4">
+              {!user && <Link to="/auth" className="text-white text-sm font-medium hidden sm:inline">Anmelden</Link>}
+              <button type="button" onClick={() => nav(user ? "/app" : "/auth")} className="bg-white rounded-full px-5 py-2 text-black text-sm font-medium whitespace-nowrap">
+                {user ? "Zum Chat" : "Kostenlos starten"}
+              </button>
             </div>
           </div>
-        </section>
+        </nav>
 
-        <footer className="border-t border-border/50 py-8">
-          <div className="container flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
-            <Logo size="sm" />
-            <p>© 2026 Mythos AI · Built for <a href="https://mythoscraft.online" className="text-accent hover:underline">mythoscraft.online</a></p>
-            <LegalLinks className="!text-sm" />
-          </div>
-        </footer>
-      <UpgradeDialog open={upgradeOpen} onOpenChange={setUpgradeOpen} feature={upgradeFeature} reason={upgradeReason} />
-      </main>
+        <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 py-12 text-center -translate-y-[12%] md:-translate-y-[20%]">
+          <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-serif-instrument tracking-tight md:whitespace-nowrap mb-4"
+            style={{ textShadow: "0 0 72px rgba(0, 0, 0, 0.42), 0 4px 28px rgba(0, 0, 0, 0.28)" }}>
+            Bau alles, was du <em className="italic">dir vorstellst</em>
+          </h1>
+          <p className="text-white/70 text-sm leading-relaxed max-w-2xl md:whitespace-nowrap mb-10"
+            style={{ textShadow: "0 0 30px rgba(0, 0, 0, 0.32), 0 1px 10px rgba(0, 0, 0, 0.20)" }}>
+            Code, Minecraft-Modelle, Bilder, Videos und Musik — eine KI, die dranbleibt, bis es fertig ist.
+          </p>
+          <form className="max-w-xl w-full" onSubmit={(e) => { e.preventDefault(); start(); }}>
+            <div className="liquid-glass rounded-full pl-6 pr-1.5 py-1.5 flex items-center gap-3">
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Frag Mythos irgendwas …" aria-label="Deine Frage an Mythos"
+                className="bg-transparent border-none outline-none flex-1 min-w-0 text-white placeholder:text-white/90 text-sm" />
+              <button type="submit" className="bg-white rounded-full px-6 py-3 text-black text-sm font-medium whitespace-nowrap hover:scale-105 transition-transform duration-300">
+                Loslegen
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div className="relative z-10 flex justify-center gap-4 pb-8">
+          {[
+            { href: "https://www.youtube.com/@MinePro641", icon: Youtube, label: "YouTube" },
+            { href: "/downloads", icon: Download, label: "Downloads" },
+            { href: "https://mythoscraft.online", icon: Globe, label: "Mythoscraft" },
+            { href: "/mc", icon: MessageCircle, label: "Minecraft-Support" },
+          ].map(({ href, icon: Icon, label }) => (
+            <a key={label} href={href} title={label} aria-label={label} target={href.startsWith("http") ? "_blank" : undefined} rel="noopener noreferrer"
+              className="liquid-glass-circle w-14 h-14 flex items-center justify-center rounded-full text-white/80 hover:text-white hover:bg-white/5 transition-all">
+              <Icon className="h-5 w-5" />
+            </a>
+          ))}
+        </div>
+        <div className="relative z-10 flex justify-center gap-4 pb-4 text-[11px] text-white/50">
+          <Link to="/impressum" className="hover:text-white">Impressum</Link>
+          <Link to="/datenschutz" className="hover:text-white">Datenschutz</Link>
+          <Link to="/nutzungsbedingungen" className="hover:text-white">AGB</Link>
+        </div>
+      </section>
     </div>
   );
 };
+
 export default Landing;

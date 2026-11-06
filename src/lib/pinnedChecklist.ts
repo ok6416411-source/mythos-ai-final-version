@@ -25,7 +25,13 @@ const norm = (t: string) => t.toLowerCase().replace(/\s+/g, " ").trim();
 export function latestChecklist(messages: { role: string; content: string }[]): PinnedChecklist | null {
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i];
-    if (m.role !== "assistant" || !m.content?.includes("mythos-ui")) continue;
+    if (m.role !== "assistant" || !m.content) continue;
+    // Auch normale Markdown-Aufgabenlisten (- [ ] …) anheften – viele Modelle schreiben Pläne so.
+    if (!m.content.includes("mythos-ui")) {
+      const md = markdownChecklist(m.content);
+      if (md) return md;
+      continue;
+    }
     const found: Record<string, unknown>[] = [];
     for (const match of m.content.matchAll(UI_BLOCK)) found.push(...checklistsIn(parseLoose(match[1])));
     const last = found[found.length - 1];
@@ -42,6 +48,24 @@ export function latestChecklist(messages: { role: string; content: string }[]): 
     return { id: String(last.id || norm(title)), title, items };
   }
   return null;
+}
+
+/** „- [ ] Punkt“ / „- [x] Punkt“ (mind. 2) → Checkliste. Titel = letzte Überschrift/fette Zeile davor. */
+export function markdownChecklist(text: string): PinnedChecklist | null {
+  const clean = text.replace(/```[\s\S]*?(```|$)/g, "");
+  const lines = clean.split("\n");
+  const items: PinItem[] = [];
+  let title = "";
+  for (const line of lines) {
+    const t = /^\s*(?:[-*+]|\d+[.)])\s+\[( |x|X|✓)\]\s+(.+)$/.exec(line);
+    if (t) { items.push({ text: t[2].replace(/\*\*/g, "").trim(), done: t[1] !== " " }); continue; }
+    if (!items.length) {
+      const h = /^\s*(?:#{1,4}\s+(.+)|\*\*(.+?)\*\*:?\s*)$/.exec(line);
+      if (h) title = (h[1] || h[2] || "").replace(/[:：]\s*$/, "").trim();
+    }
+  }
+  if (items.length < 2) return null;
+  return { id: "plan", title: title || "Aufgaben", items };
 }
 
 const key = (convId: string, listId: string) => `mythos.pin:${convId}:${listId}`;

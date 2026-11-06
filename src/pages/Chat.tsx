@@ -57,6 +57,7 @@ import { FILE_PROMPT } from "@/lib/chatFiles";
 import { defaultChatMode } from "@/lib/entry";
 import { SMART_UI_PROMPT, SMART_UI_SEND, stripSmartUI, smartUIOptions } from "@/components/chat/SmartUI";
 import PinnedChecklist from "@/components/chat/PinnedChecklist";
+import UsageDialog from "@/components/UsageDialog";
 import FileViewer, { type ViewFile } from "@/components/chat/FileViewer";
 import { filesOfChat, prepareFile } from "@/lib/chatFileParts";
 import { checklistStatusPrompt, latestChecklist } from "@/lib/pinnedChecklist";
@@ -1138,6 +1139,7 @@ const Chat = () => {
   useEffect(() => { smartUIOptions.pinChecklists = true; return () => { smartUIOptions.pinChecklists = false; }; }, []);
   const pinned = useMemo(() => latestChecklist(messages), [messages]);
   const [viewAtt, setViewAtt] = useState<ViewFile | null>(null);
+  const [usageOpen, setUsageOpen] = useState(false);
   const chatFiles = useMemo(() => filesOfChat(messages), [messages]);
   const [filesOpen, setFilesOpen] = useState(false);
   const openChatFile = (f: { name: string; content: string; base64: boolean }) => {
@@ -1399,6 +1401,7 @@ const Chat = () => {
           <DropdownMenuContent align="start" side="top" className="glass-strong w-64">
             <DropdownMenuLabel className="text-xs text-muted-foreground truncate">{user?.email}</DropdownMenuLabel>
             <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => setUsageOpen(true)}><BarChart3 className="h-4 w-4 mr-2" /> Nutzung</DropdownMenuItem>
             <DropdownMenuItem onClick={() => nav("/dashboard")}><Key className="h-4 w-4 mr-2" /> Dashboard</DropdownMenuItem>
             <DropdownMenuItem onClick={() => nav("/dashboard?tab=profile")}><UserIcon className="h-4 w-4 mr-2" /> Profil & Skin</DropdownMenuItem>
             <DropdownMenuItem onClick={() => nav("/memories")}><Brain className="h-4 w-4 mr-2" /> Memories</DropdownMenuItem>
@@ -1855,6 +1858,7 @@ const Chat = () => {
 
               {pinned && <PinnedChecklist list={pinned} convId={activeId} />}
               <FileViewer file={viewAtt} onClose={() => setViewAtt(null)} />
+              <UsageDialog open={usageOpen} onOpenChange={setUsageOpen} />
 
               <div className="rounded-lg border border-input bg-card focus-within:border-ring transition-colors">
                 <Textarea ref={textareaRef}

@@ -21,7 +21,7 @@ export default function CookieConsent() {
 
   return (
     <div role="dialog" aria-modal="false" aria-labelledby="consent-title" className="fixed inset-x-0 bottom-0 z-[100] p-3 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-      <div className="mx-auto max-w-2xl rounded-3xl border border-white/10 bg-[hsl(0_0%_8%/0.97)] p-5 text-sm shadow-[0_12px_48px_hsl(0_0%_0%/0.6)] backdrop-blur-xl">
+      <div className="mx-auto max-w-2xl rounded-3xl border border-border bg-card/95 text-card-foreground p-5 text-sm shadow-[0_12px_48px_hsl(0_0%_0%/0.6)] backdrop-blur-xl">
         <h2 id="consent-title" className="mb-1.5 font-sans text-base font-semibold text-foreground">Cookies und Datenschutz</h2>
         <p className="text-muted-foreground leading-relaxed">
           Wir speichern nur, was für Anmeldung, Einstellungen und Sicherheit nötig ist. Kein Tracking, keine Werbe-Cookies.

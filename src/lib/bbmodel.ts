@@ -185,32 +185,67 @@ export function buildBBModel(spec: CompactModel): Record<string, unknown> {
 // Ersatzfarben für Modelle ohne Farbangabe (warme, abgestufte Töne statt Einheitsgrau)
 const FALLBACK = ["#8b6b47", "#7a5c3c", "#9c7b54", "#6b4f33", "#a88a63", "#5e4630"];
 
+const isVec3 = (v: unknown) => Array.isArray(v) && v.length === 3 && v.every((x) => typeof x === "number" && Number.isFinite(x));
+
+/** Würfel überall im JSON finden – egal ob als cubes, elements, in Gruppen/Ordnern (children, groups,
+ *  bones, parts) oder verschachtelt. Gruppennamen werden übernommen. So entstehen nie „nur Ordner“. */
+export function collectCubes(data: unknown): CompactCube[] {
+  const out: CompactCube[] = [];
+  const seen = new Set<string>();
+  const walk = (v: unknown, group?: string, depth = 0) => {
+    if (depth > 12 || v == null) return;
+    if (Array.isArray(v)) { v.forEach((x) => walk(x, group, depth + 1)); return; }
+    if (typeof v !== "object") return;
+    const o = v as Record<string, unknown>;
+    if (isVec3(o.from) && isVec3(o.to)) {
+      const key = typeof o.uuid === "string" ? o.uuid : JSON.stringify([o.from, o.to, o.name]);
+      if (seen.has(key)) return;
+      seen.add(key);
+      const faces = (o.faces && typeof o.faces === "object" ? o.faces : {}) as Record<string, unknown>;
+      const faceColors = Object.fromEntries(Object.entries(faces).filter(([, f]) => typeof f === "string" || typeof (f as { color?: unknown })?.color === "string")
+        .map(([k, f]) => [k, typeof f === "string" ? f : (f as { color: string }).color])) as CompactCube["faces"];
+      out.push({
+        name: String(o.name || `wuerfel_${out.length + 1}`), from: o.from as number[], to: o.to as number[],
+        origin: isVec3(o.origin) ? (o.origin as number[]) : isVec3(o.pivot) ? (o.pivot as number[]) : undefined,
+        rotation: isVec3(o.rotation) ? (o.rotation as number[]) : undefined,
+        color: typeof o.color === "string" ? o.color : typeof o.c === "string" ? o.c : undefined,
+        faces: faceColors && Object.keys(faceColors).length ? faceColors : undefined,
+        group: typeof o.group === "string" ? o.group : group,
+      });
+      return;
+    }
+    const isGroup = typeof o.name === "string" && ["children", "cubes", "elements", "parts"].some((k) => Array.isArray(o[k]));
+    const g = isGroup && depth > 0 ? String(o.name) : group;
+    for (const k of ["cubes", "elements", "children", "groups", "parts", "bones", "outliner", "model"]) if (k in o) walk(o[k], g, depth + 1);
+  };
+  walk(data);
+  // Ohne Farbe: je Gruppe eine Farbe aus der Ersatzpalette
+  const groupIdx = new Map<string, number>();
+  for (const c of out) {
+    if (c.color || c.faces) continue;
+    const g = c.group || "";
+    if (!groupIdx.has(g)) groupIdx.set(g, groupIdx.size);
+    c.color = FALLBACK[groupIdx.get(g)! % FALLBACK.length];
+  }
+  return out;
+}
+
 /** Text einer .bbmodel-Datei aus dem Chat → fertiger Dateiinhalt (oder Fehler, wenn leer/kaputt). */
 export function finishBBModel(text: string): { ok: true; content: string; cubes: number } | { ok: false; error: string } {
   let data: unknown;
   try { data = JSON.parse(text.trim().replace(/^```[^\n]*\n|```$/g, "")); }
   catch { return { ok: false, error: "Kein gültiges JSON (wahrscheinlich abgeschnitten)" }; }
   try {
-    if (isCompactModel(data)) {
-      const full = buildBBModel(data);
-      return { ok: true, content: JSON.stringify(full), cubes: (full.elements as unknown[]).length };
-    }
-    const full = data as { name?: string; elements?: Record<string, unknown>[]; textures?: unknown[] };
-    const els = full.elements;
-    if (!Array.isArray(els) || !els.length) return { ok: false, error: "Modell ist leer (keine Würfel)" };
-    // Fertige Datei ohne (eingebettete) Textur → Würfel übernehmen und mit Farb-Textur neu bauen,
-    // sonst erscheint in Blockbench nur ein Platzhalter-Muster.
-    const hasTex = Array.isArray(full.textures) && full.textures.some((t) => typeof (t as { source?: unknown })?.source === "string" && String((t as { source: string }).source).startsWith("data:image"));
-    if (!hasTex) {
-      const cubes = els.filter((e) => e && Array.isArray(e.from) && Array.isArray(e.to)).map((e, i) => ({
-        name: String(e.name || `wuerfel_${i + 1}`), from: e.from as number[], to: e.to as number[],
-        origin: e.origin as number[] | undefined, rotation: e.rotation as number[] | undefined,
-        color: typeof e.color === "string" && e.color.startsWith("#") ? e.color : FALLBACK[i % FALLBACK.length],
-      }));
-      const rebuilt = buildBBModel({ name: full.name, cubes });
-      return { ok: true, content: JSON.stringify(rebuilt), cubes: cubes.length };
-    }
-    return { ok: true, content: text, cubes: els.length };
+    const full = data as { name?: string; elements?: Record<string, unknown>[]; textures?: unknown[]; meta?: unknown };
+    // Echte, vollständige Blockbench-Datei (Würfel mit Seiten + eingebettete Textur): unverändert lassen.
+    const hasTex = Array.isArray(full.textures) && full.textures.some((t) => String((t as { source?: unknown })?.source || "").startsWith("data:image"));
+    const realEls = Array.isArray(full.elements) && full.elements.length > 0 && full.elements.every((e) => e && e.faces && isVec3(e.from));
+    if (full.meta && hasTex && realEls) return { ok: true, content: text, cubes: full.elements!.length };
+    // Alles andere (kompakte Liste, Datei ohne Textur, Würfel in Ordnern …) → sauber neu bauen.
+    const cubes = collectCubes(data);
+    if (!cubes.length) return { ok: false, error: "Modell hat keine Würfel (nur Ordner/leer)" };
+    const built = buildBBModel({ name: full.name || (data as { title?: string }).title, cubes });
+    return { ok: true, content: JSON.stringify(built), cubes: cubes.length };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }

@@ -36,3 +36,16 @@ describe("fertige .bbmodel ohne Textur", () => {
     expect(m.elements[0].name).toBe("Hosenbein_Links");
   });
 });
+
+describe("Würfel in Ordnern", () => {
+  it("findet verschachtelte Würfel", () => {
+    const r = finishBBModel(JSON.stringify({ name: "Hose", outliner: [{ name: "bein_links", children: [{ name: "oben", from: [4, 6, 6], to: [8, 12, 10] }, { name: "unten", from: [4, 0, 6], to: [8, 6, 10] }] }], elements: [] }));
+    expect(r.ok).toBe(true);
+    const m = JSON.parse((r as { content: string }).content);
+    expect(m.elements).toHaveLength(2);
+    expect(m.outliner[0].name).toBe("bein_links");
+  });
+  it("nur Ordner ohne Würfel → Fehler", () => {
+    expect(finishBBModel(JSON.stringify({ outliner: [{ name: "a", children: [] }] })).ok).toBe(false);
+  });
+});
