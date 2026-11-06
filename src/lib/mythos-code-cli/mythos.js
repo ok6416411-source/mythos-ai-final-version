@@ -179,18 +179,18 @@ function compact(history, level) {
 }
 
 let tokens = { in: 0, out: 0 };
+let currentTaskId = null;
 async function once(messages, onText, onThink) {
   const c = ctl = new AbortController(); const to = setTimeout(() => c.abort(), 170000);
   const system = SYSTEM();
-  tokens.in += estimateTokens(system, messages);
   try {
     const r = await fetch(API, {
       method: "POST", signal: c.signal,
       headers: { "content-type": "application/json", "x-api-key": cfg.key, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: cfg.model || "mythos-code", max_tokens: 8000, system, messages, stream: true }),
+      body: JSON.stringify({ model: cfg.model || "mythos-code", task_id: currentTaskId, max_tokens: 8000, system, messages, stream: true }),
     });
     if (!r.ok) { const j = await r.json().catch(() => ({})); const e = new Error(j?.error?.message || ("HTTP " + r.status)); e.status = r.status; throw e; }
-    const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = "", out = "", think = "";
+    const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = "", out = "", think = "", measured = null;
     while (true) {
       const { done, value } = await reader.read(); if (done) break;
       buf += dec.decode(value, { stream: true });
@@ -199,13 +199,14 @@ async function once(messages, onText, onThink) {
         if (!line.startsWith("data:")) continue;
         let p; try { p = JSON.parse(line.slice(5)); } catch { continue; }
         if (p.type === "error") { const e = new Error(p.error?.message || "Überlastet"); e.status = 529; throw e; }
-        // Sichtbare Gedanken: kommen als eigener Block VOR der Antwort.
-        if (p.delta?.type === "thinking_delta" && p.delta.thinking) { think += p.delta.thinking; if (onThink) onThink(think); }
+        if (p.type === "mythos_task") currentTaskId = p.task_id;
+        if (p.type === "message_delta" && p.usage) measured = p.usage;
         if (p.delta?.text) { out += p.delta.text; if (onText) onText(out); }
       }
     }
     if (!out.trim()) throw new Error("Leere Antwort");
-    tokens.out += Math.ceil(out.length / 4);
+    if (measured?.measured) { tokens.in += measured.input_tokens || 0; tokens.out += measured.output_tokens || 0; }
+    else tokens.unknown = (tokens.unknown || 0) + 1;
     return out;
   } finally { clearTimeout(to); }
 }
@@ -392,6 +393,7 @@ async function summarize(history) {
 }
 
 async function turn(history, input, images) {
+  currentTaskId = null;
   if (input != null) history.push({ role: "user", content: input, images });
   T0 = Date.now(); working = true; stopped = false; startTick();
   const tok0 = tokens.in + tokens.out;
@@ -405,7 +407,7 @@ async function turn(history, input, images) {
   working = false; stopTick();
   const took = fmt(Date.now() - T0);
   console.log((stopped ? C.r + "■ Gestoppt nach " + took : C.g + "✓ Mythos hat " + took + " gearbeitet") + C.x +
-    C.d + "  · ≈ " + fmtTokens(tokens.in + tokens.out - tok0) + " Tokens (Sitzung ≈ " + fmtTokens(tokens.in + tokens.out) + ")" + C.x + "\n");
+    C.d + "  · " + fmtTokens(tokens.in + tokens.out - tok0) + " MythosAI Tokens (Sitzung " + fmtTokens(tokens.in + tokens.out) + ")" + (tokens.unknown ? " · Anbieterwerte teils unbekannt" : "") + C.x + "\n");
   if (!stopped && status !== "error") await maybeAd();
   if (status === "reached") { console.log(C.g + "🎯 Ziel erreicht: " + wasGoal + C.x + "\n"); goal = ""; }
   // Handy-Benachrichtigung bei /goal oder längeren Aufgaben.
@@ -471,7 +473,7 @@ const HELP = [
   ["/handy <url>", "Handy-Benachrichtigung (ntfy.sh-Thema oder Discord-Webhook) · /handy test · /handy aus"],
   ["/vollzugriff an|aus", "Ohne Nachfragen arbeiten"],
   ["/modell [name]", "Modell anzeigen oder wechseln"],
-  ["/tokens", "Geschätzten Token-Verbrauch dieser Sitzung anzeigen"],
+  ["/tokens", "Gemessenen MythosAI-Verbrauch dieser Sitzung anzeigen"],
   ["/clear", "Verlauf leeren"],
   ["/review [schwerpunkt]", "Code-Review der Git-Änderungen (ändert nichts)"],
   ["/pr [branch]", "Branch pushen und Pull Request erstellen"],
@@ -554,7 +556,7 @@ async function command(q, history) {
     cfg.model = m.id; save(cfg);
     return console.log(C.g + "✓ Modell: " + m.label + C.x + "\n");
   }
-  if (cmd === "/tokens") return console.log("≈ " + fmtTokens(tokens.in) + " Eingabe + " + fmtTokens(tokens.out) + " Ausgabe = " + fmtTokens(tokens.in + tokens.out) + " Tokens (geschätzt)\n");
+  if (cmd === "/tokens") return console.log(fmtTokens(tokens.in) + " Eingabe + " + fmtTokens(tokens.out) + " Ausgabe = " + fmtTokens(tokens.in + tokens.out) + " MythosAI Tokens" + (tokens.unknown ? " · " + tokens.unknown + " Aufrufe ohne Anbieterwerte" : "") + "\n");
   if (cmd === "/vollzugriff") { autoYes = !/^(aus|off)$/i.test(arg); return console.log(autoYes ? "Vollzugriff an.\n" : "Vollzugriff aus – Mythos fragt vor Befehlen nach.\n"); }
   if (cmd === "/review") {
     const st = git(["status", "--porcelain"]);

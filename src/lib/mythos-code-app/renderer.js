@@ -255,23 +255,25 @@ function compact(h, level) {
 async function once(run, messages, system, onText, onThink) {
   const c = run.ctl = new AbortController(); const to = setTimeout(() => c.abort(), 170000);
   const tok = run.chat.tokens = run.chat.tokens || { in: 0, out: 0 };
-  tok.in += estTokens(system, messages);
   try {
     const r = await fetch(CFG.fn + "/v1-messages", { method: "POST", signal: c.signal,
       headers: { "content-type": "application/json", "x-api-key": cfg.key, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: run.model, effort: cfg.effort || "normal", max_tokens: EFFORT_TOKENS[cfg.effort] || 8000, system: system, messages: messages, stream: true }) });
+      body: JSON.stringify({ model: run.model, effort: cfg.effort || "normal", task_id: run.taskId, max_tokens: EFFORT_TOKENS[cfg.effort] || 8000, system: system, messages: messages, stream: true }) });
     if (!r.ok) { const j = await r.json().catch(() => ({})); const e = new Error((j.error && j.error.message) || ("HTTP " + r.status)); e.status = r.status; throw e; }
-    const rd = r.body.getReader(), dec = new TextDecoder(); let buf = "", out = "", think = "", outTok = 0;
+    const rd = r.body.getReader(), dec = new TextDecoder(); let buf = "", out = "", think = "", measured = null;
     for (;;) { const x = await rd.read(); if (x.done) break; buf += dec.decode(x.value, { stream: true }); let i;
       while ((i = buf.indexOf("\n")) !== -1) { const l = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
         if (!l.startsWith("data:")) continue; let p; try { p = JSON.parse(l.slice(5)); } catch (e) { continue; }
         if (p.type === "error") { const e = new Error((p.error && p.error.message) || "Überlastet"); e.status = 529; throw e; }
-        if (p.usage && p.usage.output_tokens) outTok = p.usage.output_tokens;
+        if (p.type === "mythos_task") run.taskId = p.task_id;
+        if (p.type === "message_delta" && p.usage) measured = p.usage;
         // Sichtbare Gedanken: kommen als eigener Block VOR der Antwort.
         
         if (p.delta && p.delta.text) { out += p.delta.text; if (onText) onText(out); } } }
     if (!out.trim()) throw new Error("Leere Antwort");
-    tok.out += outTok || Math.ceil(out.length / 4);
+    if (measured && measured.measured) { tok.in += measured.input_tokens || 0; tok.out += measured.output_tokens || 0; }
+    else tok.unknown = (tok.unknown || 0) + 1;
+    renderTokens();
     return { text: out, think };
   } finally { clearTimeout(to); }
 }
@@ -296,11 +298,13 @@ async function call(run, h, system, onText, onThink) {
 const quickCall = async (content, system) => (await call({ stopped: false, ctl: null, model: cfg.model || "mythos-code", chat: chat }, [{ role: "user", content: content }], system)).text;
 async function usage() { try { const j = await (await post("cli-auth", { action: "usage", api_key: cfg.key })).json();
   window.__adTier = j.admin ? "admin" : (j.tier || "free");
-  $("usage").textContent = j.limit == null ? "Usage " + j.used + " · ∞ Pro" : "Usage " + j.used + " / " + j.limit; } catch (e) {} }
+  if (j.tokens) { const u = j.tokens.usage, l = j.tokens.limits; const fmtLimit = (k) => fmtTok(u[k]) + " / " + (l[k] == null ? "∞" : fmtTok(l[k]));
+    $("usage").textContent = "MythosAI · Stunde " + fmtLimit("hour") + " · Woche " + fmtLimit("week") + " · Monat " + fmtLimit("month");
+  } else $("usage").textContent = "Verbrauch nicht verfügbar"; } catch (e) {} }
 function renderTokens() {
   const t = (chat && chat.tokens) || { in: 0, out: 0 };
-  $("tokens").textContent = "≈ " + fmtTok(t.in + t.out) + " Tokens";
-  $("tokens").title = "Geschätzt für diesen Chat: " + fmtTok(t.in) + " Eingabe + " + fmtTok(t.out) + " Ausgabe";
+  $("tokens").textContent = fmtTok(t.in + t.out) + " MythosAI Tokens" + (t.unknown ? " + unbekannt" : "");
+  $("tokens").title = "Gemessen für diesen Chat: " + fmtTok(t.in) + " Eingabe + " + fmtTok(t.out) + " Ausgabe" + (t.unknown ? "; Anbieterwerte fehlen für " + t.unknown + " Aufrufe" : "");
 }
 // Antwort live mitlesen: sichtbarer Text ohne <tool>-Block (auch nicht halb angefangen).
 function visibleText(full) {
@@ -816,7 +820,7 @@ const COMMANDS = [
   ["/koppeln", "[neu|aus]", "📱 Mythos vom Handy schreiben: Link zum Antippen (auch per Discord/ntfy), kein Konto nötig"],
   ["/warteschlange", "[leeren]", "Warteschlange anzeigen oder leeren"],
   ["/suche", "<text>", "Alle Chats durchsuchen"],
-  ["/tokens", "", "Geschätzten Token-Verbrauch dieses Chats anzeigen"],
+  ["/tokens", "", "Gemessenen MythosAI-Verbrauch dieses Chats anzeigen"],
   ["/design", "hell|dunkel", "Helles oder dunkles Design"],
   ["/umbenennen", "<name>", "Aktuellen Chat umbenennen"],
   ["/vollzugriff", "an|aus", "Vollzugriff ein- oder ausschalten"],
@@ -1175,7 +1179,7 @@ async function command(q) {
     return note(q2.length ? "⏳ Warteschlange:\n" + q2.map((it, i) => (i + 1) + ". " + it.q).join("\n") : "Die Warteschlange ist leer. Tipp: Während Mythos arbeitet, reiht Enter neue Aufgaben ein.");
   }
   if (cmd === "/suche") { $("csearch").value = arg; searchQ = arg; renderSide(); return $("csearch").focus(); }
-  if (cmd === "/tokens") { const t = chat.tokens || { in: 0, out: 0 }; return note("≈ " + fmtTok(t.in) + " Eingabe + " + fmtTok(t.out) + " Ausgabe = " + fmtTok(t.in + t.out) + " Tokens in diesem Chat (geschätzt)"); }
+  if (cmd === "/tokens") { const t = chat.tokens || { in: 0, out: 0 }; return note(fmtTok(t.in) + " Eingabe + " + fmtTok(t.out) + " Ausgabe = " + fmtTok(t.in + t.out) + " MythosAI Tokens" + (t.unknown ? " · " + t.unknown + " Aufrufe ohne Anbieterwerte" : "")); }
   if (cmd === "/design") { setTheme(/^hell|light/i.test(arg) ? "light" : /^dunkel|dark/i.test(arg) ? "dark" : cfg.theme === "light" ? "dark" : "light"); return; }
   if (cmd === "/umbenennen") {
     if (!arg) return note("So geht's: /umbenennen <neuer Name>");
