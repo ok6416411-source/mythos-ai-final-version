@@ -87,6 +87,22 @@ function initUpdater() {
   setTimeout(check, 5000);
   setInterval(() => { if (!["downloading", "ready"].includes(updState.state)) check(); }, 60 * 60 * 1000);
 }
+// Bestätigungen/Hinweise als echtes Fenster-Dialog statt window.confirm/alert: Unter Windows
+// bekommt das Eingabefeld nach confirm()/alert() oft keinen Fokus mehr (Electron-Fehler) –
+// man konnte dann nicht mehr ins Eingabefeld klicken. Danach Fokus aktiv zurückgeben.
+const refocus = () => setImmediate(() => { if (!w || w.isDestroyed()) return; w.focus(); w.webContents.focus(); });
+ipcMain.on("dialog:confirm", (e, msg) => {
+  const r = dialog.showMessageBoxSync(w, { type: "question", title: "Mythos Code", message: String(msg || ""), buttons: ["OK", "Abbrechen"], defaultId: 0, cancelId: 1, noLink: true });
+  e.returnValue = r === 0;
+  refocus();
+});
+ipcMain.on("dialog:alert", (e, msg) => {
+  dialog.showMessageBoxSync(w, { type: "info", title: "Mythos Code", message: String(msg || ""), buttons: ["OK"], noLink: true });
+  e.returnValue = true;
+  refocus();
+});
+// Falls doch irgendwo der Fokus verloren geht: beim Zurückkehren ins Fenster wieder herstellen.
+app.on("browser-window-focus", (_e, win) => { if (win === w) win.webContents.focus(); });
 ipcMain.handle("update:state", () => updState);
 ipcMain.handle("update:check", async () => {
   if (!updater) return Object.assign({}, updState, { state: "unavailable" });

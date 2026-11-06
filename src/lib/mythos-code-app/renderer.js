@@ -20,17 +20,42 @@ window.mythosFolder = () => (chat && chat.folder) || cfg.folder || "";
 const md = (box, text) => window.renderMarkdown(box, text, openLink);
 // Buttons in der intelligenten Oberfläche (```mythos-ui) schicken ihren Text wie eine getippte Nachricht.
 window.mythosSendPrompt = (t) => { $("inp").value = t; send(); };
-let follow = true;
+// Native Dialoge über das Hauptfenster (sonst lässt sich das Eingabefeld danach unter Windows nicht mehr anklicken).
+if (window.mythos && window.mythos.confirmSync) {
+  window.confirm = (m) => window.mythos.confirmSync(String(m == null ? "" : m));
+  window.alert = (m) => { window.mythos.alertSync(String(m == null ? "" : m)); };
+}
+// Freies Scrollen: Mythos scrollt nur mit, solange du unten bist. Scrollst du hoch (Mausrad, Leiste,
+// Tastatur, Touchpad), bleibt die Ansicht stehen; der Knopf „↓“ springt wieder ans Ende.
+let follow = true, progUntil = 0;
 const nearBottom = () => follow;
-const atBottom = () => { const l = $("log"); return l.scrollHeight - l.scrollTop - l.clientHeight < 40; };
-document.addEventListener("DOMContentLoaded", () => {}, { once: true });
+const atBottom = () => { const l = $("log"); return l.scrollHeight - l.scrollTop - l.clientHeight < 60; };
+const jumpBtn = () => {
+  let b = document.getElementById("jumpDown");
+  if (!b) {
+    b = document.createElement("button"); b.id = "jumpDown"; b.type = "button"; b.title = "Zum Ende"; b.textContent = "↓";
+    b.style.cssText = "position:absolute;right:22px;bottom:12px;z-index:5;width:34px;height:34px;border-radius:50%;border:1px solid var(--line2,rgba(255,255,255,.15));background:var(--panel,#151515);color:inherit;font-size:16px;cursor:pointer;display:none;box-shadow:0 6px 20px rgba(0,0,0,.35)";
+    b.onclick = () => scrollDown(true);
+    const l = $("log"); (l.parentElement || document.body).style.position ||= "relative"; (l.parentElement || document.body).appendChild(b);
+  }
+  return b;
+};
+const showJump = () => { const b = jumpBtn(); b.style.display = follow ? "none" : ""; };
 setTimeout(() => { const l = $("log"); if (!l) return;
-  l.addEventListener("wheel", (e) => { if (e.deltaY < 0) follow = false; else if (atBottom()) follow = true; }, { passive: true });
-  l.addEventListener("touchmove", () => { follow = atBottom(); }, { passive: true });
-  l.addEventListener("scroll", () => { if (atBottom()) follow = true; }, { passive: true });
-  l.addEventListener("keydown", (e) => { if (e.key === "PageUp" || e.key === "ArrowUp" || e.key === "Home") follow = false; });
+  l.addEventListener("wheel", (e) => { if (e.deltaY < 0) { follow = false; showJump(); } }, { passive: true });
+  l.addEventListener("scroll", () => {
+    if (performance.now() < progUntil && atBottom()) return; // eigenes Mitscrollen ignorieren
+    follow = atBottom(); showJump();
+  }, { passive: true });
+  l.addEventListener("keydown", (e) => { if (e.key === "PageUp" || e.key === "ArrowUp" || e.key === "Home") { follow = false; showJump(); } });
 }, 0);
-const scrollDown = (force) => { if (force) follow = true; if (follow) $("log").scrollTop = 1e9; };
+const scrollDown = (force) => {
+  if (force) follow = true;
+  if (!follow) return;
+  const l = $("log");
+  if (l.scrollHeight - l.scrollTop - l.clientHeight > 1) { progUntil = performance.now() + 120; l.scrollTop = 1e9; }
+  showJump();
+};
 const stripAnsi = (s) => s.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "");
 const isBusy = (c) => !!(c && runs.has(c.id));
 const runOf = (c) => (c ? runs.get(c.id) : null);
@@ -1659,6 +1684,36 @@ async function installUpdate() {
   updHidden = ""; upd = Object.assign({}, upd, { state: "downloading", percent: 0 }); renderUpdate();
   await window.mythos.update.install();
 }
+// ---------- „Was ist neu“ nach einem Update ----------
+// Neue Version: hier oben einen Eintrag ergänzen (neueste zuerst). Wird einmal nach dem Update gezeigt.
+const WHATS_NEW = {
+  "2.15.1": [
+    "Eingabefeld bleibt immer anklickbar – auch nach Rückfragen wie „Mythos möchte ausführen …“",
+    "Freies Scrollen: Während Mythos schreibt, kannst du hochscrollen, ohne nach unten gezogen zu werden. ↓ springt ans Ende",
+    "Rückfragen zum Anklicken und Abschicken direkt im Chat",
+    "Blockbench-Modelle (.bbmodel) kommen vollständig an – kein abgeschnittener Dateiname, keine leeren Modelle mehr",
+    "Updates kommen jetzt aus dem neuen Release-Ort und werden automatisch gefunden",
+  ],
+};
+function showWhatsNew(current) {
+  let last = null; try { last = localStorage.getItem("mythos_seen_version"); localStorage.setItem("mythos_seen_version", current); } catch { /* egal */ }
+  const notes = WHATS_NEW[current];
+  if (!notes || last === current) return;
+  const bg = document.createElement("div");
+  bg.style.cssText = "position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:20px";
+  const box = document.createElement("div");
+  box.style.cssText = "max-width:520px;width:100%;background:var(--panel,#141414);border:1px solid var(--line2,rgba(255,255,255,.12));border-radius:18px;padding:22px 24px;box-shadow:0 30px 80px rgba(0,0,0,.5)";
+  const h = document.createElement("div"); h.style.cssText = "font-size:18px;font-weight:650;margin-bottom:4px"; h.textContent = "Neu in Mythos Code " + current;
+  const sub = document.createElement("div"); sub.style.cssText = "opacity:.6;font-size:13px;margin-bottom:14px"; sub.textContent = last ? "Update von " + last + " installiert" : "Willkommen!";
+  const ul = document.createElement("ul"); ul.style.cssText = "margin:0 0 18px;padding-left:18px;display:grid;gap:7px;font-size:14px;line-height:1.45";
+  notes.forEach((n) => { const li = document.createElement("li"); li.textContent = n; ul.appendChild(li); });
+  const ok = document.createElement("button"); ok.type = "button"; ok.textContent = "Los geht's";
+  ok.style.cssText = "border:0;border-radius:10px;padding:9px 18px;font:inherit;font-weight:600;cursor:pointer;background:#fff;color:#0a0a0a";
+  const close = () => { bg.remove(); $("inp").focus(); };
+  ok.onclick = close; bg.onclick = (e) => { if (e.target === bg) close(); };
+  box.append(h, sub, ul, ok); bg.appendChild(box); document.body.appendChild(bg);
+}
+window.mythos.update.state().then((s) => { if (s && s.current) showWhatsNew(s.current); }).catch(() => {});
 window.mythos.update.onStatus((s) => { upd = s; renderUpdate(); });
 window.mythos.update.state().then((s) => { upd = s; renderUpdate(); });
 $("updBtn").onclick = installUpdate;

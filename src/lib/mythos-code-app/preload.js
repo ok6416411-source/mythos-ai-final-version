@@ -2,6 +2,8 @@ const { contextBridge, ipcRenderer } = require("electron");
 const inv = (ch) => (...a) => ipcRenderer.invoke(ch, ...a);
 const on = (ch) => (fn) => ipcRenderer.on(ch, (_e, payload) => fn(payload));
 contextBridge.exposeInMainWorld("mythos", {
+  confirmSync: (m) => ipcRenderer.sendSync("dialog:confirm", String(m)),
+  alertSync: (m) => ipcRenderer.sendSync("dialog:alert", String(m)),
   getCfg: inv("cfg:get"), setCfg: inv("cfg:set"),
   open: inv("open"), pickFolder: inv("pickFolder"), pickFiles: inv("pickFiles"),
   tool: inv("tool"), systemPrompt: inv("prompt:system"), prompts: inv("prompts"), abort: inv("abort"),
