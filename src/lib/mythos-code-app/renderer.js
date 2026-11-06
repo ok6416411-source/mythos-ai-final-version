@@ -312,11 +312,18 @@ async function call(run, h, system, onText, onThink) {
       if (run.stopped) throw e;
       if (e.status === 401) throw new Error("Anmeldung abgelaufen – bitte abmelden und neu anmelden.");
       if (/Daily limit/i.test(e.message)) throw new Error("Tageslimit erreicht – mit Pro unbegrenzt.");
-      // Konfigurationsproblem (Guthaben leer, kein Ausweich-Schlüssel) statt normaler Überlastung -> nicht sinnlos wiederholen.
-      if (/nicht konfiguriert/i.test(e.message)) throw e;
-      const wait = Math.min(30000, 1500 * (a + 1));
-      if (a >= 2 && run.chat) { run.phase = "Verbindung weg – neuer Versuch " + (a + 1) + "/25"; schedulePaint && schedulePaint(run); }
+      // KI kurz nicht erreichbar (auch „nicht konfiguriert“/Guthaben – oft nur ein Aussetzer):
+      // still 20 s warten, im Protokoll „Gerade nicht erreichbar“ zeigen, dann einfach weitermachen.
+      const outage = /nicht konfiguriert|nicht erreichbar|Guthaben|überlastet|Überlastet|HTTP 5\d\d|Failed to fetch|NetworkError|aborted/i.test(e.message) || (e.status >= 500);
+      const wait = outage ? 20000 : Math.min(30000, 1500 * (a + 1));
+      if ((outage || a >= 2) && run.chat) {
+        const until = Date.now() + wait;
+        const tick = () => { const s2 = Math.max(0, Math.ceil((until - Date.now()) / 1000)); run.phase = "Gerade nicht erreichbar – neuer Versuch in " + s2 + " s"; schedulePaint && schedulePaint(run); };
+        tick(); var phaseTimer = setInterval(tick, 1000);
+      }
       for (let w = 0; w < wait && !run.stopped; w += 250) await new Promise((r) => setTimeout(r, 250));
+      if (typeof phaseTimer !== "undefined") clearInterval(phaseTimer);
+      run.phase = "";
     }
   }
   throw new Error("Mythos ist gerade nicht erreichbar – bitte gleich nochmal versuchen.");
@@ -563,10 +570,11 @@ async function runAgent(c, opts) {
       try { res = await ask(); }
       catch (e) {
         if (run.stopped) break;
-        if (/Anmeldung|Tageslimit|nicht konfiguriert/.test(e.message)) throw e;
-        // Nicht aufgeben: kurz warten, Verlauf straffen und neu ansetzen.
-        noteTo(c, "⚠ " + e.message + " – Mythos setzt in 20 s neu an (Stopp mit Esc).");
-        for (let w = 0; w < 20000 && !run.stopped; w += 250) await new Promise((r) => setTimeout(r, 250));
+        if (/Anmeldung|Tageslimit/.test(e.message)) throw e;
+        // Nicht aufgeben und keine Fehlermeldung in den Chat: still warten und neu ansetzen.
+        activityPush(run, "⏸", "Gerade nicht erreichbar – geht gleich weiter");
+        for (let w = 0; w < 20000 && !run.stopped; w += 250) { run.phase = "Gerade nicht erreichbar – neuer Versuch in " + Math.ceil((20000 - w) / 1000) + " s"; if (w % 1000 === 0) schedulePaint(run); await new Promise((r) => setTimeout(r, 250)); }
+        run.phase = "";
         if (++toolFails > 6 && !goal) throw e; continue;
       }
       toolFails = 0;
