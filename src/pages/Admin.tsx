@@ -77,6 +77,19 @@ const Admin = () => {
     if (n === CRAFT_ARTICLES.length) toast.success(`${n} KI-Wissens-Artikel eingespielt (${CRAFT_KNOWLEDGE_VERSION})`);
     else toast.error(`Nur ${n}/${CRAFT_ARTICLES.length} Artikel gespeichert – Admin-Rechte?`);
   };
+  // Feedback → Regel: Vorschlag an den Artikel „ki-gelernt“ anhängen (gilt in allen Chats), Feedback löschen.
+  const adoptRule = async (a: { id: string; body: string }) => {
+    const rule = (/\*\*Regel-Vorschlag:\*\*\s*(.+)/.exec(a.body)?.[1] || "").trim();
+    if (!rule || rule === "(keiner)") { toast.error("Kein Regel-Vorschlag – bitte Artikel bearbeiten."); return; }
+    const { data: ex } = await supabase.from("knowledge_articles").select("id,body").eq("category", "ki-gelernt").maybeSingle();
+    const { error } = ex
+      ? await supabase.from("knowledge_articles").update({ body: `${ex.body}\n- ${rule}`, is_published: true }).eq("id", ex.id)
+      : await supabase.from("knowledge_articles").insert({ title: "Gelernte Regeln (aus Feedback)", category: "ki-gelernt", is_published: true, body: `## Gelernte Regeln (aus Nutzer-Feedback)\n- ${rule}` });
+    if (error) { toast.error(error.message); return; }
+    await supabase.from("knowledge_articles").delete().eq("id", a.id);
+    toast.success("Regel übernommen – gilt ab sofort in allen Chats");
+    loadArticles();
+  };
   const del = async (id: string) => { if (!confirm("Löschen?")) return; await supabase.from("knowledge_articles").delete().eq("id", id); loadArticles(); };
 
   const toggleAdmin = async (uid: string, isAdmin: boolean) => {
@@ -150,6 +163,9 @@ const Admin = () => {
                     <p className="text-xs text-muted-foreground line-clamp-2">{a.body}</p>
                   </div>
                   <div className="flex gap-1">
+                    {a.category === "feedback" && (
+                      <Button size="sm" variant="outline" onClick={() => adoptRule(a)} title="Regel-Vorschlag in „Gelernte Regeln“ übernehmen">Als Regel übernehmen</Button>
+                    )}
                     <Button size="icon" variant="ghost" onClick={() => { setEditing(a); setOpen(true); }}><Edit className="h-4 w-4" /></Button>
                     <Button size="icon" variant="ghost" onClick={() => del(a.id)} className="hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
                   </div>

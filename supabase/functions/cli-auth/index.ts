@@ -88,6 +88,34 @@ Deno.serve(async (req) => {
       } catch (e) { return json({ error: e instanceof Error ? e.message : String(e) }, 502); }
     }
 
+    // Feedback zu einer Antwort (Website). Bei „schlecht“ schlägt die KI direkt eine Regel vor;
+    // gespeichert als unveröffentlichter Knowledge-Artikel (Kategorie „feedback“) → Admin übernimmt per Klick.
+    if (action === "feedback") {
+      const jwt = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+      const { data: u } = await db.auth.getUser(jwt);
+      if (!u?.user) return json({ error: "Nicht angemeldet" }, 401);
+      const vote = body.vote === "up" ? "up" : "down";
+      if (vote === "up") return json({ ok: true });
+      const q = String(body.question || "").slice(0, 2000), a = String(body.answer || "").slice(0, 6000), c = String(body.comment || "").slice(0, 400);
+      let rule = "";
+      try {
+        const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${Deno.env.get("LOVABLE_API_KEY")}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: "google/gemini-3.6-flash",
+            messages: [{ role: "user", content: "Ein Nutzer fand diese KI-Antwort schlecht. Formuliere EINE kurze, allgemeine Verhaltensregel (1–2 Sätze, Deutsch, Imperativ, ohne Bezug auf diesen Einzelfall), die die KI künftig besser macht. Nur die Regel ausgeben.\n\nFrage: " + q + "\n\nAntwort: " + a.slice(0, 3000) + "\n\nKritik des Nutzers: " + (c || "(keine)") }],
+          }),
+        });
+        if (r.ok) rule = String((await r.json()).choices?.[0]?.message?.content || "").trim().slice(0, 400);
+      } catch { /* Regel ist optional */ }
+      await db.from("knowledge_articles").insert({
+        title: (c || "Schlechte Antwort").slice(0, 80), category: "feedback", is_published: false,
+        body: `**Regel-Vorschlag:** ${rule || "(keiner)"}\n\n**Kritik:** ${c || "(keine)"}\n\n**Frage:** ${q.slice(0, 600)}\n\n**Antwort (Auszug):** ${a.slice(0, 1200)}`,
+      });
+      return json({ ok: true });
+    }
+
     if (action === "usage") {
       const key = String(body.api_key || "");
       const { data: k } = await db.from("api_keys").select("id,user_id,daily_limit,revoked").eq("key_hash", await sha256(key)).maybeSingle();

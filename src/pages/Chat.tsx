@@ -58,6 +58,7 @@ import { defaultChatMode } from "@/lib/entry";
 import { SMART_UI_PROMPT, SMART_UI_SEND, stripSmartUI, smartUIOptions } from "@/components/chat/SmartUI";
 import PinnedChecklist from "@/components/chat/PinnedChecklist";
 import UsageDialog from "@/components/UsageDialog";
+import FeedbackButtons from "@/components/chat/FeedbackButtons";
 import FileViewer, { type ViewFile } from "@/components/chat/FileViewer";
 import { filesOfChat, prepareFile } from "@/lib/chatFileParts";
 import { checkAnswer, repairPrompt } from "@/lib/selfCheck";
@@ -1785,6 +1786,10 @@ const Chat = () => {
                                 >
                                   {voice.status === "speaking" ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
                                 </button>
+                              )}
+                              {!(m as { ad?: boolean }).ad && (
+                                <FeedbackButtons messageId={m.id} answer={stripSmartUI(forDisplay(m.content))}
+                                  question={[...messages.slice(0, i)].reverse().find(x => x.role === "user")?.content || ""} />
                               )}
                             </div>
                           )}

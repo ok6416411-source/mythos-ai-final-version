@@ -285,11 +285,80 @@ const WEB = `## Web, Spiele & Grafik – Qualitätsmaßstab
 - Barrierearm: Buttons sind <button>, Kontraste ausreichend, Fokus sichtbar.`;
 
 const PLUGIN = `## Minecraft-Plugins (Paper/Spigot) & Mods
-- Paper 1.21+: Java 21, plugin.yml mit api-version: '1.21', Befehle über Paper-Brigadier oder getCommand(...).setExecutor.
+- Paper 1.21+: Java 21, plugin.yml mit api-version: '1.21'. Befehle über getCommand(...).setExecutor (oder Paper-Brigadier).
 - Adventure-API für Texte (Component.text(...).color(NamedTextColor.GREEN)), keine §-Farbcodes in neuem Code.
-- Liefere ein komplettes Projekt: pom.xml oder build.gradle.kts, plugin.yml, alle Klassen mit Paketpfad (datei:src/main/java/…), README mit Build-Befehl.
-- Scheduler: Bukkit.getScheduler().runTaskTimer(plugin, …) bzw. Folia-kompatibel, keine Blockierung des Main-Threads (IO async).
-- Konfiguration über config.yml mit saveDefaultConfig(); Berechtigungen in plugin.yml deklarieren.`;
+- Immer ein KOMPLETTES Projekt: pom.xml, plugin.yml, alle Klassen mit Paketpfad (datei:src/main/java/…), config.yml, README mit Build-Befehl (mvn package → target/*.jar).
+- Main-Thread nie blockieren (Datei/Netz async), Scheduler für Wiederholungen, Berechtigungen in plugin.yml deklarieren, Tab-Completion anbieten.
+
+Beispiel (vollständig, kompiliert) – /heal mit Cooldown:
+\`\`\`datei:pom.xml
+<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion>
+  <groupId>de.mythos</groupId><artifactId>heal</artifactId><version>1.0.0</version>
+  <properties><maven.compiler.release>21</maven.compiler.release><project.build.sourceEncoding>UTF-8</project.build.sourceEncoding></properties>
+  <repositories><repository><id>papermc</id><url>https://repo.papermc.io/repository/maven-public/</url></repository></repositories>
+  <dependencies><dependency><groupId>io.papermc.paper</groupId><artifactId>paper-api</artifactId><version>1.21.4-R0.1-SNAPSHOT</version><scope>provided</scope></dependency></dependencies>
+</project>
+\`\`\`
+\`\`\`datei:src/main/resources/plugin.yml
+name: Heal
+version: 1.0.0
+main: de.mythos.heal.HealPlugin
+api-version: '1.21'
+commands:
+  heal:
+    description: Heilt dich vollständig
+    permission: heal.use
+permissions:
+  heal.use:
+    default: op
+\`\`\`
+\`\`\`datei:src/main/java/de/mythos/heal/HealPlugin.java
+package de.mythos.heal;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.attribute.Attribute;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
+import org.bukkit.plugin.java.JavaPlugin;
+
+public final class HealPlugin extends JavaPlugin {
+    private final Map<UUID, Long> cooldown = new HashMap<>();
+
+    @Override
+    public void onEnable() {
+        saveDefaultConfig();
+    }
+
+    @Override
+    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (!(sender instanceof Player p)) { sender.sendMessage("Nur für Spieler."); return true; }
+        long wait = getConfig().getLong("cooldown-seconds", 60) * 1000L;
+        long left = cooldown.getOrDefault(p.getUniqueId(), 0L) + wait - System.currentTimeMillis();
+        if (left > 0) { p.sendMessage(Component.text("Noch " + (left / 1000 + 1) + " s warten.", NamedTextColor.RED)); return true; }
+        var max = p.getAttribute(Attribute.MAX_HEALTH);
+        p.setHealth(max != null ? max.getValue() : 20.0);
+        p.setFoodLevel(20);
+        cooldown.put(p.getUniqueId(), System.currentTimeMillis());
+        p.sendMessage(Component.text("Du wurdest geheilt!", NamedTextColor.GREEN));
+        return true;
+    }
+}
+\`\`\`
+\`\`\`datei:src/main/resources/config.yml
+cooldown-seconds: 60
+\`\`\``;
+
+const PACKS_MC = `## Resource Packs, Datapacks & Shader
+- pack.mcmeta: "pack_format" hängt von der Minecraft-Version ab und ändert sich oft – wenn du die genaue Zahl für die Zielversion nicht sicher weißt, per Web-Suche prüfen oder "supported_formats" als Bereich angeben. Version immer nennen.
+- Resource Pack Aufbau: assets/minecraft/textures/…, models/…, ab 1.21.4 zusätzlich items/<name>.json als Item-Model-Definition; eigene Modelle über item_model-Komponente. Texturen als PNG 16×16 (oder Vielfache), Pfade klein geschrieben.
+- Datapack Aufbau: data/<namespace>/function/*.mcfunction (ab 1.21 Singular „function“), tick/load über data/minecraft/tags/function/tick.json bzw. load.json. Befehle ohne führenden Slash.
+- Shader (Iris/OptiFine): shaders/ mit composite/gbuffers/final-Programmen (.vsh/.fsh), shaders.properties für Optionen; GLSL-Version am Anfang (#version 330 compatibility). Liefere jede Datei komplett.
+- Immer die komplette Ordnerstruktur als einzelne datei:-Blöcke mit Pfad liefern (der Chat packt alles als ZIP).`;
 
 /** Kategorie-Präfix der KI-Wissens-Artikel in knowledge_articles (Admin → „KI-Wissen einspielen“). */
 export const CRAFT_CATEGORY_PREFIX = "ki-";
@@ -300,6 +369,7 @@ const PACKS: Pack[] = [
   { id: "bbmodel", title: "Blockbench-Modelle (.bbmodel)", test: /bbmodel|blockbench|block ?bench|3d[- ]?modell|modell f(ü|ue)r minecraft|hut|helm|chestplate|r(ü|ue)stung|item[- ]?modell|möbel|moebel/i, text: BBMODEL },
   { id: "skin", title: "Minecraft-Skins & 3D-Animationen", test: /skin|minepro641|lauf(-|en|animation)|animation|animier|winken|three\.?js|3d[- ]?figur|charakter/i, text: SKIN },
   { id: "web", title: "Web, Spiele & Grafik", test: /html|webseite|website|landing|spiel|game|canvas|animation|three|app bauen|ui|design|css|javascript|react/i, text: WEB },
+  { id: "packs", title: "Resource Packs, Datapacks & Shader", test: /resource ?pack|ressourcenpaket|texturepack|texture pack|datapack|datenpaket|mcfunction|shader|iris|optifine|pack\.mcmeta/i, text: PACKS_MC },
   { id: "plugin", title: "Minecraft-Plugins & Mods", test: /plugin|spigot|paper|bukkit|forge|fabric|mod\b|datapack|java/i, text: PLUGIN },
 ];
 
@@ -318,6 +388,8 @@ const pick = (o: CraftOverrides | undefined, id: string, fallback: string) => {
 };
 export const workRules = (o?: CraftOverrides) => pick(o, "regeln", MYTHOS_WORK_RULES);
 export const abilities = (o?: CraftOverrides) => pick(o, "faehigkeiten", MYTHOS_ABILITIES);
+/** Aus Nutzer-Feedback gelernte Regeln (Admin → „Als Regel übernehmen“). */
+export const learnedRules = (o?: CraftOverrides) => pick(o, "gelernt", "");
 
 /** Themen-Pakete, die zur Frage passen (höchstens 3, Reihenfolge wie in PACKS). */
 export function relevantCraftKnowledge(text: string, max = 3, overrides?: CraftOverrides): string {

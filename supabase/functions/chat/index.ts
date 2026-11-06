@@ -3,7 +3,7 @@ import { explainErrors, generateImage, PROVIDER_LABEL } from "../_shared/image.t
 import { classifyImageRequest, isImageRequest, maybeImageRequest, resolveImagePrompt } from "../_shared/imageIntent.ts";
 import { mythosIdentity, mythosIdentityReminder } from "../_shared/identity.ts";
 import { MYTHOS_CATALOG, MYTHOS_FILES } from "../_shared/catalog.ts";
-import { CRAFT_CATEGORY_PREFIX, abilities, relevantCraftKnowledge, wantsLongOutput, workRules, type CraftOverrides } from "../_shared/craftKnowledge.ts";
+import { CRAFT_CATEGORY_PREFIX, abilities, learnedRules, relevantCraftKnowledge, wantsLongOutput, workRules, type CraftOverrides } from "../_shared/craftKnowledge.ts";
 import { PLUGIN_CATEGORY_PREFIX, formatServerArticles, isServerQuestion, relevantServerArticles, serverKnowledgeText } from "../_shared/serverKnowledge.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.103.3";
 import { admitTask, recordUsage, validTaskId, limitMessage } from "../_shared/tokens.ts";
@@ -373,7 +373,7 @@ Deno.serve(async (req) => {
     // Gespräch, Persona und Erinnerungen gleichzeitig laden statt nacheinander (spart Wartezeit vor der Antwort).
     let identityOverride: string | null = null;
     let convUserId: string | null = clientUserId || null;
-    const loadMemories = (uid: string) => supabase.from("user_memories").select("content,category").eq("user_id", uid).order("created_at", { ascending: false }).limit(40);
+    const loadMemories = (uid: string) => supabase.from("user_memories").select("content,category").eq("user_id", uid).order("created_at", { ascending: false }).limit(400);
     const wantMemory = resolved.memory !== false;
     const [convRes, personaRes, memRes] = await Promise.all([
       conversationId ? supabase.from("conversations").select("identity_override,user_id").eq("id", conversationId).maybeSingle() : Promise.resolve({ data: null }),
@@ -401,7 +401,14 @@ Deno.serve(async (req) => {
       // Meist schon oben mitgeladen; nur wenn der Chat jemand anderem gehört, neu laden.
       const { data: mems } = convUserId === clientUserId ? memRes : await loadMemories(convUserId);
       if (mems && mems.length > 0) {
-        memoryBlock = `\n\n## Was du über den User weißt (aus früheren Chats)\n${mems.map((m: any) => `- (${m.category}) ${m.content}`).join("\n")}\n\nNutze dieses Wissen natürlich in deinen Antworten — beziehe dich nicht ständig drauf, sondern wirke einfach so als kenntest du den User.`;
+        // Passend zur Frage auswählen: die 10 neuesten + die 20 relevantesten (Wort-Treffer mit den letzten Nachrichten).
+        const ctx = (Array.isArray(messages) ? messages.slice(-4) : []).map((m: any) => typeof m.content === "string" ? m.content : Array.isArray(m.content) ? m.content.map((x: any) => x?.text || "").join(" ") : "").join(" ").toLowerCase();
+        const words = [...new Set(ctx.split(/[^\p{L}\p{N}]+/u).filter((w: string) => w.length > 3))];
+        const score = (c: string) => { const t = c.toLowerCase(); return words.reduce((n, w) => n + (t.includes(w) ? 1 : 0), 0); };
+        const newest = mems.slice(0, 10);
+        const relevant = mems.slice(10).map((m: any) => ({ m, s: score(String(m.content)) })).filter((x: any) => x.s > 0).sort((a: any, b: any) => b.s - a.s).slice(0, 20).map((x: any) => x.m);
+        const picked = [...relevant, ...newest];
+        memoryBlock = `\n\n## Was du über den User weißt (aus früheren Chats)\n${picked.map((m: any) => `- (${m.category}) ${m.content}`).join("\n")}\n\nNutze dieses Wissen natürlich in deinen Antworten — beziehe dich nicht ständig drauf, sondern wirke einfach so als kenntest du den User.`;
       }
     }
 
@@ -478,7 +485,8 @@ Bilder & PDFs: Du kannst hochgeladene Bilder direkt sehen und analysieren.${memo
       for (const r of (kiRows || []) as { category: string; body: string }[]) overrides[r.category] = r.body;
     }
     const craft = voiceMode ? "" : relevantCraftKnowledge(recentUser, resolved.lean ? 1 : 3, overrides);
-    if (!voiceMode) system += `\n\n${workRules(overrides)}${resolved.lean ? "" : `\n\n${abilities(overrides)}`}${craft ? `\n\n${craft}` : ""}`;
+    const learned = learnedRules(overrides);
+    if (!voiceMode) system += `\n\n${workRules(overrides)}${resolved.lean ? "" : `\n\n${abilities(overrides)}`}${learned ? `\n\n${learned}` : ""}${craft ? `\n\n${craft}` : ""}`;
     // Code/Dateien brauchen Platz: sonst wird z. B. eine .bbmodel oder ein Spiel mittendrin abgeschnitten.
     if (wantsLongOutput(lastText) && resolved.maxOut && !resolved.lean) {
       resolved.maxOut = Math.max(resolved.maxOut, String(chatModel).startsWith("openai/") ? 16000 : 24000);
