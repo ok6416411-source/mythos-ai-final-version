@@ -125,7 +125,7 @@ const browserBridge = { server: null, port: 0, token: "", code: "", paired: fals
 const tokenOk = (t) => { const a = Buffer.from(String(t || "")), b = Buffer.from(browserBridge.token); return a.length === b.length && crypto.timingSafeEqual(a, b); };
 const bridgeJson = (res, status, body) => { const origin = String(res.req.headers.origin || ""); res.writeHead(status, { "Content-Type": "application/json", "Access-Control-Allow-Origin": origin.startsWith("chrome-extension://") ? origin : "null", "Access-Control-Allow-Headers": "content-type,x-mythos-token", "Vary": "Origin" }); res.end(JSON.stringify(body)); };
 const readBody = (req) => new Promise((resolve) => { let s = ""; req.on("data", (d) => { s += d; if (s.length > 100000) req.destroy(); }); req.on("end", () => { try { resolve(s ? JSON.parse(s) : {}); } catch { resolve({}); } }); });
-function bridgeState() { return { running: !!browserBridge.server, port: browserBridge.port, code: browserBridge.code, paired: browserBridge.paired, connected: browserBridge.paired && Date.now() - browserBridge.lastSeen < 7000 }; }
+function bridgeState() { return { running: !!browserBridge.server, port: browserBridge.port, code: browserBridge.code, paired: browserBridge.paired, connected: browserBridge.paired && Date.now() - browserBridge.lastSeen < 45000 }; } // Plugin meldet sich min. alle 30 s (Chrome weckt es per Alarm)
 function bridgeEvent(ev) { const item = { id: crypto.randomUUID(), at: Date.now(), ...ev }; browserBridge.events.push(item); browserBridge.events = browserBridge.events.slice(-200); send("browser-event", item); if (item.taskId && (item.kind === "done" || item.kind === "error")) { const w = browserBridge.pending.get(item.taskId); if (w) { browserBridge.pending.delete(item.taskId); w(item); } } }
 async function startBrowserBridge() {
   if (browserBridge.server) return bridgeState();
@@ -271,8 +271,8 @@ function mcpPrompt() {
     tools.slice(0, 80).map((t) => "- " + t.server + " / " + t.name + ": " + (t.description || "").replace(/\s+/g, " ").slice(0, 160) + args(t)).join("\n");
 }
 function browserPrompt() {
-  if (!bridgeState().connected) return "";
-  return '\n\nBrowser-Plugin – Aufruf: <tool>{"name":"browser","task":"konkrete Browser-Aufgabe"}</tool>. Nutze es, wenn die Aufgabe echte Webseiten bedienen oder lesen soll. Logins, Passwörter, Zahlungen und Captchas übernimmt immer der Nutzer.';
+  if (!browserBridge.paired) return "";
+  return '\n\nBROWSER: Das Mythos-Browser-Plugin ist mit dir VERBUNDEN – du kannst den echten Browser des Nutzers steuern (Seiten öffnen, lesen, klicken, Formulare ausfüllen). Fragt der Nutzer, ob du verbunden bist: ja. Aufruf: <tool>{"name":"browser","task":"konkrete Browser-Aufgabe"}</tool>. Nutze es, wenn die Aufgabe echte Webseiten bedienen oder lesen soll. Logins, Passwörter, Zahlungen und Captchas übernimmt immer der Nutzer.';
 }
 // Dateien schicken: Codeblöcke ```datei:name.ext werden im Chat zu Datei-Karten mit „Speichern“.
 const FILES_PROMPT = "\n\nDateien schicken: Will der Nutzer eine Datei BEKOMMEN (nicht ins Projekt schreiben) – z. B. ein Dokument, eine Tabelle, ein Skript, ein Logo –, " +
@@ -353,7 +353,7 @@ ipcMain.handle("tool", async (_e, t, cwd, runId) => {
     r = { result: (x.text + (x.code ? "\nExit: " + x.code : "")).slice(-8000) || "(keine Ausgabe)", code: x.code };
   } else if (isWebTool(t)) r = await webTool(t);
   else if (t.name === "mcp") { const x = await mcp.call(t.server, t.tool, t.args || {}); r = { result: String(x.output).slice(0, 20000) }; }
-  else if (t.name === "browser") { const st = bridgeState(); if (!st.connected) r = { result: "FEHLER: Browser-Plugin nicht verbunden" }; else { const item = { id: crypto.randomUUID(), task: String(t.task || "").slice(0, 1500), at: Date.now() }; browserBridge.stopped = false; const done = new Promise((res) => { browserBridge.pending.set(item.id, res); setTimeout(() => { if (browserBridge.pending.delete(item.id)) res({ kind: "error", text: "Zeitüberschreitung (5 Min)" }); }, 300000); }); browserBridge.tasks.push(item); bridgeEvent({ kind: "task", text: item.task, taskId: item.id }); const ev = await done; r = { result: (ev.kind === "done" ? "Browser-Ergebnis: " : "FEHLER: ") + String(ev.text || "").slice(0, 8000) }; } }
+  else if (t.name === "browser") { const st = bridgeState(); if (!st.paired) r = { result: "FEHLER: Browser-Plugin nicht gekoppelt – der Nutzer muss es unter Anpassungen → Plugins mit dem Code koppeln." }; else { const item = { id: crypto.randomUUID(), task: String(t.task || "").slice(0, 1500), at: Date.now() }; browserBridge.stopped = false; const done = new Promise((res) => { browserBridge.pending.set(item.id, res); setTimeout(() => { if (browserBridge.pending.delete(item.id)) res({ kind: "error", text: "Zeitüberschreitung (5 Min)" }); }, 300000); }); browserBridge.tasks.push(item); bridgeEvent({ kind: "task", text: item.task, taskId: item.id }); const ev = await done; r = { result: (ev.kind === "done" ? "Browser-Ergebnis: " : "FEHLER: ") + String(ev.text || "").slice(0, 8000) }; } }
   else r = fileTool(t, root);
   const post = await runHooks("PostToolUse", { tool_name: toolName, tool_input: t, tool_output: r.result.slice(0, 4000) }, cwd);
   const notes = post.filter((h) => h.out || h.code).map((h) => "[Hook „" + h.command + "“ → Exit " + h.code + "]\n" + h.out);

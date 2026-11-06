@@ -8,7 +8,7 @@ const runs = new Map();
 
 // @@TOOL_PARSE@@
 /** Was gerade wirklich verfügbar ist (für toolProblem). */
-const toolExtra = () => ({ mcp: mcpStatus.filter((s) => s.status === "connected").map((s) => ({ server: s.name, tools: s.tools.map((t) => t.name) })), browser: !!browserStatus.connected });
+const toolExtra = () => ({ mcp: mcpStatus.filter((s) => s.status === "connected").map((s) => ({ server: s.name, tools: s.tools.map((t) => t.name) })), browser: !!(browserStatus.connected || browserStatus.paired) });
 const EMPTY = $("empty").cloneNode(true);
 const fmt = (ms) => { const s = Math.floor(ms / 1000); return (s >= 60 ? Math.floor(s / 60) + "m " : "") + (s % 60) + "s"; };
 const fmtTok = (n) => (n >= 1e6 ? (n / 1e6).toFixed(1) + " Mio." : n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n));
