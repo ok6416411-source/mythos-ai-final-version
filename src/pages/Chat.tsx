@@ -59,7 +59,6 @@ import { SMART_UI_PROMPT, SMART_UI_SEND, stripSmartUI, smartUIOptions } from "@/
 import PinnedChecklist from "@/components/chat/PinnedChecklist";
 import FileViewer, { type ViewFile } from "@/components/chat/FileViewer";
 import { filesOfChat, prepareFile } from "@/lib/chatFileParts";
-import { extractFrames, videoPromptParts, type VideoFrame } from "@/lib/videoFrames";
 import { checklistStatusPrompt, latestChecklist } from "@/lib/pinnedChecklist";
 import { capabilitiesPrompt } from "@/lib/mythosCapabilities";
 import { fallbackTitle, generateChatTitle } from "@/lib/chatTitle";
@@ -99,9 +98,9 @@ const SLASH_COMMANDS = [
 ];
 
 type Persona = { id: string; name: string; avatar_emoji: string | null };
-type Attachment = { url: string; name: string; mime: string; frames?: VideoFrame[]; duration?: number };
+type Attachment = { url: string; name: string; mime: string };
 type Conv = { id: string; title: string; mode: string; updated_at: string };
-type Msg = { id?: string; role: "user" | "assistant" | "tool"; content: string; metadata?: any; image?: GeneratedImage; imagePending?: { prompt: string }; music?: FunkPattern; song?: SongRequest; video?: VideoRequest; agent?: { task: string }; search?: string; ext?: { task: string }; attachments?: Attachment[]; agents?: AgentStatus[]; thinking?: string; thinkingMs?: number; steps?: string[]; created_at?: string };
+type Msg = { id?: string; role: "user" | "assistant" | "tool"; content: string; metadata?: any; videoNotes?: { name: string; text: string }[]; image?: GeneratedImage; imagePending?: { prompt: string }; music?: FunkPattern; song?: SongRequest; video?: VideoRequest; agent?: { task: string }; search?: string; ext?: { task: string }; attachments?: Attachment[]; agents?: AgentStatus[]; thinking?: string; thinkingMs?: number; steps?: string[]; created_at?: string };
 /** Status eines Teil-Agenten im Multi-Agent-Modus (vom agent-Endpunkt gestreamt). */
 type AgentStatus = { i: number; title: string; status: "läuft" | "fertig" | "fehler"; phase?: string };
 
@@ -143,7 +142,7 @@ const MAX_BAD_TOOLS = 2;
 type ApiMsg = { role: string; content: any };
 type GoalState = { text: string; step: number; status: "läuft" | "erreicht" | "gestoppt" | "limit" };
 type MythosUsage = { input_tokens?: number; output_tokens?: number; total_tokens?: number; measured: boolean };
-type StreamResult = { full: string; image?: GeneratedImage; music?: FunkPattern; agents?: AgentStatus[]; thinking: string; thinkingMs?: number; steps?: string[]; aborted: boolean; usage?: MythosUsage; interrupted?: boolean };
+type StreamResult = { full: string; image?: GeneratedImage; music?: FunkPattern; agents?: AgentStatus[]; thinking: string; thinkingMs?: number; steps?: string[]; aborted: boolean; usage?: MythosUsage; interrupted?: boolean; videoNotes?: { name: string; text: string }[] };
 
 /** Nachricht aus dem Verlauf so umwandeln, wie das Modell sie bekommt. */
 const toApi = (m: Msg): ApiMsg =>
@@ -273,33 +272,15 @@ const Chat = () => {
     setUploading(true);
     const newAtts: Attachment[] = [];
     for (const file of Array.from(files).slice(0, 5)) {
-      // Video: im Browser in Einzelbilder zerlegen, die Bilder hochladen – Mythos schaut sich jedes an.
+      // Video: wird hochgeladen, die KI sieht es sich auf dem Server selbst an (Bild für Bild, mit Ton).
       if (file.type.startsWith("video/")) {
-        if (file.size > 500 * 1024 * 1024) { toast.error(`${file.name}: Video max. 500 MB`); continue; }
-        const tid = toast.loading(`Video wird zerlegt: ${file.name}`);
-        try {
-          const { frames, duration } = await extractFrames(file, (d, n) => toast.loading(`Video wird zerlegt: Bild ${d} von ${n}`, { id: tid }));
-          const base = `${user.id}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
-          const up: VideoFrame[] = [];
-          for (let i = 0; i < frames.length; i++) {
-            toast.loading(`Bilder werden hochgeladen: ${i + 1} von ${frames.length}`, { id: tid });
-            const fp = `${base}/frame-${String(i).padStart(3, "0")}.jpg`;
-            const { error } = await supabase.storage.from("chat-uploads").upload(fp, frames[i].blob, { contentType: "image/jpeg" });
-            if (!error) up.push({ url: supabase.storage.from("chat-uploads").getPublicUrl(fp).data.publicUrl, t: frames[i].t });
-          }
-          // Das Video selbst zum Ansehen hochladen (wenn nicht zu groß), sonst nur lokal abspielbar.
-          let url = URL.createObjectURL(file);
-          if (file.size <= 45 * 1024 * 1024) {
-            const vp = `${base}/${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
-            const { error } = await supabase.storage.from("chat-uploads").upload(vp, file, { contentType: file.type });
-            if (!error) url = supabase.storage.from("chat-uploads").getPublicUrl(vp).data.publicUrl;
-          }
-          if (!up.length) throw new Error("Keine Bilder hochgeladen");
-          newAtts.push({ url, name: file.name, mime: file.type, frames: up, duration });
-          toast.success(`${file.name}: ${up.length} Bilder bereit`, { id: tid });
-        } catch (e) {
-          toast.error(`${file.name}: ${(e as Error).message}`, { id: tid });
-        }
+        if (file.size > 200 * 1024 * 1024) { toast.error(`${file.name}: Video max. 200 MB`); continue; }
+        const tid = toast.loading(`Video wird hochgeladen: ${file.name}`);
+        const vp = `${user.id}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+        const { error } = await supabase.storage.from("chat-uploads").upload(vp, file, { contentType: file.type });
+        if (error) { toast.error(`${file.name}: Hochladen fehlgeschlagen (${error.message})`, { id: tid }); continue; }
+        newAtts.push({ url: supabase.storage.from("chat-uploads").getPublicUrl(vp).data.publicUrl, name: file.name, mime: file.type });
+        toast.success(`${file.name} angehängt – Mythos schaut es sich beim Senden an`, { id: tid });
         continue;
       }
       if (file.size > 20 * 1024 * 1024) { toast.error(`${file.name}: max 20MB`); continue; }
@@ -340,6 +321,7 @@ const Chat = () => {
         agents: m.metadata?.agents,
         thinking: m.metadata?.thinking,
         thinkingMs: m.metadata?.thinkingMs,
+        videoNotes: m.metadata?.videoNotes,
         steps: m.metadata?.steps,
       })) as Msg[];
       setMessages(cached.length > enriched.length ? cached : enriched);
@@ -761,7 +743,7 @@ const Chat = () => {
       if (!attachments.length) return txt;
       const parts: any[] = [{ type: "text", text: txt }];
       for (const a of attachments) {
-        if (a.frames?.length) parts.push(...videoPromptParts(a.name, a.duration, a.frames));
+        if (a.mime.startsWith("video/")) parts.push({ type: "video_url", video_url: { url: a.url, name: a.name, mime: a.mime } });
         else if (a.mime.startsWith("image/")) parts.push({ type: "image_url", image_url: { url: a.url } });
         else parts.push({ type: "text", text: `\n[Anhang: ${a.name} (${a.mime}) — ${a.url}]` });
       }
@@ -836,6 +818,7 @@ const Chat = () => {
     let imageData: GeneratedImage | undefined;
     let musicData: FunkPattern | undefined;
     let agentsData: AgentStatus[] | undefined;
+    let videoNotes: { name: string; text: string }[] = [];
     try {
       // Automatisch neu versuchen: 429 (zu viele Anfragen) und kurze Server-Aussetzer (5xx, Zeitlimit, Netz).
       // Passiert still im Hintergrund – der User merkt davon nichts.
@@ -905,6 +888,7 @@ const Chat = () => {
               continue;
             }
             if (p.agents) { agentsData = p.agents; setLast({ agents: p.agents }); continue; }
+            if (p.videoAnalysis) { videoNotes = [...videoNotes, p.videoAnalysis]; setLast({ videoNotes }); continue; }
             if (p.search) { setLast({ search: p.search }); continue; }
             if (p.image) { imageData = p.image; pendingImage = null; setLast({ image: p.image, imagePending: undefined }); continue; }
             if (p.music) { musicData = p.music; setLast({ music: p.music }); continue; }
@@ -945,7 +929,7 @@ const Chat = () => {
       // Stream endete ohne [DONE] (z. B. Zeitlimit der Server-Funktion bei langer Arbeit): als unterbrochen
       // melden – runAgent setzt dann unauffällig an derselben Stelle fort.
       const interrupted = !sawDone && !!full && !imageData && !musicData;
-      return { full, image: imageData, music: musicData, agents: agentsData, thinking, thinkingMs, steps, aborted: false, usage: measuredUsage, interrupted };
+      return { full, image: imageData, music: musicData, agents: agentsData, thinking, thinkingMs, steps, aborted: false, usage: measuredUsage, interrupted, videoNotes: videoNotes.length ? videoNotes : undefined };
     } catch (e) {
       if ((e as Error)?.name === "AbortError") {
         // Gestoppt: was schon da ist, bleibt stehen.
@@ -1054,7 +1038,7 @@ const Chat = () => {
       if (res.full || res.image || res.music) {
         await supabase.from("messages").insert({
           conversation_id: convId, role: "assistant", content: res.full,
-          metadata: { image: res.image, music: res.music, agents: res.agents, thinking: res.thinking || undefined, thinkingMs: res.thinkingMs || undefined, steps: res.steps?.length ? res.steps : undefined, goal: goalText ? step : undefined, mythos_usage: res.usage },
+          metadata: { videoNotes: res.videoNotes, image: res.image, music: res.music, agents: res.agents, thinking: res.thinking || undefined, thinkingMs: res.thinkingMs || undefined, steps: res.steps?.length ? res.steps : undefined, goal: goalText ? step : undefined, mythos_usage: res.usage },
         });
       }
       history.push({ role: "assistant", content: res.full });
@@ -1161,8 +1145,8 @@ const Chat = () => {
     setFilesOpen(false);
     setViewAtt({ name: f.name, content: p.content, base64: f.base64, blob: p.blob, note: p.note });
   };
-  const openAttachment = (a: Attachment) => setViewAtt({ name: a.name, content: "", base64: false, blob: null, url: a.url, mime: a.mime, frames: a.frames, duration: a.duration,
-    note: a.frames?.length ? `${a.frames.length} Bilder angesehen` : undefined });
+  const openAttachment = (a: Attachment) => setViewAtt({ name: a.name, content: "", base64: false, blob: null, url: a.url, mime: a.mime,
+    note: a.mime.startsWith("video/") ? "Video" : undefined });
   const pinnedRef = useRef(pinned);
   pinnedRef.current = pinned;
 
@@ -1657,11 +1641,11 @@ const Chat = () => {
                       <div className="flex flex-col items-end gap-1.5">
                         {m.attachments && m.attachments.length > 0 && (
                           <div className="flex flex-wrap justify-end gap-1.5">
-                            {m.attachments.map((a, j) => a.frames?.length
-                              ? <button key={j} type="button" onClick={() => openAttachment(a)} title="Video und angesehene Bilder zeigen" className="relative h-20 w-32 overflow-hidden rounded-xl border border-white/10">
-                                  <img src={a.frames[0].url} alt={a.name} className="h-full w-full object-cover" loading="lazy" />
+                            {m.attachments.map((a, j) => a.mime.startsWith("video/")
+                              ? <button key={j} type="button" onClick={() => openAttachment(a)} title="Video ansehen" className="relative h-20 w-32 overflow-hidden rounded-xl border border-white/10 bg-black">
+                                  <video src={a.url + "#t=0.5"} preload="metadata" muted playsInline className="h-full w-full object-cover" />
                                   <span className="absolute inset-0 flex items-center justify-center bg-black/25 text-white text-lg">▶</span>
-                                  <span className="absolute bottom-1 left-1 rounded bg-black/70 px-1.5 text-[10px] text-white">{a.frames.length} Bilder</span>
+                                  <span className="absolute bottom-1 left-1 max-w-[90%] truncate rounded bg-black/70 px-1.5 text-[10px] text-white">{a.name}</span>
                                 </button>
                               : a.mime.startsWith("image/")
                               ? <button key={j} type="button" onClick={() => openAttachment(a)} title="Ansehen"><img src={a.url} alt={a.name} className="h-20 w-20 rounded-xl object-cover border border-white/10" loading="lazy" /></button>
@@ -1693,6 +1677,13 @@ const Chat = () => {
                               <ThinkingBlock ms={m.thinkingMs} live={!m.content && sending && i === messages.length - 1} />
                             )}
                             {m.steps && m.steps.length > 0 && <StepsTimeline steps={m.steps} />}
+                            {m.videoNotes?.map((v, k) => (
+                              <div key={k} className="not-prose mb-3">
+                                <TimelineRow label={`Video angesehen: ${v.name}`} detail="Was Mythos gesehen hat">
+                                  <div className="prose-mythos max-h-96 overflow-y-auto text-[13px]"><MarkdownMessage content={v.text} /></div>
+                                </TimelineRow>
+                              </div>
+                            ))}
                             {m.search && m.content && (
                               <div className="not-prose mb-2 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-muted-foreground">
                                 <Globe className="h-3 w-3" /> Im Internet gesucht: <span className="text-foreground/80">{m.search}</span>
@@ -1800,10 +1791,10 @@ const Chat = () => {
                   {attachments.map((a, i) => (
                     <div key={i} className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs">
                       <button type="button" onClick={() => openAttachment(a)} className="flex items-center gap-1.5" title="Ansehen">
-                        {a.frames?.length ? <img src={a.frames[0].url} alt={a.name} className="h-5 w-7 rounded object-cover" />
+                        {a.mime.startsWith("video/") ? <span className="flex h-5 w-7 items-center justify-center rounded bg-black text-[10px] text-white">▶</span>
                           : a.mime.startsWith("image/") ? <img src={a.url} alt={a.name} className="h-5 w-5 rounded object-cover" />
                           : <Paperclip className="h-3 w-3" />}
-                        <span className="max-w-[120px] truncate">{a.name}{a.frames?.length ? ` · ${a.frames.length} Bilder` : ""}</span>
+                        <span className="max-w-[120px] truncate">{a.name}</span>
                       </button>
                       <button onClick={() => setAttachments(prev => prev.filter((_, j) => j !== i))} aria-label="Entfernen">
                         <XIcon className="h-3 w-3 hover:text-destructive" />

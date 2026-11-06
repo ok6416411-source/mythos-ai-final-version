@@ -8,6 +8,7 @@ import { PLUGIN_CATEGORY_PREFIX, formatServerArticles, isServerQuestion, relevan
 import { createClient } from "npm:@supabase/supabase-js@2.103.3";
 import { admitTask, recordUsage, validTaskId, limitMessage } from "../_shared/tokens.ts";
 import { forwardUsageStream } from "../_shared/usageStream.ts";
+import { prepareVideos } from "../_shared/video.ts";
 import type { TokenUsage } from "../_shared/usageParse.ts";
 
 const corsHeaders = {
@@ -506,6 +507,7 @@ Bilder & PDFs: Du kannst hochgeladene Bilder direkt sehen und analysieren.${memo
     const histLimit = resolved.effortLabel === "Instant" ? 4 : resolved.effortLabel === "Low" ? 8 : 40;
     const trimmed = Array.isArray(messages) ? messages.slice(-histLimit) : messages;
     const outMessages: any[] = [{ role: "system", content: system }, ...trimmed];
+    const hasVideo = outMessages.some((m: any) => Array.isArray(m?.content) && m.content.some((p: any) => p?.type === "video_url"));
 
     const isOpenAI = String(chatModel).startsWith("openai/");
     const body: Record<string, unknown> = {
@@ -542,6 +544,7 @@ Bilder & PDFs: Du kannst hochgeladene Bilder direkt sehen und analysieren.${memo
           try {
             webContext = await webResearch(searchQuery, LOVABLE_API_KEY);
           } catch (_e) { webContext = ""; }
+          if (hasVideo) await prepareVideos(outMessages, LOVABLE_API_KEY, (ev) => c.enqueue(sse(ev)));
           if (webContext) {
             outMessages[0] = {
               role: "system",
@@ -571,6 +574,8 @@ Bilder & PDFs: Du kannst hochgeladene Bilder direkt sehen und analysieren.${memo
         const ping = setInterval(() => { if (open) try { c.enqueue(enc.encode(": ping\n\n")); } catch { /* closed */ } }, 4000);
         c.enqueue(enc.encode(": start\n\n"));
         try {
+          // Angehängte Videos sieht sich die KI selbst an (Bild + Ton); Fortschritt erscheint als Arbeitsschritte.
+          if (hasVideo) await prepareVideos(outMessages, LOVABLE_API_KEY, (ev) => c.enqueue(sse(ev)));
           const resp = await startUpstream();
           if (!resp.ok || !resp.body) {
             const t = await resp.text().catch(() => "");
