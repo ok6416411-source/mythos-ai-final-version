@@ -12,7 +12,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const out = path.resolve(process.argv[2] || path.join(root, "build/desktop"));
 const lib = (p) => fs.readFileSync(path.join(root, "src/lib", p), "utf8");
 
-const SITE = process.env.MYTHOS_SITE_URL || "https://mythos-ai-final-version.lovable.app";
+const SITE = process.env.MYTHOS_SITE_URL || "https://mythos-ai-final-vers.lovable.app";
 const env = fs.existsSync(path.join(root, ".env")) ? fs.readFileSync(path.join(root, ".env"), "utf8") : "";
 // Eigenes Backend (backend.json) hat Vorrang vor Lovable Cloud (.env), wie in vite.config.ts.
 const backend = (() => { try { return JSON.parse(fs.readFileSync(path.join(root, "backend.json"), "utf8")); } catch { return {}; } })();

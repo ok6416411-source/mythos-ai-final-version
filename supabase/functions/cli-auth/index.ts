@@ -3,6 +3,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.103.3";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { usageSummary } from "../_shared/tokens.ts";
+import { watchVideoBytes } from "../_shared/video.ts";
 
 const json = (d: unknown, status = 200) =>
   new Response(JSON.stringify(d), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -70,6 +71,21 @@ Deno.serve(async (req) => {
       const { data: u } = await db.auth.getUser(jwt);
       if (!u?.user) return json({ error: "Nicht angemeldet" }, 401);
       return json({ tokens: await usageSummary(db, u.user.id) });
+    }
+
+    // Code-App: Video ansehen lassen (Bytes als Base64, max. ~40 MB). Antwort = Analyse-Text.
+    if (action === "watch_video") {
+      const key = String(body.api_key || "");
+      const { data: k } = await db.from("api_keys").select("id,revoked").eq("key_hash", await sha256(key)).maybeSingle();
+      if (!k || k.revoked) return json({ error: "Ungültiger Schlüssel – bitte neu anmelden" }, 401);
+      const b64 = String(body.data || "");
+      if (!b64 || b64.length > 56_000_000) return json({ error: "Video fehlt oder ist zu groß (max. 40 MB)" }, 400);
+      const bin = atob(b64); const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      try {
+        const text = await watchVideoBytes(bytes, String(body.mime || "video/mp4"), String(body.name || "video.mp4").slice(0, 120), Deno.env.get("LOVABLE_API_KEY"));
+        return json({ analysis: text });
+      } catch (e) { return json({ error: e instanceof Error ? e.message : String(e) }, 502); }
     }
 
     if (action === "usage") {

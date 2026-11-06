@@ -127,7 +127,7 @@ function draw(it, i) {
   const box = $("col").querySelector(":scope > .runbox"); if (box) $("col").insertBefore(d, box); else $("col").appendChild(d); scrollDown(); return d;
 }
 /* Werbung: Free gelegentlich, Plus seltener, Pro nie, Admin 1x/Tag (erste Antwort) – immer NACH der Antwort. */
-const AD_MD = "**📣 Werbung** · ![at](https://mythos-ai-final-version.lovable.app/at-logo.png)\n\n**at** – dein Feed voller Vibes. Entdecke jetzt: [at-feed-vibes.lovable.app](https://at-feed-vibes.lovable.app/)\n\n_[Buche deine eigene Werbung](https://mythos-ai-final-version.lovable.app/werbung)_";
+const AD_MD = "**📣 Werbung** · ![at](https://mythos-ai-final-vers.lovable.app/at-logo.png)\n\n**at** – dein Feed voller Vibes. Entdecke jetzt: [at-feed-vibes.lovable.app](https://at-feed-vibes.lovable.app/)\n\n_[Buche deine eigene Werbung](https://mythos-ai-final-vers.lovable.app/werbung)_";
 let adCache = null;
 async function pickAd() {
   try { if (!adCache || Date.now() - adCache.at > 6e5) { const j = await (await post("ad-review", { action: "list" })).json(); adCache = { at: Date.now(), ads: j.ads || [] }; } } catch (e) { adCache = { at: Date.now(), ads: [] }; }
@@ -135,7 +135,7 @@ async function pickAd() {
   let ad = pool[0]; for (const a of pool) { r -= Math.max(1, a.weight); if (r <= 0) { ad = a; break; } }
   if (ad.house) return AD_MD;
   const s = (x) => String(x || "").replace(/[\[\]()<>*_`]/g, ""); const link = /^https?:\/\//.test(ad.link) ? ad.link : "https://" + ad.link;
-  return "**📣 Werbung**\n\n**" + s(ad.product) + "** – " + s(ad.ad_text) + "\n\n[" + s(link.replace(/^https?:\/\//, "")) + "](" + link + ")\n\n_[Buche deine eigene Werbung](https://mythos-ai-final-version.lovable.app/werbung)_";
+  return "**📣 Werbung**\n\n**" + s(ad.product) + "** – " + s(ad.ad_text) + "\n\n[" + s(link.replace(/^https?:\/\//, "")) + "](" + link + ")\n\n_[Buche deine eigene Werbung](https://mythos-ai-final-vers.lovable.app/werbung)_";
 }
 function adDue(tier) {
   const today = new Date().toDateString();
@@ -325,6 +325,7 @@ let lastUsage = null;
 async function usage() { try { const j = await (await post("cli-auth", { action: "usage", api_key: cfg.key })).json();
   lastUsage = j;
   window.__adTier = j.admin ? "admin" : (j.tier || "free");
+  try { renderProfile(); } catch { /* egal */ }
   if (j.tokens) { const u = j.tokens.usage, l = j.tokens.limits; const fmtLimit = (k) => fmtTok(u[k]) + " / " + (l[k] == null ? "∞" : fmtTok(l[k]));
     $("usage").textContent = "MythosAI · Stunde " + fmtLimit("hour") + " · Woche " + fmtLimit("week") + " · Monat " + fmtLimit("month");
   } else $("usage").textContent = "Verbrauch nicht verfügbar"; } catch (e) {} }
@@ -358,6 +359,40 @@ function showUsage() {
   box.appendChild(ok); bg.appendChild(box); document.body.appendChild(bg);
   usage().catch(() => {});
 }
+// ---------- Profil unten in der Seitenleiste (wie auf der Website / bei Claude) ----------
+function renderProfile() {
+  const side = $("side"); if (!side) return;
+  let p = document.getElementById("profileBox");
+  if (!p) {
+    p = el("button", "", ""); p.id = "profileBox"; p.type = "button";
+    p.style.cssText = "margin-top:auto;position:sticky;bottom:0;display:flex;align-items:center;gap:10px;width:100%;padding:12px 10px;border:0;border-top:1px solid var(--line,rgba(255,255,255,.08));background:var(--bg,#0a0a0a);color:inherit;font:inherit;text-align:left;cursor:pointer";
+    p.onclick = (e) => { e.stopPropagation(); profileMenu(p); };
+    side.appendChild(p);
+  }
+  const name = cfg.name || "Mythos-Nutzer", tier = { free: "Free", plus: "Plus", pro: "Pro", ultra: "Ultra", admin: "Admin" }[window.__adTier] || "";
+  p.textContent = "";
+  const av = el("span", "", name.split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase());
+  av.style.cssText = "width:32px;height:32px;border-radius:50%;background:#fff;color:#0a0a0a;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0";
+  const t = el("span", ""); t.style.cssText = "min-width:0;display:flex;flex-direction:column;line-height:1.25";
+  const n = el("span", "", name); n.style.cssText = "font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis";
+  const s2 = el("span", "", tier); s2.style.cssText = "font-size:12px;opacity:.55";
+  t.append(n, s2); p.append(av, t);
+}
+function profileMenu(anchor) {
+  const old = document.getElementById("profileMenu"); if (old) { old.remove(); return; }
+  const m = el("div", "glass"); m.id = "profileMenu";
+  const r = anchor.getBoundingClientRect();
+  m.style.cssText = "position:fixed;z-index:1500;left:" + (r.left + 8) + "px;bottom:" + (innerHeight - r.top + 6) + "px;width:" + Math.max(220, r.width - 16) + "px;padding:6px;border-radius:14px;display:flex;flex-direction:column;gap:2px";
+  const item = (label, fn) => { const b = el("button", "", label); b.type = "button"; b.style.cssText = "border:0;background:none;color:inherit;font:inherit;font-size:14px;text-align:left;padding:9px 10px;border-radius:9px;cursor:pointer"; b.onmouseenter = () => { b.style.background = "rgba(255,255,255,.07)"; }; b.onmouseleave = () => { b.style.background = "none"; }; b.onclick = () => { m.remove(); fn(); }; m.appendChild(b); };
+  item("📊  Nutzung", showUsage);
+  item("⚙  Anpassungen", () => $("navCust").click());
+  item("◐  Helles / dunkles Design", () => $("btnTheme").click());
+  item("⬆  Nach Updates suchen", () => { window.mythos.update.check().catch(() => {}); note("Suche nach Updates …"); });
+  item("↪  Abmelden", () => $("btnOut").click());
+  document.body.appendChild(m);
+  setTimeout(() => document.addEventListener("click", () => m.remove(), { once: true }), 0);
+}
+setTimeout(renderProfile, 0);
 setTimeout(() => { const u = $("usage"); if (u) { u.style.cursor = "pointer"; u.title = "Nutzung anzeigen"; u.onclick = showUsage; } }, 0);
 function renderTokens() {
   const t = (chat && chat.tokens) || { in: 0, out: 0 };
@@ -1607,6 +1642,17 @@ const readAs = (file, how) => new Promise((res, rej) => { const r = new FileRead
 async function addFiles(files) {
   for (const f of Array.from(files).slice(0, 10)) {
     try {
+      if (/^video\//.test(f.type) || /\.(mp4|mov|webm|mkv|avi|m4v)$/i.test(f.name || "")) {
+        // Video: Mythos sieht es sich auf dem Server selbst an (Bild für Bild, mit Ton).
+        if (f.size > 40e6) { note("🎬 " + f.name + " ist zu groß (max. 40 MB)."); continue; }
+        note("🎬 Mythos schaut sich " + f.name + " an …");
+        const data = String(await readAs(f, "readAsDataURL")).split(",")[1];
+        const r = await (await post("cli-auth", { action: "watch_video", api_key: cfg.key, name: f.name, mime: f.type || "video/mp4", data })).json().catch(() => ({}));
+        if (!r.analysis) { note("🎬 " + f.name + ": " + (r.error || "konnte nicht angesehen werden")); continue; }
+        attach.push({ name: f.name, video: true, content: "Video „" + f.name + "“ – du hast es dir komplett angesehen (Bild und Ton). Deine Beobachtungen:\n" + r.analysis });
+        note("✓ Video angesehen: " + f.name + " – wird mit deiner Nachricht geschickt");
+        continue;
+      }
       if (/^image\/(png|jpe?g|gif|webp)$/.test(f.type)) {
         const url = await readAs(f, "readAsDataURL");
         const image = await shrinkImage(f.type, String(url).split(",")[1]);
@@ -1621,7 +1667,7 @@ async function addFiles(files) {
 }
 function renderFiles() {
   const f = $("files"); f.textContent = "";
-  attach.forEach((a, i) => { const c = el("button", "chip", (a.image ? "🖼 " : "📎 ") + a.name + "  ✕"); c.title = "Entfernen"; c.onclick = () => { attach.splice(i, 1); renderFiles(); }; f.appendChild(c); });
+  attach.forEach((a, i) => { const c = el("button", "chip", (a.image ? "🖼 " : a.video ? "🎬 " : "📎 ") + a.name + "  ✕"); c.title = "Entfernen"; c.onclick = () => { attach.splice(i, 1); renderFiles(); }; f.appendChild(c); });
 }
 let dragDepth = 0;
 document.addEventListener("dragenter", (e) => { if (!e.dataTransfer || !Array.from(e.dataTransfer.types).includes("Files")) return; dragDepth++; document.body.classList.add("dragging"); });

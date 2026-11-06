@@ -1,6 +1,6 @@
 # MythosAI Minecraft Plugin
 
-Paper/Spigot 1.20.x+ Plugin (Java 17). Verbindet den Server mit **mythos-ai-final-version.lovable.app**.
+Paper/Spigot 1.20.x+ Plugin (Java 17). Verbindet den Server mit **mythos-ai-final-vers.lovable.app**.
 
 ## Fertige .jar bekommen (ohne selber bauen)
 

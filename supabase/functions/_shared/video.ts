@@ -102,6 +102,11 @@ export async function watchVideo(part: VideoPart, lovableKey: string | undefined
   if (!res.ok) throw new Error(`Video nicht erreichbar (${res.status})`);
   const mime = part.video_url.mime || (res.headers.get("content-type") || "video/mp4").split(";")[0];
   const bytes = new Uint8Array(await res.arrayBuffer());
+  return await watchVideoBytes(bytes, mime, name, lovableKey, log);
+}
+
+/** Video-Bytes direkt ansehen lassen (z. B. aus der Code-App hochgeladen). */
+export async function watchVideoBytes(bytes: Uint8Array, mime: string, name: string, lovableKey: string | undefined, log: (s: string) => void = () => {}): Promise<string> {
   if (bytes.length > 200_000_000) throw new Error("Video zu groß (max. 200 MB)");
   const keys = await googleKeys();
   let lastErr: unknown = null;

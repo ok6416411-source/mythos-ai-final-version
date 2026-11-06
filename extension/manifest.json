@@ -19,7 +19,7 @@
     },
     {
       "matches": [
-        "https://mythos-ai-final-version.lovable.app/*",
+        "https://mythos-ai-final-vers.lovable.app/*",
         "https://*.lovable.app/*",
         "http://localhost/*",
         "http://localhost:*/*"
