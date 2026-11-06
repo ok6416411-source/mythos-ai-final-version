@@ -282,18 +282,38 @@ const PLUGIN = `## Minecraft-Plugins (Paper/Spigot) & Mods
 - Scheduler: Bukkit.getScheduler().runTaskTimer(plugin, …) bzw. Folia-kompatibel, keine Blockierung des Main-Threads (IO async).
 - Konfiguration über config.yml mit saveDefaultConfig(); Berechtigungen in plugin.yml deklarieren.`;
 
-type Pack = { id: string; test: RegExp; text: string };
+/** Kategorie-Präfix der KI-Wissens-Artikel in knowledge_articles (Admin → „KI-Wissen einspielen“). */
+export const CRAFT_CATEGORY_PREFIX = "ki-";
+export const CRAFT_KNOWLEDGE_VERSION = "KI-Wissen 2026-11-06";
+
+type Pack = { id: string; title: string; test: RegExp; text: string };
 const PACKS: Pack[] = [
-  { id: "bbmodel", test: /bbmodel|blockbench|block ?bench|3d[- ]?modell|modell f(ü|ue)r minecraft|hut|helm|rüstung|ruestung|chestplate|r(ü|ue)stung|item[- ]?modell|möbel|moebel/i, text: BBMODEL },
-  { id: "skin", test: /skin|minepro641|lauf(-|en|animation)|animation|animier|winken|three\.?js|3d[- ]?figur|charakter/i, text: SKIN },
-  { id: "web", test: /html|webseite|website|landing|spiel|game|canvas|animation|three|app bauen|ui|design|css|javascript|react/i, text: WEB },
-  { id: "plugin", test: /plugin|spigot|paper|bukkit|forge|fabric|mod\b|datapack|java/i, text: PLUGIN },
+  { id: "bbmodel", title: "Blockbench-Modelle (.bbmodel)", test: /bbmodel|blockbench|block ?bench|3d[- ]?modell|modell f(ü|ue)r minecraft|hut|helm|chestplate|r(ü|ue)stung|item[- ]?modell|möbel|moebel/i, text: BBMODEL },
+  { id: "skin", title: "Minecraft-Skins & 3D-Animationen", test: /skin|minepro641|lauf(-|en|animation)|animation|animier|winken|three\.?js|3d[- ]?figur|charakter/i, text: SKIN },
+  { id: "web", title: "Web, Spiele & Grafik", test: /html|webseite|website|landing|spiel|game|canvas|animation|three|app bauen|ui|design|css|javascript|react/i, text: WEB },
+  { id: "plugin", title: "Minecraft-Plugins & Mods", test: /plugin|spigot|paper|bukkit|forge|fabric|mod\b|datapack|java/i, text: PLUGIN },
 ];
 
+/** Alle Wissens-Artikel zum Einspielen in die Knowledge Base (Admin-Button). */
+export const CRAFT_ARTICLES: { title: string; category: string; body: string }[] = [
+  { title: "Arbeitsweise (immer aktiv)", category: CRAFT_CATEGORY_PREFIX + "regeln", body: MYTHOS_WORK_RULES },
+  { title: "Eigene Fähigkeiten (immer aktiv)", category: CRAFT_CATEGORY_PREFIX + "faehigkeiten", body: MYTHOS_ABILITIES },
+  ...PACKS.map((p) => ({ title: p.title, category: CRAFT_CATEGORY_PREFIX + p.id, body: p.text })),
+];
+
+/** Eingespielte/bearbeitete Artikel aus der Datenbank (Kategorie → Text) haben Vorrang vor dem Code. */
+export type CraftOverrides = Record<string, string>;
+const pick = (o: CraftOverrides | undefined, id: string, fallback: string) => {
+  const v = o?.[CRAFT_CATEGORY_PREFIX + id];
+  return typeof v === "string" && v.trim() ? v : fallback;
+};
+export const workRules = (o?: CraftOverrides) => pick(o, "regeln", MYTHOS_WORK_RULES);
+export const abilities = (o?: CraftOverrides) => pick(o, "faehigkeiten", MYTHOS_ABILITIES);
+
 /** Themen-Pakete, die zur Frage passen (höchstens 3, Reihenfolge wie in PACKS). */
-export function relevantCraftKnowledge(text: string, max = 3): string {
+export function relevantCraftKnowledge(text: string, max = 3, overrides?: CraftOverrides): string {
   const t = String(text || "").slice(-4000);
-  return PACKS.filter((p) => p.test.test(t)).slice(0, max).map((p) => p.text).join("\n\n");
+  return PACKS.filter((p) => p.test.test(t)).slice(0, max).map((p) => pick(overrides, p.id, p.text)).join("\n\n");
 }
 
 /** Sieht die Anfrage nach Code/Dateien aus? Dann darf die Antwort deutlich länger werden. */

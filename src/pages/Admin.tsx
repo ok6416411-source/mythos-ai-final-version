@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import PhoneInbox from "@/components/PhoneInbox";
 import RewardsAdmin from "@/components/RewardsAdmin";
 import { SERVER_KNOWLEDGE, SERVER_KNOWLEDGE_VERSION } from "../../supabase/functions/_shared/serverKnowledge.ts";
+import { CRAFT_ARTICLES, CRAFT_KNOWLEDGE_VERSION } from "../../supabase/functions/_shared/craftKnowledge.ts";
 
 type Article = { id: string; title: string; category: string; body: string; is_published: boolean; created_at: string };
 type UserRow = { user_id: string; email: string; display_name: string | null; role?: string };
@@ -60,6 +61,22 @@ const Admin = () => {
     if (n === SERVER_KNOWLEDGE.length) toast.success(`${n} Plugin-Artikel eingespielt (${SERVER_KNOWLEDGE_VERSION})`);
     else toast.error(`Nur ${n}/${SERVER_KNOWLEDGE.length} Artikel gespeichert – Admin-Rechte?`);
   };
+  // KI-Wissen (Arbeitsweise, Fähigkeiten, .bbmodel, Skins, Web, Plugins) einspielen. Danach im Admin bearbeitbar –
+  // die Chat-Funktion nimmt dann den Text aus der Datenbank statt den aus dem Code.
+  const importCraftKnowledge = async () => {
+    const { data: existing } = await supabase.from("knowledge_articles").select("id,category").like("category", "ki-%");
+    let n = 0;
+    for (const a of CRAFT_ARTICLES) {
+      const hit = existing?.find((e: { id: string; category: string }) => e.category === a.category);
+      const { error } = hit
+        ? await supabase.from("knowledge_articles").update({ title: a.title, body: a.body, is_published: true }).eq("id", hit.id)
+        : await supabase.from("knowledge_articles").insert({ title: a.title, category: a.category, body: a.body, is_published: true });
+      if (!error) n++;
+    }
+    loadArticles();
+    if (n === CRAFT_ARTICLES.length) toast.success(`${n} KI-Wissens-Artikel eingespielt (${CRAFT_KNOWLEDGE_VERSION})`);
+    else toast.error(`Nur ${n}/${CRAFT_ARTICLES.length} Artikel gespeichert – Admin-Rechte?`);
+  };
   const del = async (id: string) => { if (!confirm("Löschen?")) return; await supabase.from("knowledge_articles").delete().eq("id", id); loadArticles(); };
 
   const toggleAdmin = async (uid: string, isAdmin: boolean) => {
@@ -92,8 +109,11 @@ const Admin = () => {
 
           <TabsContent value="kb" className="mt-6">
             <div className="flex justify-between items-center mb-4">
-              <p className="text-sm text-muted-foreground">{articles.length} Artikel · Werden automatisch in den Support-Mode injiziert</p>
+              <p className="text-sm text-muted-foreground">{articles.length} Artikel · „ki-…“ gilt in allen Chats, der Rest im Support-Mode</p>
               <div className="flex gap-2">
+              <Button variant="outline" onClick={importCraftKnowledge} title="Arbeitsweise, Fähigkeiten, Blockbench, Skins & Animationen, Web, Plugins">
+                KI-Wissen einspielen
+              </Button>
               <Button variant="outline" onClick={importPluginKnowledge} title="Befehle, Ränge, Events, Kisten usw. aus dem Server-Plugin übernehmen">
                 Plugin-Wissen einspielen
               </Button>

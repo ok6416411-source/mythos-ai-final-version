@@ -3,7 +3,7 @@ import { explainErrors, generateImage, PROVIDER_LABEL } from "../_shared/image.t
 import { classifyImageRequest, isImageRequest, maybeImageRequest, resolveImagePrompt } from "../_shared/imageIntent.ts";
 import { mythosIdentity, mythosIdentityReminder } from "../_shared/identity.ts";
 import { MYTHOS_CATALOG, MYTHOS_FILES } from "../_shared/catalog.ts";
-import { MYTHOS_ABILITIES, MYTHOS_WORK_RULES, relevantCraftKnowledge, wantsLongOutput } from "../_shared/craftKnowledge.ts";
+import { CRAFT_CATEGORY_PREFIX, abilities, relevantCraftKnowledge, wantsLongOutput, workRules, type CraftOverrides } from "../_shared/craftKnowledge.ts";
 import { PLUGIN_CATEGORY_PREFIX, formatServerArticles, isServerQuestion, relevantServerArticles, serverKnowledgeText } from "../_shared/serverKnowledge.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.103.3";
 import { admitTask, recordUsage, validTaskId, limitMessage } from "../_shared/tokens.ts";
@@ -413,7 +413,7 @@ Deno.serve(async (req) => {
       const { data: kb } = await supabase
         .from("knowledge_articles").select("title,category,body").eq("is_published", true);
       // Plugin-Artikel kommen aus dem Code (serverKnowledge.ts); im Admin eingespielte Kopien nicht doppelt senden.
-      const kbAll = (kb || []).filter((a: any) => !String(a.category || "").startsWith(PLUGIN_CATEGORY_PREFIX))
+      const kbAll = (kb || []).filter((a: any) => !String(a.category || "").startsWith(PLUGIN_CATEGORY_PREFIX) && !String(a.category || "").startsWith(CRAFT_CATEGORY_PREFIX))
         .map((a: any) => `### [${a.category}] ${a.title}\n${a.body}`).join("\n\n---\n\n");
       // Spar-Modus: Wissensbasis stark gekürzt -> deutlich weniger Tokens pro Anfrage.
       const kbText = resolved.lean ? kbAll.slice(0, 1500) : kbAll;
@@ -469,8 +469,15 @@ Bilder & PDFs: Du kannst hochgeladene Bilder direkt sehen und analysieren.${memo
       .filter((m: any) => m?.role === "user").slice(-3)
       .map((m: any) => typeof m.content === "string" ? m.content : Array.isArray(m.content) ? m.content.map((p: any) => p?.text || "").join(" ") : "")
       .join("\n");
-    const craft = voiceMode ? "" : relevantCraftKnowledge(recentUser, resolved.lean ? 1 : 3);
-    if (!voiceMode) system += `\n\n${MYTHOS_WORK_RULES}${resolved.lean ? "" : `\n\n${MYTHOS_ABILITIES}`}${craft ? `\n\n${craft}` : ""}`;
+    // Im Admin eingespielte/bearbeitete KI-Wissens-Artikel (Kategorie ki-…) haben Vorrang vor dem Code.
+    const overrides: CraftOverrides = {};
+    if (!voiceMode) {
+      const { data: kiRows } = await supabase.from("knowledge_articles").select("category,body")
+        .eq("is_published", true).like("category", `${CRAFT_CATEGORY_PREFIX}%`);
+      for (const r of (kiRows || []) as { category: string; body: string }[]) overrides[r.category] = r.body;
+    }
+    const craft = voiceMode ? "" : relevantCraftKnowledge(recentUser, resolved.lean ? 1 : 3, overrides);
+    if (!voiceMode) system += `\n\n${workRules(overrides)}${resolved.lean ? "" : `\n\n${abilities(overrides)}`}${craft ? `\n\n${craft}` : ""}`;
     // Code/Dateien brauchen Platz: sonst wird z. B. eine .bbmodel oder ein Spiel mittendrin abgeschnitten.
     if (wantsLongOutput(lastText) && resolved.maxOut && !resolved.lean) {
       resolved.maxOut = Math.max(resolved.maxOut, String(chatModel).startsWith("openai/") ? 16000 : 24000);
