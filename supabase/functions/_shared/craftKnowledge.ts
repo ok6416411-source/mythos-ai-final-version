@@ -62,6 +62,13 @@ Regeln für gute Modelle:
 - Detailreich, nicht faul: typischerweise 20–80 Würfel. Rundungen aus gestuften Würfeln (Ringe aus 5–8 Teilen), Ränder, Nähte, Bänder, Taschen, Knöpfe als eigene kleine Würfel.
 - Farben realistisch und abgestuft: Grundfarbe + dunklere Schatten-/Kantenfarbe + hellere Akzente. Oberseiten (up) gern einen Tick heller.
 - Würfel dürfen sich leicht überlappen (keine Lücken). Keine Würfel mit Größe 0.
+- MINDESTENS 25 Würfel, bei Kleidung/Rüstung eher 30–60. Zwei Klötze sind KEIN Modell – lieber länger arbeiten.
+
+Kleidung & Rüstung (am Spielerkörper, Füße bei y=0, Pixel-Einheiten):
+- Spielerkörper zum Orientieren: rechtes Bein x 4–8, linkes Bein x 8–12, y 0–12, z 6–10 · Körper x 4–12, y 12–24, z 6–10 · Arme x 0–4 und 12–16, y 12–24 · Kopf x 4–12, y 24–32, z 4–12.
+- Kleidung liegt 0,25–0,75 px AUSSEN um den Körper (z. B. Hosenbein x 3.5–8.0, z 5.5–10.5), nie genau auf der Haut.
+- Hose: pro Bein Ober- und Unterteil getrennt, Saum/Umschlag unten (etwas breiter), Bund (y 11–13) rundherum, Gürtel + Schnalle, Taschen vorne und hinten, Kniepolster/Flicken, Nähte als dünne Leisten, Schlaufen; Bauernhose: Latz vorne (x 5–11, y 12–20) mit zwei Trägern über die Schultern und Knöpfen, Flicken in anderer Farbe.
+- Hemd/Jacke: Rumpf, Kragen, Knopfleiste, Taschen, Ärmel (oben, unten, Bündchen) · Hut/Helm: Krempe aus Ringen, Krone gestuft, Band.
 - Sinnvolle englische oder deutsche Namen in snake_case (brim_front, krempe_links …), gleiche Teile durchnummerieren.
 - NIE ein leeres Modell oder ein Modell „zum Selbst-Ausfüllen“ schicken. Immer das fertige, vollständige Modell in EINEM Block am Ende der Antwort.
 - Animationen für Blockbench beschreibst du in Worten (Keyframes) oder lieferst sie für GeckoLib als separate .animation.json.

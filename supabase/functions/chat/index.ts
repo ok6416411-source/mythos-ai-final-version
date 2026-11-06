@@ -481,6 +481,10 @@ Bilder & PDFs: Du kannst hochgeladene Bilder direkt sehen und analysieren.${memo
     // Code/Dateien brauchen Platz: sonst wird z. B. eine .bbmodel oder ein Spiel mittendrin abgeschnitten.
     if (wantsLongOutput(lastText) && resolved.maxOut && !resolved.lean) {
       resolved.maxOut = Math.max(resolved.maxOut, String(chatModel).startsWith("openai/") ? 16000 : 24000);
+      // Dateien/Code: gründlich statt schnell – Denk-Anleitung an, und erst planen, dann schreiben.
+      resolved.depth = true;
+      if (!resolved.reasoning || resolved.reasoning === "none" || resolved.reasoning === "low") resolved.reasoning = "medium";
+      system += `\n\n## Diese Anfrage braucht Sorgfalt\nNimm dir Zeit: erst still planen (Aufbau, alle Teile, Maße, Randfälle), dann vollständig ausarbeiten, dann im Kopf prüfen. Schicke NICHTS am Anfang der Antwort – keine Datei, kein Code-Block vor der kurzen Erklärung. Die Datei(en) kommen erst ganz am Ende, komplett und detailreich.`;
     }
 
     // Spar-Modus (Instant/Low): Katalog- und Datei-Blöcke weglassen -> viel kleinerer Prompt.

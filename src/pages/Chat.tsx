@@ -57,6 +57,9 @@ import { FILE_PROMPT } from "@/lib/chatFiles";
 import { defaultChatMode } from "@/lib/entry";
 import { SMART_UI_PROMPT, SMART_UI_SEND, stripSmartUI, smartUIOptions } from "@/components/chat/SmartUI";
 import PinnedChecklist from "@/components/chat/PinnedChecklist";
+import FileViewer, { type ViewFile } from "@/components/chat/FileViewer";
+import { filesOfChat, prepareFile } from "@/lib/chatFileParts";
+import { extractFrames, videoPromptParts, type VideoFrame } from "@/lib/videoFrames";
 import { checklistStatusPrompt, latestChecklist } from "@/lib/pinnedChecklist";
 import { capabilitiesPrompt } from "@/lib/mythosCapabilities";
 import { fallbackTitle, generateChatTitle } from "@/lib/chatTitle";
@@ -96,7 +99,7 @@ const SLASH_COMMANDS = [
 ];
 
 type Persona = { id: string; name: string; avatar_emoji: string | null };
-type Attachment = { url: string; name: string; mime: string };
+type Attachment = { url: string; name: string; mime: string; frames?: VideoFrame[]; duration?: number };
 type Conv = { id: string; title: string; mode: string; updated_at: string };
 type Msg = { id?: string; role: "user" | "assistant" | "tool"; content: string; metadata?: any; image?: GeneratedImage; imagePending?: { prompt: string }; music?: FunkPattern; song?: SongRequest; video?: VideoRequest; agent?: { task: string }; search?: string; ext?: { task: string }; attachments?: Attachment[]; agents?: AgentStatus[]; thinking?: string; thinkingMs?: number; steps?: string[]; created_at?: string };
 /** Status eines Teil-Agenten im Multi-Agent-Modus (vom agent-Endpunkt gestreamt). */
@@ -270,6 +273,35 @@ const Chat = () => {
     setUploading(true);
     const newAtts: Attachment[] = [];
     for (const file of Array.from(files).slice(0, 5)) {
+      // Video: im Browser in Einzelbilder zerlegen, die Bilder hochladen – Mythos schaut sich jedes an.
+      if (file.type.startsWith("video/")) {
+        if (file.size > 500 * 1024 * 1024) { toast.error(`${file.name}: Video max. 500 MB`); continue; }
+        const tid = toast.loading(`Video wird zerlegt: ${file.name}`);
+        try {
+          const { frames, duration } = await extractFrames(file, (d, n) => toast.loading(`Video wird zerlegt: Bild ${d} von ${n}`, { id: tid }));
+          const base = `${user.id}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+          const up: VideoFrame[] = [];
+          for (let i = 0; i < frames.length; i++) {
+            toast.loading(`Bilder werden hochgeladen: ${i + 1} von ${frames.length}`, { id: tid });
+            const fp = `${base}/frame-${String(i).padStart(3, "0")}.jpg`;
+            const { error } = await supabase.storage.from("chat-uploads").upload(fp, frames[i].blob, { contentType: "image/jpeg" });
+            if (!error) up.push({ url: supabase.storage.from("chat-uploads").getPublicUrl(fp).data.publicUrl, t: frames[i].t });
+          }
+          // Das Video selbst zum Ansehen hochladen (wenn nicht zu groß), sonst nur lokal abspielbar.
+          let url = URL.createObjectURL(file);
+          if (file.size <= 45 * 1024 * 1024) {
+            const vp = `${base}/${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+            const { error } = await supabase.storage.from("chat-uploads").upload(vp, file, { contentType: file.type });
+            if (!error) url = supabase.storage.from("chat-uploads").getPublicUrl(vp).data.publicUrl;
+          }
+          if (!up.length) throw new Error("Keine Bilder hochgeladen");
+          newAtts.push({ url, name: file.name, mime: file.type, frames: up, duration });
+          toast.success(`${file.name}: ${up.length} Bilder bereit`, { id: tid });
+        } catch (e) {
+          toast.error(`${file.name}: ${(e as Error).message}`, { id: tid });
+        }
+        continue;
+      }
       if (file.size > 20 * 1024 * 1024) { toast.error(`${file.name}: max 20MB`); continue; }
       const path = `${user.id}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
       const { error } = await supabase.storage.from("chat-uploads").upload(path, file);
@@ -729,7 +761,8 @@ const Chat = () => {
       if (!attachments.length) return txt;
       const parts: any[] = [{ type: "text", text: txt }];
       for (const a of attachments) {
-        if (a.mime.startsWith("image/")) parts.push({ type: "image_url", image_url: { url: a.url } });
+        if (a.frames?.length) parts.push(...videoPromptParts(a.name, a.duration, a.frames));
+        else if (a.mime.startsWith("image/")) parts.push({ type: "image_url", image_url: { url: a.url } });
         else parts.push({ type: "text", text: `\n[Anhang: ${a.name} (${a.mime}) — ${a.url}]` });
       }
       return parts;
@@ -1120,6 +1153,16 @@ const Chat = () => {
   // Checklisten im Verlauf nur als Hinweis zeigen – die aktuelle ist unten angeheftet.
   useEffect(() => { smartUIOptions.pinChecklists = true; return () => { smartUIOptions.pinChecklists = false; }; }, []);
   const pinned = useMemo(() => latestChecklist(messages), [messages]);
+  const [viewAtt, setViewAtt] = useState<ViewFile | null>(null);
+  const chatFiles = useMemo(() => filesOfChat(messages), [messages]);
+  const [filesOpen, setFilesOpen] = useState(false);
+  const openChatFile = (f: { name: string; content: string; base64: boolean }) => {
+    const p = prepareFile(f.name, f.content, f.base64);
+    setFilesOpen(false);
+    setViewAtt({ name: f.name, content: p.content, base64: f.base64, blob: p.blob, note: p.note });
+  };
+  const openAttachment = (a: Attachment) => setViewAtt({ name: a.name, content: "", base64: false, blob: null, url: a.url, mime: a.mime, frames: a.frames, duration: a.duration,
+    note: a.frames?.length ? `${a.frames.length} Bilder angesehen` : undefined });
   const pinnedRef = useRef(pinned);
   pinnedRef.current = pinned;
 
@@ -1524,6 +1567,25 @@ const Chat = () => {
             {messages.length > 0 && (
               <Tooltip>
                 <TooltipTrigger asChild>
+                  {chatFiles.length > 0 && (
+                    <div className="relative">
+                      <Button variant="ghost" size="sm" className="h-9 gap-1.5 px-2.5" onClick={() => setFilesOpen(o => !o)} aria-label="Dateien in diesem Chat" title="Alle Dateien in diesem Chat">
+                        <Paperclip className="h-4 w-4" /><span className="text-xs tabular-nums">{chatFiles.length}</span>
+                      </Button>
+                      {filesOpen && (
+                        <div className="absolute right-0 top-11 z-50 w-72 overflow-hidden rounded-xl border border-border bg-popover shadow-xl">
+                          <div className="border-b border-border px-3 py-2 text-xs font-medium text-muted-foreground">Dateien in diesem Chat</div>
+                          <div className="max-h-80 overflow-y-auto p-1">
+                            {chatFiles.slice().reverse().map((f) => (
+                              <button key={f.name} type="button" onClick={() => openChatFile(f)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-muted">
+                                <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /><span className="truncate">{f.name}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <Button variant="ghost" size="icon" className="h-9 w-9" onClick={exportChat} aria-label="Chat exportieren">
                     <Download className="h-4 w-4" />
                   </Button>
@@ -1595,9 +1657,15 @@ const Chat = () => {
                       <div className="flex flex-col items-end gap-1.5">
                         {m.attachments && m.attachments.length > 0 && (
                           <div className="flex flex-wrap justify-end gap-1.5">
-                            {m.attachments.map((a, j) => a.mime.startsWith("image/")
-                              ? <img key={j} src={a.url} alt={a.name} className="h-20 w-20 rounded-xl object-cover border border-white/10" loading="lazy" />
-                              : <span key={j} className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs"><Paperclip className="h-3 w-3" />{a.name}</span>)}
+                            {m.attachments.map((a, j) => a.frames?.length
+                              ? <button key={j} type="button" onClick={() => openAttachment(a)} title="Video und angesehene Bilder zeigen" className="relative h-20 w-32 overflow-hidden rounded-xl border border-white/10">
+                                  <img src={a.frames[0].url} alt={a.name} className="h-full w-full object-cover" loading="lazy" />
+                                  <span className="absolute inset-0 flex items-center justify-center bg-black/25 text-white text-lg">▶</span>
+                                  <span className="absolute bottom-1 left-1 rounded bg-black/70 px-1.5 text-[10px] text-white">{a.frames.length} Bilder</span>
+                                </button>
+                              : a.mime.startsWith("image/")
+                              ? <button key={j} type="button" onClick={() => openAttachment(a)} title="Ansehen"><img src={a.url} alt={a.name} className="h-20 w-20 rounded-xl object-cover border border-white/10" loading="lazy" /></button>
+                              : <button key={j} type="button" onClick={() => openAttachment(a)} title="Ansehen" className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs hover:bg-white/10"><Paperclip className="h-3 w-3" />{a.name}</button>)}
                           </div>
                         )}
                         <div className="max-w-[85%] rounded-2xl px-4 py-3 bg-white/[0.08] text-foreground">
@@ -1731,10 +1799,12 @@ const Chat = () => {
                 <div className="flex flex-wrap gap-1.5 mb-2">
                   {attachments.map((a, i) => (
                     <div key={i} className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs">
-                      {a.mime.startsWith("image/") ? (
-                        <img src={a.url} alt={a.name} className="h-5 w-5 rounded object-cover" />
-                      ) : <Paperclip className="h-3 w-3" />}
-                      <span className="max-w-[120px] truncate">{a.name}</span>
+                      <button type="button" onClick={() => openAttachment(a)} className="flex items-center gap-1.5" title="Ansehen">
+                        {a.frames?.length ? <img src={a.frames[0].url} alt={a.name} className="h-5 w-7 rounded object-cover" />
+                          : a.mime.startsWith("image/") ? <img src={a.url} alt={a.name} className="h-5 w-5 rounded object-cover" />
+                          : <Paperclip className="h-3 w-3" />}
+                        <span className="max-w-[120px] truncate">{a.name}{a.frames?.length ? ` · ${a.frames.length} Bilder` : ""}</span>
+                      </button>
                       <button onClick={() => setAttachments(prev => prev.filter((_, j) => j !== i))} aria-label="Entfernen">
                         <XIcon className="h-3 w-3 hover:text-destructive" />
                       </button>
@@ -1780,7 +1850,7 @@ const Chat = () => {
 
               <input
                 ref={fileInputRef} type="file" multiple hidden
-                accept="image/*,.pdf,.txt,.md,.json,.csv"
+                accept="image/*,video/*,.pdf,.txt,.md,.json,.csv"
                 onChange={(e) => { uploadFiles(e.target.files); if (fileInputRef.current) fileInputRef.current.value = ""; }}
               />
 
@@ -1793,6 +1863,7 @@ const Chat = () => {
               />
 
               {pinned && <PinnedChecklist list={pinned} convId={activeId} />}
+              <FileViewer file={viewAtt} onClose={() => setViewAtt(null)} />
 
               <div className="rounded-lg border border-input bg-card focus-within:border-ring transition-colors">
                 <Textarea ref={textareaRef}

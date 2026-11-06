@@ -5,10 +5,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Code2, Copy, Download, ExternalLink, Image as ImageIcon, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { parseFileInfo } from "@/lib/chatFiles";
+import { prepareFile } from "@/lib/chatFileParts";
+import FileViewer, { type ViewFile } from "@/components/chat/FileViewer";
 
 type Props = { open: boolean; onOpenChange: (o: boolean) => void; onOpenChat: (id: string) => void };
 type Artifact =
-  | { kind: "code"; key: string; convId: string; lang: string; code: string; at: string }
+  | { kind: "code"; key: string; convId: string; lang: string; code: string; at: string; file?: string; base64?: boolean }
   | { kind: "image"; key: string; convId: string; url: string; prompt: string; at: string };
 
 const EXT: Record<string, string> = { javascript: "js", typescript: "ts", python: "py", html: "html", css: "css", json: "json", bash: "sh", shell: "sh", tsx: "tsx", jsx: "jsx", java: "java", markdown: "md", sql: "sql" };
@@ -17,39 +20,50 @@ const EXT: Record<string, string> = { javascript: "js", typescript: "ts", python
 export default function ArtifactsDialog({ open, onOpenChange, onOpenChat }: Props) {
   const [items, setItems] = useState<Artifact[] | null>(null);
   const [filter, setFilter] = useState<"all" | "code" | "image">("all");
+  const [viewing, setViewing] = useState<ViewFile | null>(null);
+  const openCode = (a: Extract<Artifact, { kind: "code" }>) => {
+    const name = a.file || `artifact.${EXT[a.lang.toLowerCase()] || "txt"}`;
+    const p = prepareFile(name, a.code, !!a.base64);
+    setViewing({ name, content: p.content, base64: !!a.base64, blob: p.blob, note: p.note });
+  };
 
   useEffect(() => {
     if (!open) return;
     setItems(null);
-    supabase.from("messages")
-      .select("id,conversation_id,content,metadata,created_at")
-      .eq("role", "assistant")
-      .or("content.ilike.%```%,metadata->image.not.is.null")
-      .order("created_at", { ascending: false })
-      .limit(200)
-      .then(({ data }) => {
+    // Zwei einfache Abfragen statt einer .or()-Kombination (die mit ``` im Filter scheiterte → ewiges Laden).
+    const base = () => supabase.from("messages").select("id,conversation_id,content,metadata,created_at").eq("role", "assistant").order("created_at", { ascending: false }).limit(150);
+    Promise.all([base().like("content", "%```%"), base().not("metadata->image", "is", null)])
+      .then(([code, imgs]) => {
         const out: Artifact[] = [];
-        for (const m of (data || []) as any[]) {
+        const rows = new Map<string, any>();
+        for (const m of [...(code.data || []), ...(imgs.data || [])] as any[]) rows.set(m.id, m);
+        const list = [...rows.values()].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+        for (const m of list) {
           const img = m.metadata?.image;
           if (img?.url) out.push({ kind: "image", key: m.id + "i", convId: m.conversation_id, url: img.url, prompt: img.prompt || "Bild", at: m.created_at });
-          const re = /```([\w+-]*)\n([\s\S]*?)```/g;
+          const re = /```([^\n`]*)\n([\s\S]*?)```/g;
           let x: RegExpExecArray | null; let n = 0;
           while ((x = re.exec(m.content || ""))) {
+            const info = x[1].trim();
+            if (/^mythos-ui/i.test(info)) continue;
             const code = x[2].trimEnd();
-            if (code.split("\n").length < 3) continue; // kleine Schnipsel weglassen
-            out.push({ kind: "code", key: `${m.id}c${n++}`, convId: m.conversation_id, lang: x[1] || "text", code, at: m.created_at });
+            const file = parseFileInfo(info);
+            if (!file && code.split("\n").length < 3) continue; // kleine Schnipsel weglassen
+            out.push({ kind: "code", key: `${m.id}c${n++}`, convId: m.conversation_id, lang: file ? file.name : (info.split(/\s/)[0] || "text"), code, at: m.created_at, file: file?.name, base64: file?.base64 });
           }
         }
         setItems(out);
-      });
+      })
+      .catch(() => setItems([]));
   }, [open]);
 
   const shown = (items || []).filter(i => filter === "all" || i.kind === filter);
 
   const download = (a: Extract<Artifact, { kind: "code" }>) => {
-    const blob = new Blob([a.code], { type: "text/plain;charset=utf-8" });
+    const name = a.file || `artifact.${EXT[a.lang.toLowerCase()] || "txt"}`;
+    const blob = prepareFile(name, a.code, !!a.base64).blob || new Blob([a.code], { type: "text/plain;charset=utf-8" });
     const el = document.createElement("a");
-    el.href = URL.createObjectURL(blob); el.download = `artifact.${EXT[a.lang.toLowerCase()] || "txt"}`; el.click();
+    el.href = URL.createObjectURL(blob); el.download = name.split("/").pop() || name; el.click();
     setTimeout(() => URL.revokeObjectURL(el.href), 5000);
   };
 
@@ -74,7 +88,9 @@ export default function ArtifactsDialog({ open, onOpenChange, onOpenChat }: Prop
               {a.kind === "image" ? (
                 <img src={a.url} alt={a.prompt} className="h-40 w-full object-cover" loading="lazy" />
               ) : (
-                <pre className="h-40 overflow-hidden text-[11px] leading-snug p-3 font-mono text-foreground/80">{a.code.slice(0, 1200)}</pre>
+                <button type="button" onClick={() => openCode(a)} className="text-left" title="Öffnen">
+                  <pre className="h-40 overflow-hidden text-[11px] leading-snug p-3 font-mono text-foreground/80">{a.code.slice(0, 1200)}</pre>
+                </button>
               )}
               <div className="flex items-center gap-1 border-t border-white/5 px-2 py-1.5">
                 {a.kind === "image" ? <ImageIcon className="h-3.5 w-3.5 text-violet-300" /> : <Code2 className="h-3.5 w-3.5 text-violet-300" />}
@@ -97,6 +113,7 @@ export default function ArtifactsDialog({ open, onOpenChange, onOpenChat }: Prop
           ))}
         </div>
       </DialogContent>
+      <FileViewer file={viewing} onClose={() => setViewing(null)} />
     </Dialog>
   );
 }

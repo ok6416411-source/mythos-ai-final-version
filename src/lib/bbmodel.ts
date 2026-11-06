@@ -182,6 +182,9 @@ export function buildBBModel(spec: CompactModel): Record<string, unknown> {
   };
 }
 
+// Ersatzfarben für Modelle ohne Farbangabe (warme, abgestufte Töne statt Einheitsgrau)
+const FALLBACK = ["#8b6b47", "#7a5c3c", "#9c7b54", "#6b4f33", "#a88a63", "#5e4630"];
+
 /** Text einer .bbmodel-Datei aus dem Chat → fertiger Dateiinhalt (oder Fehler, wenn leer/kaputt). */
 export function finishBBModel(text: string): { ok: true; content: string; cubes: number } | { ok: false; error: string } {
   let data: unknown;
@@ -192,8 +195,21 @@ export function finishBBModel(text: string): { ok: true; content: string; cubes:
       const full = buildBBModel(data);
       return { ok: true, content: JSON.stringify(full), cubes: (full.elements as unknown[]).length };
     }
-    const els = (data as { elements?: unknown[] }).elements;
+    const full = data as { name?: string; elements?: Record<string, unknown>[]; textures?: unknown[] };
+    const els = full.elements;
     if (!Array.isArray(els) || !els.length) return { ok: false, error: "Modell ist leer (keine Würfel)" };
+    // Fertige Datei ohne (eingebettete) Textur → Würfel übernehmen und mit Farb-Textur neu bauen,
+    // sonst erscheint in Blockbench nur ein Platzhalter-Muster.
+    const hasTex = Array.isArray(full.textures) && full.textures.some((t) => typeof (t as { source?: unknown })?.source === "string" && String((t as { source: string }).source).startsWith("data:image"));
+    if (!hasTex) {
+      const cubes = els.filter((e) => e && Array.isArray(e.from) && Array.isArray(e.to)).map((e, i) => ({
+        name: String(e.name || `wuerfel_${i + 1}`), from: e.from as number[], to: e.to as number[],
+        origin: e.origin as number[] | undefined, rotation: e.rotation as number[] | undefined,
+        color: typeof e.color === "string" && e.color.startsWith("#") ? e.color : FALLBACK[i % FALLBACK.length],
+      }));
+      const rebuilt = buildBBModel({ name: full.name, cubes });
+      return { ok: true, content: JSON.stringify(rebuilt), cubes: cubes.length };
+    }
     return { ok: true, content: text, cubes: els.length };
   } catch (e) {
     return { ok: false, error: (e as Error).message };

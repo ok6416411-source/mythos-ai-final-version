@@ -22,3 +22,17 @@ describe("bbmodel", () => {
     expect(finishBBModel(JSON.stringify(spec)).ok).toBe(true);
   });
 });
+
+describe("fertige .bbmodel ohne Textur", () => {
+  it("wird mit Farb-Textur neu gebaut", () => {
+    const old = JSON.stringify({ meta: { format_version: "4.5" }, name: "bauernhose", elements: [
+      { name: "Hosenbein_Links", from: [4, 0, 4], to: [8, 12, 8], faces: { north: { uv: [0, 0, 4, 12] } } },
+      { name: "Hosenbein_Rechts", from: [8, 0, 4], to: [12, 12, 8], faces: { north: { uv: [0, 0, 4, 12] } } },
+    ], textures: [] });
+    const r = finishBBModel(old);
+    expect(r.ok).toBe(true);
+    const m = JSON.parse((r as { content: string }).content);
+    expect(m.textures[0].source.startsWith("data:image/png")).toBe(true);
+    expect(m.elements[0].name).toBe("Hosenbein_Links");
+  });
+});
