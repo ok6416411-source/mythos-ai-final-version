@@ -166,7 +166,7 @@ const appPkg = () => JSON.stringify({
   build: {
     appId: "online.mythoscraft.mythoscode",
     productName: "Mythos Code",
-    publish: { provider: "generic", url: "https://github.com/lluananonym-cloud/ai-mythoscraft/releases/download/code-latest" },
+    publish: { provider: "generic", url: "https://github.com/ok6416411-source/mythos-ai-final-version/releases/download/code-latest" },
     files: ["main.js", "preload.js", "index.html", "smartui.js", "markdown.js", "mcp.js", "voice.js", "tts-worker.js", "stt-worker.js", "renderer.js", "config.json", "icon.png"],
     win: { target: "nsis", icon: "icon.png" },
     nsis: { oneClick: false, allowToChangeInstallationDirectory: true, createDesktopShortcut: true, shortcutName: "Mythos Code", artifactName: "MythosCode-Setup-${version}.exe" },

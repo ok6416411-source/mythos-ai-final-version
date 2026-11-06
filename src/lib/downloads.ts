@@ -1,6 +1,6 @@
 // Desktop-Programme, die GitHub Actions automatisch baut und als Release
 // im öffentlichen Repo veröffentlicht. Die Website verlinkt nur noch hierauf.
-export const RELEASE_REPO = "lluananonym-cloud/ai-mythoscraft";
+export const RELEASE_REPO = "ok6416411-source/mythos-ai-final-version";
 
 export type AppDownload = {
   id: string;

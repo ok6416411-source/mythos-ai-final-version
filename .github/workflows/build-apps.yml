@@ -1,12 +1,11 @@
 name: Build Desktop Apps
 
-# Baut die Mythos-Programme automatisch und legt sie als Release im ÖFFENTLICHEN
-# Release-Repo lluananonym-cloud/ai-mythoscraft ab (dieses Repo ist privat – private
-# Releases kann die App nicht laden). Website (/downloads) und Auto-Updater lesen dort.
+# Baut die Mythos-Programme automatisch und legt sie als Release in DIESEM Repo ab
+# (muss öffentlich sein, sonst können Website (/downloads) und Auto-Updater nichts laden).
 #
-# Einmalig nötige Secrets (Settings > Secrets and variables > Actions):
-#   RELEASE_TOKEN – GitHub-Token mit "Contents: write" auf lluananonym-cloud/ai-mythoscraft
-#   NPM_TOKEN     – npm "Automation"-Token, damit die CLI automatisch auf npm landet
+# Optionales Secret (Settings > Secrets and variables > Actions):
+#   NPM_TOKEN – npm "Automation"-Token, damit die CLI automatisch auf npm landet
+#               (ohne: ZIP auf der Website laden und selbst `npm publish`)
 #
 # - Mythos Code App: aus src/lib/mythos-code-app (Lovable) -> MythosCode-Setup-<version>.exe
 #                    + latest.yml (Update-Feed: die App sucht dort nach neuen Versionen)
@@ -49,8 +48,8 @@ concurrency:
 env:
   FORCE: ${{ inputs.force || 'false' }}
   HAS_RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN != '' }}
-  # Ziel der Releases (öffentlich). release-check.sh / release-publish.sh nutzen RELEASE_REPO.
-  RELEASE_REPO: lluananonym-cloud/ai-mythoscraft
+  # Ziel der Releases: dieses (öffentliche) Repo. release-check.sh / release-publish.sh nutzen RELEASE_REPO.
+  RELEASE_REPO: ${{ github.repository }}
 
 jobs:
   code-app:
