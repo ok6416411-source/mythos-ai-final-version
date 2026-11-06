@@ -1,4 +1,8 @@
 import type { Config } from "tailwindcss";
+import twColors from "tailwindcss/colors";
+
+// Observe-Design: schwarz/weiß. Alte Lila-/Violett-Akzente werden zu neutralem Grau.
+const mono = twColors.neutral;
 
 export default {
   darkMode: ["class"],
@@ -13,6 +17,7 @@ export default {
         display: ['Space Grotesk', 'Inter', 'sans-serif'],
       },
       colors: {
+        violet: mono, purple: mono, fuchsia: mono, indigo: mono,
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",

@@ -1551,28 +1551,28 @@ const Chat = () => {
               </Tooltip>
             )}
 
+            {chatFiles.length > 0 && (
+              <div className="relative">
+                <Button variant="ghost" size="sm" className="h-9 gap-1.5 px-2.5" onClick={() => setFilesOpen(o => !o)} aria-label="Dateien in diesem Chat" title="Alle Dateien in diesem Chat">
+                  <Paperclip className="h-4 w-4" /><span className="text-xs tabular-nums">{chatFiles.length}</span>
+                </Button>
+                {filesOpen && (
+                  <div className="absolute right-0 top-11 z-50 w-72 overflow-hidden rounded-xl border border-border bg-popover shadow-xl">
+                    <div className="border-b border-border px-3 py-2 text-xs font-medium text-muted-foreground">Dateien in diesem Chat</div>
+                    <div className="max-h-80 overflow-y-auto p-1">
+                      {chatFiles.slice().reverse().map((f) => (
+                        <button key={f.name} type="button" onClick={() => openChatFile(f)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-muted">
+                          <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /><span className="truncate">{f.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
             {messages.length > 0 && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  {chatFiles.length > 0 && (
-                    <div className="relative">
-                      <Button variant="ghost" size="sm" className="h-9 gap-1.5 px-2.5" onClick={() => setFilesOpen(o => !o)} aria-label="Dateien in diesem Chat" title="Alle Dateien in diesem Chat">
-                        <Paperclip className="h-4 w-4" /><span className="text-xs tabular-nums">{chatFiles.length}</span>
-                      </Button>
-                      {filesOpen && (
-                        <div className="absolute right-0 top-11 z-50 w-72 overflow-hidden rounded-xl border border-border bg-popover shadow-xl">
-                          <div className="border-b border-border px-3 py-2 text-xs font-medium text-muted-foreground">Dateien in diesem Chat</div>
-                          <div className="max-h-80 overflow-y-auto p-1">
-                            {chatFiles.slice().reverse().map((f) => (
-                              <button key={f.name} type="button" onClick={() => openChatFile(f)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-muted">
-                                <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /><span className="truncate">{f.name}</span>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
                   <Button variant="ghost" size="icon" className="h-9 w-9" onClick={exportChat} aria-label="Chat exportieren">
                     <Download className="h-4 w-4" />
                   </Button>

@@ -6,7 +6,8 @@ import { useAuth } from "@/hooks/useAuth";
 
 // Startseite im „Observe“-Stil: ein Bildschirm, ruhiges Hintergrundvideo (0,5×), Liquid-Glass,
 // Instrument Serif nur in der Überschrift, sonst schwarz/weiß. Das Mythos-Logo bleibt unverändert.
-const VIDEO = "https://designerstephen.github.io/public-assets/videos/observe-hero.mp4";
+// Eigenes Hintergrundvideo (public/hero.mp4): langsames, dunkles Polarlicht-Band in den Logo-Farben, 12 s nahtlose Schleife.
+const VIDEO = "/hero.mp4";
 
 const Landing = () => {
   const nav = useNavigate();
