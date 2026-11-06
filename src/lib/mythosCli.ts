@@ -36,12 +36,16 @@ const fill = (src: string, vars: Record<string, string> = {}) =>
 const SHARED_TOOLS = fill(SHARED_TOOLS_RAW, { "// @@TOOL_PARSE@@": TOOL_PARSE });
 
 export const CLI_PKG = "mythos-code";
-export const CLI_VERSION = "1.9.0";
+export const CLI_VERSION = "1.10.0"; // in GitHub Actions automatisch 1.10.<Build-Nummer>
+/** Version für die ZIP von der Website (zum selbst `npm publish`en): jede ZIP bekommt eine neue,
+ *  höhere Nummer (Minuten seit 2026), damit npm nie „Version existiert schon“ meldet und alle Nutzer
+ *  beim nächsten Start automatisch updaten. */
+const zipCliVersion = () => CLI_VERSION.replace(/\.\d+$/, "." + Math.floor((Date.now() - Date.UTC(2026, 0, 1)) / 60000));
 const API = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/v1-messages`;
 
-const pkgJson = () => JSON.stringify({
+const pkgJson = (ver = zipCliVersion()) => JSON.stringify({
   name: CLI_PKG,
-  version: CLI_VERSION,
+  version: ver,
   description: "Mythos Code – KI-Coding-Agent im Terminal (by Mythoscraft)",
   bin: { "mythos": "bin/mythos.js", "mythos-code": "bin/mythos.js" },
   type: "module",
@@ -65,9 +69,10 @@ mythos
 export async function buildCliZip(site: string): Promise<Blob> {
   const zip = new JSZip();
   const root = zip.folder(CLI_PKG)!;
-  root.file("package.json", pkgJson());
+  const ver = zipCliVersion();
+  root.file("package.json", pkgJson(ver));
   root.file("README.md", readme());
-  root.folder("bin")!.file("mythos.js", fill(CLI_JS, { "// @@SHARED_TOOLS@@": SHARED_TOOLS, "__API__": API, "__SITE__": site, "__CLI_VERSION__": CLI_VERSION, "__CLI_PKG__": CLI_PKG }), { unixPermissions: "755" });
+  root.folder("bin")!.file("mythos.js", fill(CLI_JS, { "// @@SHARED_TOOLS@@": SHARED_TOOLS, "__API__": API, "__SITE__": site, "__CLI_VERSION__": ver, "__CLI_PKG__": CLI_PKG }), { unixPermissions: "755" });
   return zip.generateAsync({ type: "blob", platform: "UNIX" });
 }
 
@@ -120,7 +125,7 @@ Voraussetzung: [Node.js](https://nodejs.org) ab Version 18.
 export const APP_PKG = "mythos-code-app";
 export const APP_DOWNLOAD_SETTING = "codeprogram_download_url";
 export const APP_UPDATE_SETTING = "codeprogram_update";
-export const APP_VERSION = "2.15.1";
+export const APP_VERSION = "2.16.0"; // in GitHub Actions automatisch 2.16.<Build-Nummer>
 
 /** Google-Drive-Freigabelink -> direkter Download-Link (andere https-Links bleiben unverändert). */
 export function toDirectDownloadUrl(input: string): string | null {

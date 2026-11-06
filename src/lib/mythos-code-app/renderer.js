@@ -1685,9 +1685,10 @@ async function installUpdate() {
   await window.mythos.update.install();
 }
 // ---------- „Was ist neu“ nach einem Update ----------
-// Neue Version: hier oben einen Eintrag ergänzen (neueste zuerst). Wird einmal nach dem Update gezeigt.
+// Neue Version: hier oben einen Eintrag ergänzen (neueste zuerst), Schlüssel "2.16" gilt für alle 2.16.x.
+// Wird einmal nach jedem Update gezeigt.
 const WHATS_NEW = {
-  "2.15.1": [
+  "2.16": [
     "Eingabefeld bleibt immer anklickbar – auch nach Rückfragen wie „Mythos möchte ausführen …“",
     "Freies Scrollen: Während Mythos schreibt, kannst du hochscrollen, ohne nach unten gezogen zu werden. ↓ springt ans Ende",
     "Rückfragen zum Anklicken und Abschicken direkt im Chat",
@@ -1697,7 +1698,7 @@ const WHATS_NEW = {
 };
 function showWhatsNew(current) {
   let last = null; try { last = localStorage.getItem("mythos_seen_version"); localStorage.setItem("mythos_seen_version", current); } catch { /* egal */ }
-  const notes = WHATS_NEW[current];
+  const notes = WHATS_NEW[current] || WHATS_NEW[String(current).split(".").slice(0, 2).join(".")];
   if (!notes || last === current) return;
   const bg = document.createElement("div");
   bg.style.cssText = "position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:20px";

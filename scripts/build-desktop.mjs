@@ -24,8 +24,13 @@ const API = `${FN_BASE}/v1-messages`;
 
 const cliTs = lib("mythosCli.ts");
 const constant = (name) => cliTs.match(new RegExp(`export const ${name} = "([^"]+)"`))?.[1];
-const APP_VERSION = constant("APP_VERSION");
-const CLI_VERSION = constant("CLI_VERSION");
+// Automatische Versionsnummer: In GitHub Actions wird aus "2.16.0" → "2.16.<Build-Nummer>".
+// So bekommt jede Änderung an App/CLI eine neue, höhere Version und alle Nutzer ein Update –
+// ohne dass jemand die Nummer von Hand erhöhen muss.
+const RUN = Number(process.env.GITHUB_RUN_NUMBER || 0);
+const auto = (v) => (RUN && /^\d+\.\d+\.\d+$/.test(v || "") ? v.split(".").slice(0, 2).join(".") + "." + RUN : v);
+const APP_VERSION = auto(constant("APP_VERSION"));
+const CLI_VERSION = auto(constant("CLI_VERSION"));
 const CLI_PKG = constant("CLI_PKG");
 const APP_PKG = constant("APP_PKG");
 if (!APP_VERSION || !CLI_VERSION || !CLI_PKG || !APP_PKG) throw new Error("Versionen in src/lib/mythosCli.ts nicht gefunden");
