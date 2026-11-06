@@ -60,6 +60,7 @@ import PinnedChecklist from "@/components/chat/PinnedChecklist";
 import UsageDialog from "@/components/UsageDialog";
 import FileViewer, { type ViewFile } from "@/components/chat/FileViewer";
 import { filesOfChat, prepareFile } from "@/lib/chatFileParts";
+import { checkAnswer, repairPrompt } from "@/lib/selfCheck";
 import { checklistStatusPrompt, latestChecklist } from "@/lib/pinnedChecklist";
 import { capabilitiesPrompt } from "@/lib/mythosCapabilities";
 import { fallbackTitle, generateChatTitle } from "@/lib/chatTitle";
@@ -1014,6 +1015,7 @@ const Chat = () => {
     let step = 1;
     let final = "";
     let badTools = 0;
+    let repairs = 0;
     for (let turn = 0; turn < MAX_TURNS; turn++) {
       const hints = buildHints(tools, goalText ? { text: goalText, step } : null, convId);
       // Hinweise als eigene System-Nachricht direkt vor der letzten Nutzer-Nachricht – so bleiben Slash-Befehle unverändert.
@@ -1072,6 +1074,20 @@ const Chat = () => {
         history.push({ role: "user", content: `Ergebnis von Werkzeug ${call.name}:\n${result}` });
         if (stopRef.current) { setMessages(prev => prev.slice(0, -1)); break; }
         continue;
+      }
+
+      // Selbst prüfen: Dateien testen (Würfel zählen, HTML starten) – bei Problemen EINE automatische Verbesserungsrunde.
+      if (repairs < 1 && /```/.test(res.full)) {
+        const problems = await checkAnswer(res.full).catch(() => [] as string[]);
+        if (problems.length && !stopRef.current) {
+          repairs++;
+          const fix = repairPrompt(problems);
+          const meta = { auto: true, selfCheck: true };
+          setMessages(prev => [...prev, { role: "user", content: fix, metadata: meta }, { role: "assistant", content: "" }]);
+          await supabase.from("messages").insert({ conversation_id: convId, role: "user", content: fix, metadata: meta });
+          history.push({ role: "user", content: fix });
+          continue;
+        }
       }
 
       if (goalText) {
@@ -1627,7 +1643,13 @@ const Chat = () => {
                     {(i === 0 || dayKey(messages[i - 1].created_at) !== dayKey(m.created_at)) && (
                       <DayDivider label={dayLabel(m.created_at)} />
                     )}
-                    {m.role === "user" && m.metadata?.auto ? (
+                    {m.role === "user" && m.metadata?.selfCheck ? (
+                      <div className="not-prose">
+                        <TimelineRow label="Ergebnis geprüft – verbessere" detail="Was die Prüfung gefunden hat">
+                          <div className="whitespace-pre-wrap text-foreground/80">{m.content.replace(/^🔧 Automatische Prüfung hat Probleme gefunden:\n/, "").replace(/\n\nBitte behebe[\s\S]*$/, "")}</div>
+                        </TimelineRow>
+                      </div>
+                    ) : m.role === "user" && m.metadata?.auto ? (
                       <div className="flex items-center gap-3 text-[11px] uppercase tracking-wider text-muted-foreground">
                         <div className="h-px flex-1 bg-white/10" />
                         <span className="flex items-center gap-1.5"><Target className="h-3 w-3 text-violet-300" /> Schritt {m.metadata.step}</span>
