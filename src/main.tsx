@@ -46,18 +46,29 @@ if (isPreviewHost || isInIframe) {
 } else if ("serviceWorker" in navigator) {
   // Lazy-load the virtual PWA register module only in production-like contexts.
   import("virtual:pwa-register")
-    .then(({ registerSW }) => registerSW({
-      immediate: true,
-      // Handy-Apps (vom Homescreen) laden die Seite kaum neu und blieben so auf alten Ständen hängen.
-      // Darum regelmäßig und beim Zurückkehren in die App nach einer neuen Version fragen;
-      // "autoUpdate" lädt dann automatisch neu.
-      onRegisteredSW(_url, reg) {
-        if (!reg) return;
-        const check = () => { if (navigator.onLine) reg.update().catch(() => {}); };
-        setInterval(check, 60_000);
-        document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") check(); });
-      },
-    }))
+    .then(({ registerSW }) => {
+      let shown = false;
+      const updateSW = registerSW({
+        immediate: true,
+        // Neue Version gefunden: NICHT automatisch neu laden (sonst gehen offene Antworten,
+        // Formulare und Checklisten verloren). Der User entscheidet per Klick; sonst greift sie
+        // beim nächsten Öffnen der App von selbst.
+        onNeedRefresh() {
+          if (shown) return;
+          shown = true;
+          import("sonner").then(({ toast }) => toast("Neue Version von Mythos AI ist da", {
+            duration: Infinity,
+            action: { label: "Neu laden", onClick: () => { void updateSW(true); } },
+          })).catch(() => {});
+        },
+        onRegisteredSW(_url, reg) {
+          if (!reg) return;
+          const check = () => { if (navigator.onLine) reg.update().catch(() => {}); };
+          setInterval(check, 30 * 60_000);
+          document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") check(); });
+        },
+      });
+    })
     .catch(() => {});
 }
 

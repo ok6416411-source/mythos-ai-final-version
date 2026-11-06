@@ -3,7 +3,8 @@
 # Eingabe (env): TAG, VER (neue Version), HASH (Fingerabdruck der Quelle), FORCE, GITHUB_REPOSITORY
 # Ausgabe: build=true|false in $GITHUB_OUTPUT
 set -euo pipefail
-BODY=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body -q .body 2>/dev/null || true)
+REPO="${RELEASE_REPO:-$GITHUB_REPOSITORY}"
+BODY=$(gh release view "$TAG" --repo "$REPO" --json body -q .body 2>/dev/null || true)
 OLD_HASH=$(printf '%s' "$BODY" | sed -n 's/.*source: \([0-9a-f]*\).*/\1/p' | head -1)
 OLD_VER=$(printf '%s' "$BODY" | sed -n 's/.*version: \([0-9][0-9A-Za-z.+-]*\).*/\1/p' | head -1)
 echo "Quelle: $VER ($HASH) · veröffentlicht: ${OLD_VER:-keine} (${OLD_HASH:-keine})"

@@ -36,7 +36,7 @@ const fill = (src: string, vars: Record<string, string> = {}) =>
 const SHARED_TOOLS = fill(SHARED_TOOLS_RAW, { "// @@TOOL_PARSE@@": TOOL_PARSE });
 
 export const CLI_PKG = "mythos-code";
-export const CLI_VERSION = "1.8.3";
+export const CLI_VERSION = "1.9.0";
 const API = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/v1-messages`;
 
 const pkgJson = () => JSON.stringify({
@@ -67,7 +67,7 @@ export async function buildCliZip(site: string): Promise<Blob> {
   const root = zip.folder(CLI_PKG)!;
   root.file("package.json", pkgJson());
   root.file("README.md", readme());
-  root.folder("bin")!.file("mythos.js", fill(CLI_JS, { "// @@SHARED_TOOLS@@": SHARED_TOOLS, "__API__": API, "__SITE__": site }), { unixPermissions: "755" });
+  root.folder("bin")!.file("mythos.js", fill(CLI_JS, { "// @@SHARED_TOOLS@@": SHARED_TOOLS, "__API__": API, "__SITE__": site, "__CLI_VERSION__": CLI_VERSION, "__CLI_PKG__": CLI_PKG }), { unixPermissions: "755" });
   return zip.generateAsync({ type: "blob", platform: "UNIX" });
 }
 
@@ -120,7 +120,7 @@ Voraussetzung: [Node.js](https://nodejs.org) ab Version 18.
 export const APP_PKG = "mythos-code-app";
 export const APP_DOWNLOAD_SETTING = "codeprogram_download_url";
 export const APP_UPDATE_SETTING = "codeprogram_update";
-export const APP_VERSION = "2.14.1";
+export const APP_VERSION = "2.15.0";
 
 /** Google-Drive-Freigabelink -> direkter Download-Link (andere https-Links bleiben unverändert). */
 export function toDirectDownloadUrl(input: string): string | null {

@@ -26,6 +26,64 @@ const SYSTEM = () => "Du bist Mythos Code, ein autonomer Coding-Agent im Termina
   TOOL_PROMPT + memoryPrompt(readMemory(ROOT)) + goalPrompt(goal);
 
 const SITE = process.env.MYTHOS_SITE_URL || "__SITE__";
+const VERSION = "__CLI_VERSION__";
+const PKG = "__CLI_PKG__";
+
+// ---------- Auto-Update über npm ----------
+// Beim Start (höchstens alle 6 h) die neueste Version auf npm prüfen. Ist eine neuere da,
+// wird sie mit `npm i -g` installiert und Mythos startet direkt neu – ohne Zutun des Users.
+// Abschalten: MYTHOS_NO_UPDATE=1 oder --no-update. Manuell: `mythos update`.
+const newer = (a, b) => { const p = (v) => String(v).split(/[.+-]/).slice(0, 3).map((n) => parseInt(n, 10) || 0); const [x, y] = [p(a), p(b)]; for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] > y[i]; return false; };
+async function latestVersion() {
+  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 2500);
+  try { const r = await fetch("https://registry.npmjs.org/" + PKG + "/latest", { signal: ctl.signal }); return r.ok ? (await r.json()).version : null; }
+  catch { return null; } finally { clearTimeout(t); }
+}
+function installLatest(ver) {
+  const npm = process.platform === "win32" ? "npm.cmd" : "npm";
+  try { execFileSync(npm, ["install", "-g", PKG + "@" + ver, "--no-audit", "--no-fund", "--loglevel=error"], { stdio: "inherit", shell: process.platform === "win32" }); return true; }
+  catch { return false; }
+}
+async function autoUpdate(force = false) {
+  if (VERSION.startsWith("__") || process.env.MYTHOS_UPDATED) return;
+  if (!force && (process.env.MYTHOS_NO_UPDATE || process.argv.includes("--no-update"))) return;
+  const c = load();
+  if (!force && c.updateCheckedAt && Date.now() - c.updateCheckedAt < 6 * 3600e3) return;
+  const latest = await latestVersion();
+  save(Object.assign(load(), { updateCheckedAt: Date.now() }));
+  if (!latest || !newer(latest, VERSION)) { if (force) console.log(C.g + "  ✓ Mythos Code ist aktuell (" + VERSION + ")" + C.x); return; }
+  console.log(C.m + "  ↑ Update " + VERSION + " → " + latest + " wird installiert…" + C.x);
+  if (!installLatest(latest)) { console.log(C.y + "  Update fehlgeschlagen. Manuell: npm i -g " + PKG + "@latest" + C.x); return; }
+  console.log(C.g + "  ✓ Aktualisiert auf " + latest + " – starte neu…\n" + C.x);
+  rl.close();
+  const child = spawn(process.platform === "win32" ? "mythos.cmd" : "mythos", process.argv.slice(2), { stdio: "inherit", shell: process.platform === "win32", env: Object.assign({}, process.env, { MYTHOS_UPDATED: "1" }) });
+  child.on("exit", (code) => process.exit(code ?? 0));
+  child.on("error", () => process.exit(0));
+  await new Promise(() => {}); // hier nicht weiterlaufen – der neue Prozess übernimmt
+}
+
+// ---------- Startbildschirm mit Maskottchen „Myth“ ----------
+// Kleiner Block-Charakter (Minecraft-Stil) – das Logo der Website bleibt unverändert.
+const MASCOT = [
+  "  ▄█████▄  ",
+  " ██▀███▀██ ",
+  " ▀███████▀ ",
+  "   ▀▀ ▀▀   ",
+];
+function banner(info) {
+  const tip = ["/hilfe zeigt alle Befehle", "Dateien mit @name anhängen", "Bilder einfach ins Terminal ziehen", "/goal <ziel> – Mythos bleibt dran, bis es fertig ist"][Math.floor(Math.random() * 4)];
+  const w = Math.min((process.stdout.columns || 80) - 4, 64);
+  const line = C.d + "─".repeat(w) + C.x;
+  const right = [
+    C.b + "Mythos Code" + C.x + C.d + " v" + VERSION + C.x,
+    C.d + info.dir + C.x,
+    C.d + info.extra + C.x,
+    C.c + "✦ " + C.x + C.d + tip + C.x,
+  ];
+  console.log("\n" + line);
+  MASCOT.forEach((m, i) => console.log(C.m + m + C.x + "  " + (right[i] || "")));
+  console.log(line + "\n");
+}
 const FN = process.env.MYTHOS_FN_URL || API.replace(/\/v1-messages$/, "");
 const authPost = async (body) => (await fetch(FN + "/cli-auth", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })).json();
 
@@ -600,13 +658,15 @@ async function command(q, history) {
 }
 
 async function main() {
-  const args = process.argv.slice(2).filter((a) => a !== "--yes" && a !== "--key");
+  const args = process.argv.slice(2).filter((a) => a !== "--yes" && a !== "--key" && a !== "--no-update");
   if (args[0] === "login" || !cfg.key) await login();
   if (args[0] === "login") process.exit(0);
   if (args[0] === "logout") { save({}); console.log("Abgemeldet."); process.exit(0); }
+  if (args[0] === "update") { await autoUpdate(true); process.exit(0); }
+  if (args[0] === "--version" || args[0] === "-v") { console.log(VERSION); process.exit(0); }
+  await autoUpdate();
   const branch = gitBranch();
-  console.log(C.c + C.b + "\n  ✦ MYTHOS CODE" + C.x + C.d + "  – by Mythoscraft · " + path.basename(ROOT) + (branch ? " ⎇ " + branch : "") +
-    (readMemory(ROOT) ? " · Gedächtnis ✓" : "") + "\n  /hilfe für Befehle · Strg+C stoppt · Bilder: Datei ins Terminal ziehen\n" + C.x);
+  banner({ dir: "📁 " + path.basename(ROOT) + (branch ? "  ⎇ " + branch : ""), extra: (cfg.name ? "angemeldet als " + cfg.name : "by Mythoscraft") + (readMemory(ROOT) ? " · Gedächtnis ✓" : "") + " · Strg+C stoppt" });
   const history = [];
   if (args.length) { const { text, images } = extractImages(args.join(" ")); await turn(history, text, images); }
   while (true) {

@@ -90,8 +90,8 @@ write(cli, "package.json", JSON.stringify({
   keywords: ["ai", "cli", "agent", "mythos", "coding"],
   license: "MIT",
 }, null, 2));
-write(cli, "README.md", `# Mythos Code\n\nKI-Coding-Agent im Terminal – by Mythoscraft.\n\n\`\`\`\nnpm install -g ${CLI_PKG}\nmythos login\nmythos\n\`\`\`\n`);
-write(cli, "bin/mythos.js", fill(lib("mythos-code-cli/mythos.js"), { "// @@SHARED_TOOLS@@": SHARED_TOOLS, "__API__": API, "__SITE__": SITE }), 0o755);
+write(cli, "README.md", `# Mythos Code\n\nKI-Coding-Agent im Terminal – by Mythoscraft.\n\n\`\`\`\nnpm install -g ${CLI_PKG}\nmythos login\nmythos\n\`\`\`\n\nUpdates kommen automatisch beim Start (abschalten: \`MYTHOS_NO_UPDATE=1\`). Manuell: \`mythos update\`.\n`);
+write(cli, "bin/mythos.js", fill(lib("mythos-code-cli/mythos.js"), { "// @@SHARED_TOOLS@@": SHARED_TOOLS, "__API__": API, "__SITE__": SITE, "__CLI_VERSION__": CLI_VERSION, "__CLI_PKG__": CLI_PKG }), 0o755);
 
 const summary = { appVersion: APP_VERSION, cliVersion: CLI_VERSION, cliPackage: CLI_PKG, out };
 console.log(JSON.stringify(summary));

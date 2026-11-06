@@ -77,6 +77,18 @@
 .msui-check.on .msui-cb{background:var(--a);border-color:var(--a);color:#fff}
 .msui-check.on .ct{text-decoration:line-through;opacity:.55}
 .msui-btns{display:flex;flex-wrap:wrap;gap:8px}
+.msui-q-opt{display:flex;align-items:flex-start;gap:10px;width:100%;padding:9px 11px;margin:0 0 6px;border:1px solid var(--bd);border-radius:12px;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.msui-q-opt:hover{border-color:rgba(255,255,255,.25)}
+.msui-q-opt.on{border-color:var(--a);background:color-mix(in srgb,var(--a) 10%,transparent)}
+.msui-q-opt .k{flex-shrink:0;width:20px;height:20px;border-radius:6px;border:1.5px solid var(--mut);display:flex;align-items:center;justify-content:center;font-size:12px;margin-top:1px}
+.msui-q-opt.on .k{background:var(--a);border-color:var(--a);color:#fff}
+.msui-q-opt .d{display:block;color:var(--mut);font-size:12.5px}
+.msui-q-other{width:100%;padding:9px 11px;border:1px solid var(--bd);border-radius:12px;background:transparent;color:inherit;font:inherit;margin:0 0 10px;outline:none}
+.msui-q-other:focus{border-color:var(--a)}
+.msui-q-send{border:0;background:var(--a);color:#fff;font:inherit;font-weight:600;font-size:13.5px;padding:8px 16px;border-radius:10px;cursor:pointer}
+.msui-q-send:disabled{opacity:.35;cursor:default}
+.msui-q-done{display:flex;gap:8px;align-items:center;color:var(--mut);font-size:13px}
+.msui-pinref{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--bd);border-radius:99px;padding:5px 12px;font-size:12.5px;color:var(--mut)}
 .msui-btn{border:1px solid var(--bd);background:rgba(255,255,255,.05);color:inherit;font:inherit;font-size:13px;padding:7px 13px;border-radius:99px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
 .msui-btn:hover{background:rgba(255,255,255,.1)}
 .msui-btn.wide{width:100%;justify-content:center;border-radius:12px;margin-top:10px}
@@ -97,7 +109,9 @@
 .msui-wait{border:1px dashed var(--bd);border-radius:16px;padding:16px;color:var(--mut);font-size:13px;display:flex;align-items:center;gap:8px}
 .msui-wait::before{content:"";width:12px;height:12px;border-radius:50%;border:2px solid var(--mut);border-top-color:transparent;animation:msui-spin 1s linear infinite}
 @keyframes msui-spin{to{transform:rotate(360deg)}}
-body.light .msui{--bg:rgba(0,0,0,.025);--bd:rgba(0,0,0,.12);--mut:rgba(0,0,0,.55)}
+body.light .msui,html.light .msui{--bg:rgba(0,0,0,.025);--bd:rgba(0,0,0,.12);--mut:rgba(0,0,0,.55)}
+html.light .msui-q-opt:hover,html.light .msui-check:hover{background:rgba(0,0,0,.03);border-color:rgba(0,0,0,.25)}
+html.light .msui-btn{background:rgba(0,0,0,.03)}
 body.light .msui input[type=range]{background:rgba(0,0,0,.15)}
 body.light .msui input[type=range]::-webkit-slider-thumb{background:#fff;border:1px solid rgba(0,0,0,.2)}
 body.light .msui-num{background:#fff}
@@ -524,6 +538,10 @@ body.light .msui-num{background:#fff}
   const store = { get: (k) => { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* egal */ } } };
   const hash = (t) => { let h = 0; for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0; return (h >>> 0).toString(36); };
   B.checklist = (s, ctx) => {
+    if (ctx.pinChecklists) {
+      const items = arr(s.items), done = items.filter((it) => it && it.done).length;
+      return mk("div", "msui-pinref", "☑ " + (s.title || "Checkliste") + " · " + done + "/" + items.length + " – unten angeheftet");
+    }
     const box = mk("div", "msui-box"); head(box, s, ctx);
     const items = arr(s.items).map((it) => (typeof it === "string" ? { text: it } : it));
     const key = "msui-check-" + hash(JSON.stringify(items));
@@ -538,6 +556,56 @@ body.light .msui-num{background:#fff}
     upd(); box.appendChild(prog); note(box, s); return box;
   };
   B.todo = B.checklist;
+
+  // Rückfrage mit Auswahl (+ eigene Antwort) – „Abschicken“ schickt die Antwort als Nachricht an Mythos.
+  // {"type":"question","id":"stil","question":"Welcher Stil?","options":["A",{"label":"B","text":"Erklärung"}],"multi":false,"other":true}
+  B.question = (s, ctx) => {
+    const box = mk("div", "msui-box");
+    const q = s.question || s.title || s.frage || "Frage";
+    const key = "msui-q-" + hash(JSON.stringify([q, s.options, s.id]));
+    box.appendChild(mk("div", "msui-h", q));
+    if (s.description || s.subtitle) box.appendChild(mk("div", "msui-sub", s.description || s.subtitle));
+    const answered = store.get(key);
+    if (answered) { const d = mk("div", "msui-q-done"); d.append(mk("span", "", "✓"), mk("span", "", "Beantwortet: " + answered)); box.appendChild(d); return box; }
+    const opts = arr(s.options).map((o) => (o && typeof o === "object" ? { label: String(o.label || o.title || o.text || ""), text: o.label || o.title ? o.text || o.description || "" : o.description || "" } : { label: String(o), text: "" }));
+    const multi = !!(s.multi || s.multiple);
+    const sel = new Set();
+    const send = mk("button", "msui-q-send", s.submit || "Abschicken"); send.type = "button";
+    let other = null;
+    const upd = () => { send.disabled = !sel.size && !(other && other.value.trim()); };
+    opts.forEach((o, i) => {
+      const b = mk("button", "msui-q-opt"); b.type = "button";
+      const k = mk("span", "k", ""); const t = mk("span", ""); t.appendChild(mk("span", "", o.label)); if (o.text) t.appendChild(mk("span", "d", o.text));
+      b.append(k, t);
+      b.onclick = () => {
+        if (!multi) { sel.clear(); box.querySelectorAll(".msui-q-opt").forEach((x) => { x.classList.remove("on"); x.firstChild.textContent = ""; }); }
+        if (sel.has(i)) sel.delete(i); else sel.add(i);
+        b.classList.toggle("on", sel.has(i)); k.textContent = sel.has(i) ? "✓" : "";
+        upd();
+      };
+      box.appendChild(b);
+    });
+    if (s.other !== false) {
+      other = mk("input", "msui-q-other"); other.placeholder = s.otherLabel || (opts.length ? "Oder eigene Antwort…" : "Deine Antwort…");
+      other.oninput = upd; other.onkeydown = (e) => { if (e.key === "Enter" && !send.disabled) send.click(); };
+      box.appendChild(other);
+    }
+    send.onclick = () => {
+      const picked = [...sel].sort((a, b) => a - b).map((i) => opts[i].label);
+      const own = other && other.value.trim();
+      if (own) picked.push(own);
+      if (!picked.length) return;
+      const answer = picked.join(", ");
+      store.set(key, answer);
+      ctx.send("Antwort auf „" + q + "“: " + answer);
+      box.replaceChildren(mk("div", "msui-h", q));
+      const d = mk("div", "msui-q-done"); d.append(mk("span", "", "✓"), mk("span", "", "Beantwortet: " + answer)); box.appendChild(d);
+    };
+    upd();
+    box.appendChild(send);
+    return box;
+  };
+  B.frage = B.question;
 
   B.quiz = (s, ctx) => {
     const box = mk("div", "msui-box"); head(box, Object.assign({}, s, { title: s.title || "Quiz" }), ctx);
@@ -668,6 +736,7 @@ body.light .msui-num{background:#fff}
       openLink: o.openLink || ((u) => { try { window.open(u, "_blank", "noopener"); } catch (e) { /* egal */ } }),
       copy: o.copy || ((t) => { try { navigator.clipboard.writeText(t); } catch (e) { /* egal */ } }),
       blobImages: !!o.blobImages,
+      pinChecklists: !!o.pinChecklists,
     };
     const root = mk("div", "msui");
     const spec = typeof raw === "string" ? parse(raw) : raw;
@@ -704,7 +773,10 @@ body.light .msui-num{background:#fff}
     "- steps: {\"type\":\"steps\",\"items\":[{\"icon\":\"💬\",\"title\":\"…\",\"text\":\"…\"}]} – Ablauf mit Pfeilen.\n" +
     "- timeline: {\"type\":\"timeline\",\"items\":[{\"time\":\"09:00\",\"title\":\"…\",\"text\":\"…\"}]} – Zeitplan/Tagesplan.\n" +
     "- map: {\"type\":\"map\",\"title\":\"…\",\"places\":[{\"name\":\"Ort, Stadt\",\"lat\":48.1,\"lon\":11.5,\"time\":\"10:00\",\"text\":\"…\"}],\"mode\":\"driving|walking|transit\"} – Karte + Route (lat/lon wenn sicher bekannt).\n" +
-    "- checklist: {\"type\":\"checklist\",\"title\":\"…\",\"items\":[\"…\"]} – zum Abhaken, bleibt gespeichert.\n" +
+    "- checklist: {\"type\":\"checklist\",\"id\":\"plan\",\"title\":\"…\",\"items\":[{\"text\":\"…\",\"done\":false}]} – Plan/Aufgabenliste, wird unten über dem Eingabefeld angeheftet. " +
+    "Pro Aufgabe nur EINE Liste mit fester id; Fortschritt = dieselbe Liste (gleiche id, gleiche Punkte) mit \"done\":true neu schicken, nicht eine neue Liste anfangen.\n" +
+    "- question: {\"type\":\"question\",\"question\":\"Welcher Stil?\",\"options\":[\"Modern\",{\"label\":\"Retro\",\"text\":\"Pixel-Look\"}],\"multi\":false} – Rückfrage zum Anklicken mit „Abschicken“; " +
+    "die Antwort kommt als Nachricht „Antwort auf …“ zu dir zurück. Nutze das statt Fragen im Fließtext, wenn du wirklich etwas wissen musst. Danach mit der Antwort direkt weiterarbeiten.\n" +
     "- quiz: {\"type\":\"quiz\",\"questions\":[{\"question\":\"…\",\"options\":[\"A\",\"B\",\"C\"],\"answer\":1,\"explanation\":\"…\"}]}\n" +
     "- gallery: {\"type\":\"gallery\",\"items\":[{\"image\":\"Stichwort\",\"caption\":\"…\"}]}\n" +
     "- prompt: {\"type\":\"prompt\",\"title\":\"…\",\"text\":\"Prompt zum Kopieren/Ausprobieren\"}\n" +

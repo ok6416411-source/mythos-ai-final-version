@@ -13,6 +13,9 @@ export const SMART_UI_PROMPT = smartUI.PROMPT;
 /** ```mythos-ui-Blöcke aus Text entfernen (zum Kopieren und Vorlesen). */
 export const stripSmartUI = (text: string) => text.replace(/```mythos-ui[\s\S]*?(?:```|$)/g, "").replace(/\n{3,}/g, "\n\n").trim();
 
+/** Im Web-Chat werden Checklisten unten angeheftet; im Verlauf steht dann nur ein Hinweis. */
+export const smartUIOptions = { pinChecklists: false };
+
 /** Klick auf einen Button in der Oberfläche schickt den Text als neue Nachricht (Chat.tsx hört darauf). */
 export const SMART_UI_SEND = "mythos:smartui-send";
 
@@ -34,6 +37,7 @@ export default function SmartUI({ raw }: { raw: string }) {
       send: (text: string) => window.dispatchEvent(new CustomEvent(SMART_UI_SEND, { detail: text })),
       openLink: (url: string) => window.open(url, "_blank", "noopener"),
       copy: (text: string) => { void copyText(text); },
+      pinChecklists: smartUIOptions.pinChecklists,
     }));
   }, [raw, settled]);
   return <div ref={ref} className="not-prose" />;

@@ -12,7 +12,6 @@ import { Loader2 } from "lucide-react";
 import Home from "./pages/Home";
 import CookieConsent from "./components/CookieConsent";
 import { ThemeProvider } from "next-themes";
-import ThemeToggle from "@/components/ThemeToggle";
 
 /** Lädt eine Seite erst bei Bedarf. Fehlt nach einem Update eine alte Datei, wird die Seite einmal neu geladen. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- lazy() erwartet beliebige Props
@@ -51,6 +50,7 @@ const Werbung = lazyPage(() => import("./pages/Werbung"));
 const WerbungVorschau = lazyPage(() => import("./pages/WerbungVorschau"));
 const BrowserAgent = lazyPage(() => import("./pages/BrowserAgent"));
 const Onboarding = lazyPage(() => import("./pages/Onboarding"));
+const McEntry = lazyPage(() => import("./pages/McEntry"));
 const NotFound = lazyPage(() => import("./pages/NotFound.tsx"));
 const Impressum = lazyPage(() => import("./pages/Impressum"));
 const Build = lazyPage(() => import("./pages/Build"));
@@ -76,7 +76,7 @@ const PageLoading = () => (
 );
 
 const App = () => (
-  <ThemeProvider attribute="class" defaultTheme="dark" enableSystem storageKey="mythos.theme">
+  <ThemeProvider attribute="class" defaultTheme="system" enableSystem storageKey="mythos.theme.system" disableTransitionOnChange>
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
@@ -86,13 +86,14 @@ const App = () => (
           <SplashScreen />
           <CookieConsent />
           <MythosBackground />
-          <ThemeToggle />
           <Suspense fallback={<PageLoading />}>
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/forgot-password" element={<ResetPassword />} />
+            <Route path="/mc" element={<McEntry />} />
+            <Route path="/minecraft" element={<McEntry />} />
             <Route path="/onboarding" element={<RequireAuth skipOnboarding><Onboarding /></RequireAuth>} />
             <Route path="/try" element={<Try />} />
             <Route path="/werbung" element={<Werbung />} />

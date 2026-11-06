@@ -131,7 +131,9 @@ export default defineConfig(({ mode }) => ({
       react(),
     mode === "development" && componentTagger(),
     VitePWA({
-      registerType: "autoUpdate",
+      // "prompt": neue Versionen laden NICHT mehr automatisch im Hintergrund neu (hat offene Chats und
+      // Antworten zurückgesetzt). Stattdessen ein Hinweis mit „Neu laden“ (siehe main.tsx).
+      registerType: "prompt",
       devOptions: { enabled: false },
       includeAssets: ["icon.png", "apple-touch-icon.png"],
       manifest: {

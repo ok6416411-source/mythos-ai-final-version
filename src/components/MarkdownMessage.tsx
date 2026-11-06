@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Check, Copy, Download, Play, FileArchive, Eye, EyeOff, FileText, FileCode2, FileImage, FileSpreadsheet, ImageDown } from "lucide-react";
+import { Check, Copy, Download, Play, FileArchive, FileText, FileCode2, FileImage, FileSpreadsheet, Box, Loader2 } from "lucide-react";
 import JSZip from "jszip";
 import { toast } from "sonner";
 import { copyText } from "@/lib/copyText";
 import SmartUI from "@/components/chat/SmartUI";
-import { parseFileInfo, fileBlob, saveBlob, openBlob, svgToPng, fmtSize, extOf, isImageName } from "@/lib/chatFiles";
+import { parseFileInfo, fileBlob, saveBlob, fmtSize, extOf, isImageName } from "@/lib/chatFiles";
+import { finishBBModel } from "@/lib/bbmodel";
+import FileViewer, { type ViewFile } from "@/components/chat/FileViewer";
 
 const EXT: Record<string, string> = {
   html: "html", xml: "xml", javascript: "js", js: "js", jsx: "jsx", typescript: "ts", ts: "ts",
@@ -48,7 +50,7 @@ function extractBlocks(md: string) {
     if (/^mythos-ui$/i.test(m[1])) continue;
     const file = parseFileInfo(m[1]);
     const lang = (m[1] || "txt").toLowerCase();
-    const named = /^(?:\/\/|#|<!--)\s*([\w.\-/]+\.[a-zA-Z0-9]{1,5})/.exec(m[2].trim());
+    const named = /^(?:\/\/|#|<!--)\s*([\w.\-/]+\.[a-zA-Z0-9]{1,12})/.exec(m[2].trim());
     out.push({
       lang,
       code: m[2].replace(/\n$/, ""),
@@ -69,56 +71,79 @@ const fileIcon = (name: string) => {
   return FileCode2;
 };
 
-/** Eine Datei, die Mythos geschickt hat: Name, Größe, Download, Vorschau. */
-function FileCard({ name, content, base64 }: { name: string; content: string; base64: boolean }) {
-  const [show, setShow] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const blob = useMemo(() => { try { return fileBlob(name, content, base64); } catch { return null; } }, [name, content, base64]);
-  const preview = useMemo(() => (show && blob && isImageName(name) ? URL.createObjectURL(blob) : null), [show, blob, name]);
-  useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
+/** Datei-Blöcke (```datei:…) aus der Antwort lösen: Sie erscheinen gesammelt als Karten am Ende.
+ *  Ein noch offener Block (Antwort läuft noch) wird als „wird geschrieben“ angezeigt, nie als halbe Datei. */
+function splitFiles(md: string) {
+  const files: { name: string; content: string; base64: boolean }[] = [];
+  let writing: { name: string; lines: number } | null = null;
+  const out: string[] = [];
+  const lines = md.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const open = /^\s*```([^`\n]*)$/.exec(lines[i]);
+    const file = open ? parseFileInfo(open[1]) : null;
+    if (!open || !file) {
+      out.push(lines[i]);
+      // normalen Codeblock komplett übernehmen (darin keine Datei-Erkennung)
+      if (open) { while (++i < lines.length) { out.push(lines[i]); if (/^\s*```\s*$/.test(lines[i])) break; } }
+      continue;
+    }
+    const body: string[] = [];
+    let closed = false;
+    while (++i < lines.length) { if (/^\s*```\s*$/.test(lines[i])) { closed = true; break; } body.push(lines[i]); }
+    if (closed) files.push({ name: file.name, content: body.join("\n"), base64: file.base64 });
+    else writing = { name: file.name, lines: body.length };
+  }
+  return { text: out.join("\n").replace(/\n{3,}/g, "\n\n").trim(), files, writing };
+}
+
+/** .bbmodel: kompakte Würfel-Liste von Mythos → vollständige Blockbench-Datei. */
+function prepareFile(name: string, content: string, base64: boolean): { blob: Blob | null; content: string; note?: string; error?: string } {
+  if (extOf(name) === "bbmodel" && !base64) {
+    const r = finishBBModel(content);
+    if (r.ok === false) return { blob: null, content, error: r.error };
+    return { blob: fileBlob(name, r.content, false), content: r.content, note: `${r.cubes} Würfel` };
+  }
+  try { return { blob: fileBlob(name, content, base64), content }; } catch { return { blob: null, content, error: "Datei ist beschädigt" }; }
+}
+
+/** Eine Datei, die Mythos geschickt hat: kompakte Karte, Klick öffnet das Datei-Fenster. */
+function FileCard({ name, content, base64, onOpen }: { name: string; content: string; base64: boolean; onOpen: (f: ViewFile) => void }) {
+  const prep = useMemo(() => prepareFile(name, content, base64), [name, content, base64]);
   const e = extOf(name);
-  const Icon = fileIcon(name);
-  const canOpen = e === "html" || e === "htm" || e === "pdf" || isImageName(name);
-
-  const copy = async () => {
-    if (!(await copyText(content))) { toast.error("Kopieren hat nicht geklappt."); return; }
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1600);
-  };
-  const asPng = async () => {
-    try { saveBlob(name.replace(/\.svg$/i, ".png"), await svgToPng(content)); toast.success("PNG gespeichert"); }
-    catch { toast.error("Konnte kein PNG daraus machen."); }
-  };
-
+  const Icon = e === "bbmodel" ? Box : fileIcon(name);
+  const open = () => onOpen({ name, content: prep.content, base64, blob: prep.blob, note: prep.note });
   return (
-    <div className="not-prose my-3 overflow-hidden rounded-xl border border-primary/25 bg-primary/5">
-      <div className="flex items-center gap-3 px-3 py-2.5">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary"><Icon className="h-[18px] w-[18px]" /></div>
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-medium" title={name}>{name}</div>
-          <div className="text-[11px] text-muted-foreground">{blob ? `${e.toUpperCase() || "Datei"} · ${fmtSize(blob.size)}` : "Datei ist beschädigt"}</div>
+    <div className="group/file not-prose flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-2.5 transition-colors hover:border-foreground/25">
+      <button type="button" onClick={open} className="flex min-w-0 flex-1 items-center gap-3 text-left" title="Datei öffnen">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/50 text-muted-foreground"><Icon className="h-[18px] w-[18px]" /></div>
+        <div className="min-w-0">
+          <div className="truncate text-sm font-medium" title={name}>{name.split("/").pop()}</div>
+          <div className={`truncate text-[11.5px] ${prep.error ? "text-destructive" : "text-muted-foreground"}`}>
+            {prep.error ? prep.error : `${e.toUpperCase() || "Datei"}${prep.blob ? ` · ${fmtSize(prep.blob.size)}` : ""}${prep.note ? ` · ${prep.note}` : ""} · Klicken zum Öffnen`}
+          </div>
         </div>
-        <div className="flex items-center gap-1">
-          {!base64 && <IconBtn onClick={() => setShow(s => !s)} title={show ? "Vorschau schließen" : "Vorschau"}>{show ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}</IconBtn>}
-          {base64 && isImageName(name) && <IconBtn onClick={() => setShow(s => !s)} title="Vorschau"><Eye className="h-3.5 w-3.5" /></IconBtn>}
-          {canOpen && blob && <IconBtn onClick={() => openBlob(blob)} title="In neuem Tab öffnen"><Play className="h-3.5 w-3.5" /></IconBtn>}
-          {e === "svg" && !base64 && <IconBtn onClick={asPng} title="Als PNG speichern"><ImageDown className="h-3.5 w-3.5" /></IconBtn>}
-          {!base64 && <IconBtn onClick={copy} title="Inhalt kopieren">{copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}</IconBtn>}
-          <button
-            type="button"
-            disabled={!blob}
-            onClick={() => blob && saveBlob(name, blob)}
-            className="ml-1 inline-flex items-center gap-1.5 rounded-lg bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
-          >
-            <Download className="h-3.5 w-3.5" /> Herunterladen
-          </button>
-        </div>
+      </button>
+      <button
+        type="button"
+        disabled={!prep.blob}
+        onClick={() => prep.blob && saveBlob(name, prep.blob)}
+        title="Herunterladen"
+        className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-muted disabled:opacity-40"
+      >
+        <Download className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Download</span>
+      </button>
+    </div>
+  );
+}
+
+function WritingCard({ name, lines }: { name: string; lines: number }) {
+  return (
+    <div className="not-prose flex items-center gap-3 rounded-xl border border-dashed border-border px-3 py-2.5">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted/50"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>
+      <div className="min-w-0">
+        <div className="truncate text-sm font-medium">{name.split("/").pop()}</div>
+        <div className="text-[11.5px] text-muted-foreground">wird geschrieben … {lines} Zeilen</div>
       </div>
-      {show && (
-        preview
-          ? <div className="border-t border-white/5 bg-background/40 p-3"><img src={preview} alt={name} className="mx-auto max-h-80 rounded" /></div>
-          : <pre className="max-h-80 overflow-auto border-t border-white/5 bg-background/50 p-3 text-[12.5px] leading-relaxed"><code>{content}</code></pre>
-      )}
     </div>
   );
 }
@@ -150,7 +175,7 @@ function CodeCard({ lang, code }: { lang: string; code: string }) {
           {isHtml && (
             <IconBtn onClick={run} title="HTML ausführen"><Play className="h-3.5 w-3.5" /></IconBtn>
           )}
-          <IconBtn onClick={() => download(/^(?:\/\/|#|<!--)\s*([\w.-]+\.[a-zA-Z0-9]{1,5})/.exec(code.trim())?.[1] || `mythos-code.${ext}`, code)} title="Als Datei herunterladen">
+          <IconBtn onClick={() => download(/^(?:\/\/|#|<!--)\s*([\w.-]+\.[a-zA-Z0-9]{1,12})/.exec(code.trim())?.[1] || `mythos-code.${ext}`, code)} title="Als Datei herunterladen">
             <Download className="h-3.5 w-3.5" />
           </IconBtn>
           <IconBtn onClick={copy} title="Kopieren">
@@ -164,6 +189,8 @@ function CodeCard({ lang, code }: { lang: string; code: string }) {
 }
 
 export default function MarkdownMessage({ content }: { content: string }) {
+  const split = useMemo(() => splitFiles(content), [content]);
+  const [viewing, setViewing] = useState<ViewFile | null>(null);
   const blocks = useMemo(() => extractBlocks(content), [content]);
   // Hat Mythos echte Dateien geschickt, kommen nur die ins ZIP; sonst alle Codeblöcke + die Antwort.
   const hasFiles = blocks.some(b => b.isFile);
@@ -174,6 +201,7 @@ export default function MarkdownMessage({ content }: { content: string }) {
     zipFiles.forEach((b, i) => {
       const name = b.name.includes(".") ? b.name : `datei-${i + 1}.txt`;
       if (b.base64) { try { zip.file(name, b.code.replace(/^data:[^,]*,/, "").replace(/\s+/g, ""), { base64: true }); } catch { /* kaputt, weglassen */ } }
+      else if (extOf(name) === "bbmodel") { const r = finishBBModel(b.code); if (r.ok === true) zip.file(name, r.content); }
       else zip.file(name, b.code);
     });
     if (!hasFiles) zip.file("antwort.md", content);
@@ -196,7 +224,7 @@ export default function MarkdownMessage({ content }: { content: string }) {
             const raw = String(children ?? "");
             const info = /language-(\S+)/.exec(className || "")?.[1] || "";
             const file = parseFileInfo(info);
-            if (file) return <FileCard name={file.name} content={raw.replace(/\n$/, "")} base64={file.base64} />;
+            if (file) return <CodeCard lang={extOf(file.name)} code={raw.replace(/\n$/, "")} />;
             if (/^mythos-ui$/i.test(info)) return <SmartUI raw={raw} />;
             const lang = /^[\w+#-]+/.exec(info)?.[0] || "";
             const isBlock = lang || raw.includes("\n");
@@ -207,15 +235,23 @@ export default function MarkdownMessage({ content }: { content: string }) {
           },
         }}
       >
-        {content}
+        {split.text}
       </ReactMarkdown>
+
+      {(split.files.length > 0 || split.writing) && (
+        <div className="not-prose mt-3 grid gap-2">
+          {split.files.map((f, i) => <FileCard key={i + f.name} name={f.name} content={f.content} base64={f.base64} onOpen={setViewing} />)}
+          {split.writing && <WritingCard name={split.writing.name} lines={split.writing.lines} />}
+        </div>
+      )}
+      <FileViewer file={viewing} onClose={() => setViewing(null)} />
 
       {zipFiles.length > 1 && (
         <div className="not-prose mt-2">
           <button
             type="button"
             onClick={zipAll}
-            className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] text-muted-foreground transition-colors hover:text-foreground hover:bg-white/10"
+            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/50 px-3 py-1.5 text-[11px] text-muted-foreground transition-colors hover:text-foreground hover:bg-white/10"
           >
             <FileArchive className="h-3.5 w-3.5" /> Alle {zipFiles.length} Dateien als ZIP
           </button>

@@ -37,7 +37,7 @@
 
   // ```datei:name.ext (oder file:…, ;base64) → Datei-Karte zum Speichern.
   const fileInfo = (info) => {
-    const m = /^(?:datei|file)[:=]"?([^\s";]+\.[a-zA-Z0-9]{1,6})"?(;base64)?/i.exec(info || "");
+    const m = /^(?:datei|file)[:=]"?([^\s";]+\.[a-zA-Z0-9]{1,12})"?(;base64)?/i.exec(info || "");
     if (!m) return null;
     const name = m[1].split(/[\\/]/).filter((p) => p && p !== "..").join("/");
     return name ? { name: name, base64: !!m[2] } : null;

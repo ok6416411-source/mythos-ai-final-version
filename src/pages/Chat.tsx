@@ -1,7 +1,7 @@
 import { copyText } from "@/lib/copyText";
 import { MAX_CONTINUE, CONTINUE_PROMPT, looksCut, stitch } from "@/lib/codeContinue";
 import { readChatRecovery, writeChatRecovery, shouldFollowChat } from "@/lib/chatRecovery";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import ImageGeneration, { type GeneratedImage } from "@/components/chat/ImageGeneration";
 import { isImageRequest } from "@/lib/imageIntent";
 import { supabase } from "@/integrations/supabase/client";
@@ -54,7 +54,10 @@ import StarterPrompts from "@/components/chat/StarterPrompts";
 import { getInstructions, getMcpServers, getProjects, projectOfChat, setProjects, type Project } from "@/lib/chatPrefs";
 import { callTool, collectTools, connectorStates } from "@/lib/mcpClient";
 import { FILE_PROMPT } from "@/lib/chatFiles";
-import { SMART_UI_PROMPT, SMART_UI_SEND, stripSmartUI } from "@/components/chat/SmartUI";
+import { defaultChatMode } from "@/lib/entry";
+import { SMART_UI_PROMPT, SMART_UI_SEND, stripSmartUI, smartUIOptions } from "@/components/chat/SmartUI";
+import PinnedChecklist from "@/components/chat/PinnedChecklist";
+import { checklistStatusPrompt, latestChecklist } from "@/lib/pinnedChecklist";
 import { capabilitiesPrompt } from "@/lib/mythosCapabilities";
 import { fallbackTitle, generateChatTitle } from "@/lib/chatTitle";
 import {
@@ -100,9 +103,9 @@ type Msg = { id?: string; role: "user" | "assistant" | "tool"; content: string; 
 type AgentStatus = { i: number; title: string; status: "läuft" | "fertig" | "fehler"; phase?: string };
 
 const MODES = [
-  { value: "support", label: "Support", icon: HelpCircle, desc: "Mythoscraft Server-Support" },
-  { value: "agent", label: "Agent", icon: Brain, desc: "Mit Web-Suche & Tools" },
   { value: "general", label: "General", icon: Sparkles, desc: "Allgemeiner KI-Chat" },
+  { value: "agent", label: "Agent", icon: Brain, desc: "Mit Web-Suche & Tools" },
+  { value: "support", label: "Support", icon: HelpCircle, desc: "Mythoscraft Server-Support" },
 ];
 
 const SIDEBAR_KEY = "mythos.sidebar.collapsed";
@@ -171,7 +174,7 @@ const Chat = () => {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
-  const [mode, setMode] = useState("support");
+  const [mode, setMode] = useState(defaultChatMode);
   const [mythosId, setMythosId] = useState<string>(() => {
     if (typeof window === "undefined") return DEFAULT_MYTHOS_ID;
     return localStorage.getItem("mythos.model") || DEFAULT_MYTHOS_ID;
@@ -309,6 +312,7 @@ const Chat = () => {
       setGoal(null);
       setActiveId(null);
       setMessages([]);
+      setMode(defaultChatMode());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId, user?.id]);
@@ -940,6 +944,8 @@ const Chat = () => {
     }
     parts.push(FILE_PROMPT);
     parts.push(SMART_UI_PROMPT);
+    const status = checklistStatusPrompt(pinnedRef.current, convId);
+    if (status) parts.push(status);
     parts.push(capabilitiesPrompt(SLASH_COMMANDS, isAdmin));
     if (goalNow) {
       parts.push(
@@ -1084,12 +1090,27 @@ const Chat = () => {
 
   useEffect(() => { sendRef.current = send; });
 
+  // Checklisten im Verlauf nur als Hinweis zeigen – die aktuelle ist unten angeheftet.
+  useEffect(() => { smartUIOptions.pinChecklists = true; return () => { smartUIOptions.pinChecklists = false; }; }, []);
+  const pinned = useMemo(() => latestChecklist(messages), [messages]);
+  const pinnedRef = useRef(pinned);
+  pinnedRef.current = pinned;
+
   // Buttons in der intelligenten Oberfläche (```mythos-ui) schicken ihren Text als neue Nachricht.
   useEffect(() => {
     const onSmart = (e: Event) => { const t = (e as CustomEvent<string>).detail; if (t) sendRef.current?.(t); };
     window.addEventListener(SMART_UI_SEND, onSmart);
     return () => window.removeEventListener(SMART_UI_SEND, onSmart);
   }, []);
+
+  // /app?mode=support (Minecraft-Link) stellt den Modus für den neuen Chat ein.
+  useEffect(() => {
+    const m = searchParams.get("mode");
+    if (!m || searchParams.get("q") || chatId || !MODES.some(x => x.value === m)) return;
+    setMode(m);
+    setSearchParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, chatId]);
 
   // Von der Startseite: /app?q=... schickt die Nachricht direkt in einem neuen Chat ab.
   const startedFromHomeRef = useRef(false);
@@ -1356,7 +1377,7 @@ const Chat = () => {
       <div className="h-[100dvh] flex overflow-hidden bg-background">
         {/* Desktop sidebar */}
         <aside
-          className={`hidden md:flex shrink-0 flex-col h-full transition-[width] duration-200 ease-out border-r border-white/5 bg-[hsl(0_0%_5%)] ${
+          className={`hidden md:flex shrink-0 flex-col h-full transition-[width] duration-200 ease-out border-r border-white/5 bg-sidebar text-sidebar-foreground ${
             sidebarCollapsed ? "w-0" : "w-[260px]"
           } overflow-hidden`}
         >
@@ -1367,7 +1388,7 @@ const Chat = () => {
         <Sheet open={mobileSidebar} onOpenChange={setMobileSidebar}>
           <SheetContent
             side="left"
-            className="w-[280px] p-0 bg-[hsl(0_0%_5%)] border-r border-white/5 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
+            className="w-[280px] p-0 bg-sidebar text-sidebar-foreground border-r border-white/5 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
           >
             {SidebarContentBlock}
           </SheetContent>
@@ -1743,6 +1764,8 @@ const Chat = () => {
                 refreshing={suggestLoading}
                 onClose={() => setSuggestions([])}
               />
+
+              {pinned && <PinnedChecklist list={pinned} convId={activeId} />}
 
               <div className="rounded-lg border border-input bg-card focus-within:border-ring transition-colors">
                 <Textarea ref={textareaRef}

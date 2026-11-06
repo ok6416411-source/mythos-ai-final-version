@@ -1,8 +1,12 @@
 name: Build Desktop Apps
 
-# Baut die Mythos-Programme automatisch und legt sie als Release in diesem
-# (öffentlichen) Repo ab. Die Website (/downloads) verlinkt direkt darauf,
-# es muss also nichts mehr von Hand gebaut oder hochgeladen werden.
+# Baut die Mythos-Programme automatisch und legt sie als Release im ÖFFENTLICHEN
+# Release-Repo lluananonym-cloud/ai-mythoscraft ab (dieses Repo ist privat – private
+# Releases kann die App nicht laden). Website (/downloads) und Auto-Updater lesen dort.
+#
+# Einmalig nötige Secrets (Settings > Secrets and variables > Actions):
+#   RELEASE_TOKEN – GitHub-Token mit "Contents: write" auf lluananonym-cloud/ai-mythoscraft
+#   NPM_TOKEN     – npm "Automation"-Token, damit die CLI automatisch auf npm landet
 #
 # - Mythos Code App: aus src/lib/mythos-code-app (Lovable) -> MythosCode-Setup-<version>.exe
 #                    + latest.yml (Update-Feed: die App sucht dort nach neuen Versionen)
@@ -44,6 +48,8 @@ concurrency:
 
 env:
   FORCE: ${{ inputs.force || 'false' }}
+  # Ziel der Releases (öffentlich). release-check.sh / release-publish.sh nutzen RELEASE_REPO.
+  RELEASE_REPO: lluananonym-cloud/ai-mythoscraft
 
 jobs:
   code-app:
@@ -53,7 +59,7 @@ jobs:
       run:
         shell: bash
     env:
-      GH_TOKEN: ${{ github.token }}
+      GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
       TAG: code-latest
       ASSET: MythosCode-Setup.exe
       PRUNE: MythosCode-Setup-*
@@ -102,7 +108,7 @@ jobs:
     name: Mythos CLI
     runs-on: ubuntu-latest
     env:
-      GH_TOKEN: ${{ github.token }}
+      GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
       TAG: cli-latest
       ASSET: mythos-code.tgz
     steps:
@@ -136,6 +142,18 @@ jobs:
           mv out/*.tgz "out/$ASSET"
           bash .github/workflows/release-publish.sh "out/$ASSET"
 
+      # Auf npm veröffentlichen (unabhängig vom Release-Check: nur wenn die Version auf npm fehlt).
+      - name: Auf npm veröffentlichen
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          PKG: ${{ steps.src.outputs.cli_package }}
+          VER: ${{ steps.src.outputs.cli_version }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then echo "::warning::NPM_TOKEN fehlt – CLI nicht auf npm veröffentlicht."; exit 0; fi
+          if npm view "$PKG@$VER" version >/dev/null 2>&1; then echo "$PKG@$VER ist schon auf npm."; exit 0; fi
+          echo "//registry.npmjs.org/:_authToken=$NODE_AUTH_TOKEN" > ~/.npmrc
+          cd build/desktop/cli && npm publish --access public
+
 
   browser:
     name: Mythos Browser
@@ -144,7 +162,7 @@ jobs:
       run:
         shell: bash
     env:
-      GH_TOKEN: ${{ github.token }}
+      GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
       TAG: browser-latest
       ASSET: MythosBrowser-Setup.exe
       HAS_TOKEN: ${{ secrets.APPS_REPO_TOKEN != '' }}

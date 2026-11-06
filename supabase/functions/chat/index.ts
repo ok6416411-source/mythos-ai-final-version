@@ -3,6 +3,7 @@ import { explainErrors, generateImage, PROVIDER_LABEL } from "../_shared/image.t
 import { classifyImageRequest, isImageRequest, maybeImageRequest, resolveImagePrompt } from "../_shared/imageIntent.ts";
 import { mythosIdentity, mythosIdentityReminder } from "../_shared/identity.ts";
 import { MYTHOS_CATALOG, MYTHOS_FILES } from "../_shared/catalog.ts";
+import { MYTHOS_ABILITIES, MYTHOS_WORK_RULES, relevantCraftKnowledge, wantsLongOutput } from "../_shared/craftKnowledge.ts";
 import { PLUGIN_CATEGORY_PREFIX, formatServerArticles, isServerQuestion, relevantServerArticles, serverKnowledgeText } from "../_shared/serverKnowledge.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.103.3";
 import { admitTask, recordUsage, validTaskId, limitMessage } from "../_shared/tokens.ts";
@@ -462,6 +463,19 @@ Bilder & PDFs: Du kannst hochgeladene Bilder direkt sehen und analysieren.${memo
     const depthHint = resolved.depth
       ? `\n\n## Denk-Tiefe\nDenke vor dem Antworten still Schritt für Schritt durch: Ziel klären, Annahmen prüfen, Randfälle und Alternativen abwägen, dann die beste Lösung begründet ausgeben. Zeige den Denkprozess nicht rohkopiert, sondern nur das saubere Ergebnis mit kurzer Begründung.`
       : "";
+    // Arbeitsweise + eigene Fähigkeiten + passendes Fachwissen (bbmodel, Skins, Web, Plugins).
+    // Thema aus den letzten User-Nachrichten, damit Folgefragen („mach die Krempe breiter“) es behalten.
+    const recentUser = (Array.isArray(messages) ? messages : [])
+      .filter((m: any) => m?.role === "user").slice(-3)
+      .map((m: any) => typeof m.content === "string" ? m.content : Array.isArray(m.content) ? m.content.map((p: any) => p?.text || "").join(" ") : "")
+      .join("\n");
+    const craft = voiceMode ? "" : relevantCraftKnowledge(recentUser, resolved.lean ? 1 : 3);
+    if (!voiceMode) system += `\n\n${MYTHOS_WORK_RULES}${resolved.lean ? "" : `\n\n${MYTHOS_ABILITIES}`}${craft ? `\n\n${craft}` : ""}`;
+    // Code/Dateien brauchen Platz: sonst wird z. B. eine .bbmodel oder ein Spiel mittendrin abgeschnitten.
+    if (wantsLongOutput(lastText) && resolved.maxOut && !resolved.lean) {
+      resolved.maxOut = Math.max(resolved.maxOut, String(chatModel).startsWith("openai/") ? 16000 : 24000);
+    }
+
     // Spar-Modus (Instant/Low): Katalog- und Datei-Blöcke weglassen -> viel kleinerer Prompt.
     system = resolved.lean
       ? `${mythosIdentity(identityOpts)}\n\n${system}\n\n## Antwort-Aufwand: ${resolved.effortLabel}\n${resolved.style}`

@@ -47,7 +47,8 @@ jobs:
 
       - name: Wach halten
         if: steps.cfg.outputs.on == 'true' && github.event_name == 'schedule'
-        run: curl -sS "$NEW_URL/rest/v1/profiles?select=id&limit=1" -H "apikey: $NEW_ANON" -o /dev/null -w "Ping %{http_code}\n" || true
+        run: |
+          curl -sS "$NEW_URL/rest/v1/profiles?select=id&limit=1" -H "apikey: $NEW_ANON" -o /dev/null -w "Ping %{http_code}\n" || true
 
       - name: Migrationen anwenden
         if: steps.cfg.outputs.on == 'true' && github.event_name != 'schedule'

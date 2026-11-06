@@ -1,0 +1,21 @@
+import { describe, expect, it } from "vitest";
+import { checklistStatusPrompt, latestChecklist } from "./pinnedChecklist";
+
+const ui = (o: unknown) => "Text\n```mythos-ui\n" + JSON.stringify(o) + "\n```\n";
+
+describe("angeheftete Checkliste", () => {
+  it("nimmt die neueste Version", () => {
+    const msgs = [
+      { role: "assistant", content: ui({ type: "checklist", id: "plan", title: "Plan", items: ["A", "B"] }) },
+      { role: "user", content: "weiter" },
+      { role: "assistant", content: ui({ blocks: [{ type: "checklist", id: "plan", title: "Plan", items: [{ text: "A", done: true }, { text: "B" }] }] }) },
+    ];
+    const l = latestChecklist(msgs)!;
+    expect(l.id).toBe("plan");
+    expect(l.items).toEqual([{ text: "A", done: true }, { text: "B", done: false }]);
+    expect(checklistStatusPrompt(l, null)).toContain("1 von 2 erledigt");
+  });
+  it("ohne Checkliste: null", () => {
+    expect(latestChecklist([{ role: "assistant", content: "hallo" }])).toBeNull();
+  });
+});

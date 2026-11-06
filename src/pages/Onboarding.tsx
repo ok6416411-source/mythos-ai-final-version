@@ -9,10 +9,23 @@ import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Sparkles, ArrowRight, ArrowLeft, Check } from "lucide-react";
 import { toast } from "sonner";
 import { LogoMark } from "@/components/Logo";
+import { getEntry } from "@/lib/entry";
 
 const INTEREST_OPTIONS = [
   "Survival", "Creative", "PvP", "Redstone", "Building", "Mini-Games",
   "Skyblock", "Modded", "Adventure", "Speedrun", "Coding/Plugins", "Streaming",
+];
+
+// Normales Onboarding (alle, die NICHT über den Minecraft-Link kommen).
+const USES = [
+  "Schule & Lernen", "Coding", "Texte schreiben", "Kreatives & Design", "Gaming", "Musik",
+  "Videos & Content", "Arbeit & Organisation", "Recherche", "Einfach quatschen",
+];
+const STYLES = [
+  { v: "kurz", l: "Kurz & direkt", e: "⚡", mem: "Möchte kurze, direkte Antworten ohne viel Drumherum." },
+  { v: "ausfuehrlich", l: "Ausführlich erklärt", e: "📚", mem: "Möchte Dinge ausführlich und Schritt für Schritt erklärt bekommen." },
+  { v: "locker", l: "Locker wie ein Kumpel", e: "😎", mem: "Mag einen lockeren, freundschaftlichen Ton." },
+  { v: "profi", l: "Sachlich & professionell", e: "🧑‍💼", mem: "Mag einen sachlichen, professionellen Ton." },
 ];
 
 const PLAYSTYLES = [
@@ -36,6 +49,9 @@ export default function Onboarding() {
   const [favoriteBlock, setFavoriteBlock] = useState("");
   const [about, setAbout] = useState("");
   const [referral, setReferral] = useState("");
+  const mc = getEntry() === "mc";
+  const [style, setStyle] = useState("");
+  const [doing, setDoing] = useState("");
 
   useEffect(() => {
     if (profile?.onboarded) nav("/app", { replace: true });
@@ -54,16 +70,30 @@ export default function Onboarding() {
   const save = async () => {
     if (!user) return;
     setSaving(true);
+    const styleObj = STYLES.find(x => x.v === style);
     const { error } = await supabase.from("profiles").update({
       display_name: name.trim() || null,
       mc_username: mcUsername.trim() || null,
       age: age === "" ? null : Number(age),
-      interests, playstyle: playstyle || null,
-      favorite_block: favoriteBlock.trim() || null,
-      about: about.trim() || null,
+      interests, playstyle: (mc ? playstyle : style) || null,
+      favorite_block: mc ? favoriteBlock.trim() || null : null,
+      about: [doing.trim(), about.trim()].filter(Boolean).join(" · ") || null,
       referral: referral.trim() || null,
       onboarded: true,
     }).eq("user_id", user.id);
+    // Antworten als Erinnerungen speichern – die KI bekommt sie in jedem Chat mit.
+    const mems: { content: string; category: string }[] = [];
+    if (name.trim()) mems.push({ content: `Heißt ${name.trim()}.`, category: "personal" });
+    if (!mc) {
+      if (interests.length) mems.push({ content: `Nutzt Mythos AI vor allem für: ${interests.join(", ")}.`, category: "preference" });
+      if (styleObj) mems.push({ content: styleObj.mem, category: "preference" });
+      if (doing.trim()) mems.push({ content: `Macht beruflich/in der Schule: ${doing.trim()}.`, category: "work" });
+    } else {
+      if (mcUsername.trim()) mems.push({ content: `Minecraft-Name: ${mcUsername.trim()}.`, category: "minecraft" });
+      if (interests.length) mems.push({ content: `Spielt gern: ${interests.join(", ")}.`, category: "minecraft" });
+    }
+    if (about.trim()) mems.push({ content: about.trim().slice(0, 280), category: "personal" });
+    if (mems.length) await supabase.from("user_memories").insert(mems.map(m => ({ ...m, user_id: user.id, source: "onboarding" })));
     setSaving(false);
     if (error) { toast.error(error.message); return; }
     toast.success("Willkommen bei Mythos AI ✨");
@@ -147,6 +177,73 @@ export default function Onboarding() {
     },
   ];
 
+  const generalSteps = [
+    {
+      title: "Wie heißt du?",
+      sub: "Damit Mythos weiß, mit wem es spricht.",
+      body: (
+        <div className="space-y-4">
+          <div><Label>Name / Spitzname</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Alex" className="mt-1.5 bg-input/50" maxLength={50} autoFocus />
+          </div>
+          <div><Label>Was machst du so? (optional)</Label>
+            <Input value={doing} onChange={(e) => setDoing(e.target.value)} placeholder="Schüler, Entwickler, Content Creator…" className="mt-1.5 bg-input/50" maxLength={80} />
+          </div>
+        </div>
+      ),
+      canNext: name.trim().length > 0,
+    },
+    {
+      title: "Wobei soll ich helfen?",
+      sub: "Wähle alles, was passt – du kannst später alles fragen.",
+      body: (
+        <div className="flex flex-wrap gap-2">
+          {USES.map(i => (
+            <button key={i} type="button" onClick={() => toggle(i)}
+              className={`px-3.5 py-2 rounded-full text-sm border transition-colors ${
+                interests.includes(i) ? "bg-foreground text-background border-transparent" : "border-border hover:border-foreground/40"}`}>
+              {i}
+            </button>
+          ))}
+        </div>
+      ),
+      canNext: interests.length > 0,
+    },
+    {
+      title: "Wie soll ich antworten?",
+      sub: "Kannst du jederzeit im Chat ändern.",
+      body: (
+        <div className="grid grid-cols-2 gap-3">
+          {STYLES.map(p => (
+            <button key={p.v} type="button" onClick={() => setStyle(p.v)}
+              className={`p-4 rounded-2xl border text-left transition-colors ${
+                style === p.v ? "border-foreground bg-foreground/5" : "border-border hover:border-foreground/40"}`}>
+              <div className="text-2xl mb-1">{p.e}</div>
+              <div className="font-medium text-sm">{p.l}</div>
+            </button>
+          ))}
+        </div>
+      ),
+      canNext: !!style,
+    },
+    {
+      title: "Noch was, das ich wissen sollte?",
+      sub: "Ich merke es mir für alle Chats. Alles optional.",
+      body: (
+        <div className="space-y-4">
+          <div><Label>Über dich</Label>
+            <Textarea value={about} onChange={(e) => setAbout(e.target.value)} placeholder="Ich lerne gerade Python, mag kurze Erklärungen mit Beispielen…" className="mt-1.5 bg-input/50 min-h-[90px]" maxLength={500} />
+          </div>
+          <div><Label>Wie hast du Mythos gefunden?</Label>
+            <Input value={referral} onChange={(e) => setReferral(e.target.value)} placeholder="YouTube, Freund, TikTok…" className="mt-1.5 bg-input/50" maxLength={100} />
+          </div>
+        </div>
+      ),
+      canNext: true,
+    },
+  ];
+  if (!mc) steps.splice(0, steps.length, ...generalSteps);
+
   const s = steps[step];
   const last = step === steps.length - 1;
 
@@ -160,14 +257,14 @@ export default function Onboarding() {
       <div className="glass-strong rounded-3xl p-6 md:p-8 w-full max-w-lg animate-fade-in">
         <div className="flex gap-1.5 mb-6">
           {steps.map((_, i) => (
-            <div key={i} className={`h-1 flex-1 rounded-full transition-all ${i <= step ? "bg-gradient-primary" : "bg-border"}`} />
+            <div key={i} className={`h-1 flex-1 rounded-full transition-all ${i <= step ? "bg-foreground" : "bg-border"}`} />
           ))}
         </div>
 
         <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground font-medium">
           <Sparkles className="h-3.5 w-3.5 text-primary" /> Schritt {step + 1} von {steps.length}
         </div>
-        <h1 className="font-display text-2xl md:text-3xl font-bold mb-1"><Sparkles className="h-5 w-5 mr-2 text-primary" />{s.title}</h1>
+        <h1 className="font-display text-2xl md:text-3xl font-bold mb-1">{s.title}</h1>
         <p className="text-sm text-muted-foreground mb-6">{s.sub}</p>
 
         <div className="mb-8">{s.body}</div>
@@ -181,7 +278,7 @@ export default function Onboarding() {
           <Button
             onClick={() => last ? save() : setStep(step + 1)}
             disabled={!s.canNext || saving}
-            className="flex-1 bg-gradient-primary text-primary-foreground hover:opacity-90"
+            className="flex-1 bg-foreground text-background hover:bg-foreground/90"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : last ? (<>Los geht's <Check className="h-4 w-4 ml-1.5" /></>) : (<>Weiter <ArrowRight className="h-4 w-4 ml-1.5" /></>)}
           </Button>

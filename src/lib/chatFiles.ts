@@ -5,7 +5,7 @@ export type ChatFile = { name: string; base64: boolean };
 
 /** Liest die Info-Zeile eines Codeblocks: "datei:bericht.csv", "file:logo.png;base64", "csv datei=bericht.csv". */
 export function parseFileInfo(info: string): ChatFile | null {
-  const m = /(?:^|\s)(?:datei|file|title)[:=]"?([^\s";]+\.[a-zA-Z0-9]{1,6})"?(;base64)?/i.exec(info || "");
+  const m = /(?:^|\s)(?:datei|file|title)[:=]"?([^\s";]+\.[a-zA-Z0-9]{1,12})"?(;base64)?/i.exec(info || "");
   if (!m) return null;
   const name = m[1].split(/[\\/]/).filter(p => p && p !== "..").join("/");
   return name ? { name, base64: !!m[2] || /(?:^|\s)base64(?:\s|$)/i.test(info) } : null;
