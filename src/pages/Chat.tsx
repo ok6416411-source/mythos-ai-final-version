@@ -101,7 +101,7 @@ const SLASH_COMMANDS = [
 ];
 
 type Persona = { id: string; name: string; avatar_emoji: string | null };
-type Attachment = { url: string; name: string; mime: string };
+type Attachment = { url: string; name: string; mime: string; text?: string };
 type Conv = { id: string; title: string; mode: string; updated_at: string };
 type Msg = { id?: string; role: "user" | "assistant" | "tool"; content: string; metadata?: any; videoNotes?: { name: string; text: string }[]; image?: GeneratedImage; imagePending?: { prompt: string }; music?: FunkPattern; song?: SongRequest; video?: VideoRequest; agent?: { task: string }; search?: string; ext?: { task: string }; attachments?: Attachment[]; agents?: AgentStatus[]; thinking?: string; thinkingMs?: number; steps?: string[]; created_at?: string };
 /** Status eines Teil-Agenten im Multi-Agent-Modus (vom agent-Endpunkt gestreamt). */
@@ -160,7 +160,24 @@ type StreamResult = { full: string; image?: GeneratedImage; music?: FunkPattern;
 const toApi = (m: Msg): ApiMsg =>
   m.role === "tool"
     ? { role: "user", content: `Ergebnis von Werkzeug ${m.metadata?.tool || ""}:\n${m.content}` }
-    : { role: m.role, content: m.content };
+    : { role: m.role, content: m.role === "user" ? expandPastes(m.content, m.attachments) : m.content };
+
+/** Eingefügte lange Texte stehen als „[Eingefügt #1]“ in der Nachricht und als Anhang daneben (wie bei Claude).
+ *  Für die KI wird der Text genau an dieser Stelle eingesetzt; nicht mehr im Text markierte kommen ans Ende. */
+const PASTE_RE = /\[Eingefügt #(\d+)\]/g;
+function expandPastes(text: string, atts?: Attachment[]): string {
+  const pastes = (atts || []).filter(a => typeof a.text === "string");
+  if (!pastes.length) return text;
+  const used = new Set<string>();
+  let out = text.replace(PASTE_RE, (m) => {
+    const a = pastes.find(p => `[${p.name}]` === m);
+    if (!a) return m;
+    used.add(a.name);
+    return `\n<eingefügter-text name="${a.name}">\n${a.text}\n</eingefügter-text>\n`;
+  });
+  for (const a of pastes) if (!used.has(a.name)) out += `\n\n<eingefügter-text name="${a.name}">\n${a.text}\n</eingefügter-text>`;
+  return out;
+}
 
 function parseToolCall(text: string): { name: string; arguments: unknown } | null {
   const m = TOOL_OPEN.exec(text);
@@ -638,8 +655,9 @@ const Chat = () => {
     sendingRef.current = true;
     setSending(true);
     followRef.current = true;
-    const displayContent = attachments.length
-      ? text + "\n" + attachments.map(a => `📎 ${a.name}`).join("\n")
+    const fileAtts = attachments.filter(a => typeof a.text !== "string");
+    const displayContent = fileAtts.length
+      ? text + "\n" + fileAtts.map(a => `📎 ${a.name}`).join("\n")
       : text;
     setMessages(prev => [...prev, { role: "user", content: displayContent, attachments: [...attachments] }]);
 
@@ -751,10 +769,11 @@ const Chat = () => {
     }
 
 
-    const buildContent = (txt: string) => {
-      if (!attachments.length) return txt;
+    const buildContent = (raw: string) => {
+      const txt = expandPastes(raw, attachments);
+      if (!fileAtts.length) return txt;
       const parts: any[] = [{ type: "text", text: txt }];
-      for (const a of attachments) {
+      for (const a of fileAtts) {
         if (a.mime.startsWith("video/")) parts.push({ type: "video_url", video_url: { url: a.url, name: a.name, mime: a.mime } });
         else if (a.mime.startsWith("image/")) parts.push({ type: "image_url", image_url: { url: a.url } });
         else parts.push({ type: "text", text: `\n[Anhang: ${a.name} (${a.mime}) — ${a.url}]` });
@@ -1178,7 +1197,9 @@ const Chat = () => {
     setFilesOpen(false);
     setViewAtt({ name: f.name, content: p.content, base64: f.base64, blob: p.blob, note: p.note });
   };
-  const openAttachment = (a: Attachment) => setViewAtt({ name: a.name, content: "", base64: false, blob: null, url: a.url, mime: a.mime,
+  const openAttachment = (a: Attachment) => typeof a.text === "string"
+    ? setViewAtt({ name: a.name + ".txt", content: a.text, base64: false, blob: new Blob([a.text], { type: "text/plain;charset=utf-8" }), note: `${a.text.split("\n").length} Zeilen` })
+    : setViewAtt({ name: a.name, content: "", base64: false, blob: null, url: a.url, mime: a.mime,
     note: a.mime.startsWith("video/") ? "Video" : undefined });
   const pinnedRef = useRef(pinned);
   pinnedRef.current = pinned;
@@ -1904,6 +1925,21 @@ const Chat = () => {
               <div className="rounded-lg border border-input bg-card focus-within:border-ring transition-colors">
                 <Textarea ref={textareaRef}
                   value={input}
+                  onPaste={(e) => {
+                    // Bilder/Dateien aus der Zwischenablage (Strg+V) direkt anhängen.
+                    if (e.clipboardData.files.length) { e.preventDefault(); uploadFiles(e.clipboardData.files); return; }
+                    // Lange Texte nicht ins Feld kippen, sondern als Anhang – Platzhalter an der Einfügestelle.
+                    const t = e.clipboardData.getData("text/plain");
+                    if (!t || (t.length < 1500 && t.split("\n").length < 30)) return;
+                    e.preventDefault();
+                    const n = attachments.filter(a => typeof a.text === "string").length + 1;
+                    const name = `Eingefügt #${n}`;
+                    setAttachments(prev => [...prev, { url: "", name, mime: "text/plain", text: t }]);
+                    const el = e.currentTarget, a0 = el.selectionStart ?? input.length, b0 = el.selectionEnd ?? input.length;
+                    const tag = `[${name}]`;
+                    setInput(input.slice(0, a0) + tag + input.slice(b0));
+                    requestAnimationFrame(() => { el.selectionStart = el.selectionEnd = a0 + tag.length; });
+                  }}
                   onChange={(e) => { setInput(e.target.value); setSlashIndex(0); }}
                   onKeyDown={(e) => {
                     if (input.startsWith("/")) {
@@ -1922,12 +1958,6 @@ const Chat = () => {
                       }
                     }
                     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submitOrQueue(); }
-                  }}
-                  onPaste={(e) => {
-                    // Bilder/Dateien aus der Zwischenablage (Strg+V) direkt anhängen.
-                    if (!e.clipboardData.files.length) return;
-                    e.preventDefault();
-                    uploadFiles(e.clipboardData.files);
                   }}
                   placeholder={
                     sending ? "Nächste Nachricht? Enter reiht sie in die Warteschlange ein" :

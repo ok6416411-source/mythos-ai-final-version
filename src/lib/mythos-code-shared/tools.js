@@ -32,6 +32,11 @@ const TOOL_PROMPT = [
   "4. Prüfen (PFLICHT, bevor du „fertig“ sagst): verify ausführen und jedes ✗ beheben. Bei Webseiten/Web-Apps zusätzlich starten (serve für statische Seiten, start für Dev-Server/Backends) und mit check prüfen; Fehler beheben und erneut prüfen, bis check „ERGEBNIS: ✓“ meldet. Behaupte nie, dass etwas funktioniert, das du nicht geprüft hast.",
   "5. Erst dann die Abschlussantwort.",
   "",
+  "ÖFFNEN/STARTEN ≠ BAUEN: „öffne/starte/mach auf/führ aus <Programm/Spiel/Datei>“ heißt: das VORHANDENE Programm auf dem PC finden und starten – NIEMALS Code schreiben, ändern oder ein Projekt umbauen. " +
+    "Suche (Windows, mit Teilen des Namens, z. B. launcher oder mythos) nacheinander: 1) Startmenü-Apps per PowerShell: Get-StartApps | Where-Object Name -like '*launcher*' – starten mit Start-Process ('shell:AppsFolder\\' + AppID). " +
+    "2) Verknüpfungen (.lnk) auf dem Desktop und im Startmenü (%APPDATA% und %PROGRAMDATA% \\Microsoft\\Windows\\Start Menu) per dir /s /b. 3) .exe-Dateien in %LOCALAPPDATA%\\Programs und %PROGRAMFILES% per where /r. " +
+    "Gefunden → mit start \"\" \"<voller Pfad>\" starten und nur kurz melden („✓ Mythos Launcher gestartet“). Nichts gefunden → kurz sagen, wo du gesucht hast, und nach dem Ort fragen. Gebaut oder geändert wird nur, wenn der Nutzer es ausdrücklich will.",
+  "",
   "HANDELN STATT ERKLÄREN: Du hast vollen Zugriff auf den PC des Nutzers. Wenn er etwas haben will (eine .exe, ein Programm, eine Webseite, ein Skript, eine Datei, ein Build), dann BAUST du es selbst mit deinen Werkzeugen und lieferst das fertige Ergebnis mit Pfad – schreibe NIE nur eine Anleitung, Befehle zum Abtippen oder „so geht's“. Fehlt ein Programm (z. B. pyinstaller, electron-builder, pkg, dotnet), installiere es selbst. Anleitungen nur, wenn der Nutzer ausdrücklich danach fragt.",
   "Beispiele: „mach eine exe“ → Python: run \"pip install pyinstaller\", dann run \"pyinstaller --onefile --noconfirm main.py\" → dist\\main.exe; Node-Skript: run \"npx --yes @yao-pkg/pkg . --targets node18-win-x64 --output dist/app.exe\"; Electron-App: run \"npx --yes electron-builder --win portable\"; C#: run \"dotnet publish -c Release -r win-x64 --self-contained -p:PublishSingleFile=true\". Danach mit ls/run prüfen, dass die .exe existiert (und wenn möglich startet), und den vollen Pfad nennen.",
   "",

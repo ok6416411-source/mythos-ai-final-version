@@ -222,9 +222,9 @@ function paintRun(run) {
   if (root.lastElementChild !== e.box) root.appendChild(e.box);
   const col = { appendChild(x) { const kids = e.box.children; if (kids[col.i] !== x) e.box.insertBefore(x, kids[col.i] || null); col.i++; }, i: 0 };
   const vis = visibleText(run.stream).trim();
-  if (!e.activity || !e.activity.isConnected) { e.activity = el("details", "activity"); e.activity.open = true; e.actSum = el("summary"); e.actSpin = el("span", "spin"); e.actTitle = el("span", "", "Mythos arbeitet"); e.actTime = el("span", "elapsed mono"); e.actTime.style.display = "none"; e.actSteps = el("div", "steps"); e.actSafe = el("div", "safe", "Live-Aktivitäten zeigen sichere Arbeitsschritte, keine privaten internen Gedanken."); e.actSum.append(e.actSpin, e.actTitle, e.actTime); e.activity.append(e.actSum, e.actSteps, e.actSafe); }
-  e.actTime.textContent = fmt(Date.now() - run.t0); const lastAct = (run.activity || [])[(run.activity || []).length - 1]; e.actTitle.textContent = "Läuft seit " + fmt(Date.now() - run.t0) + " · " + (run.phase || (lastAct ? lastAct.text : "Mythos arbeitet"));
-  const acts = run.activity || []; if (e.activityCount !== acts.length) { e.actSteps.textContent = ""; acts.slice().reverse().forEach((a, k) => { const row = el("div", "step" + (k === 0 ? " now" : "")); row.append(el("span", "", a.icon || "•"), el("span", "", a.text), el("time", "", fmt(a.at - run.t0))); e.actSteps.appendChild(row); }); e.actSteps.scrollTop = 0; e.activityCount = acts.length; }
+  if (!e.activity || !e.activity.isConnected) { e.activity = el("details", "activity"); e.activity.open = true; e.actSum = el("summary"); e.actSpin = el("span", "dots"); for (let k = 0; k < 4; k++) e.actSpin.appendChild(el("i")); e.actTitle = el("span", "", "Mythos arbeitet"); e.actTime = el("span", "elapsed"); e.actChev = el("span", "chev", "›"); e.actSteps = el("div", "steps"); e.actSafe = el("div", "safe", "Live-Aktivitäten zeigen sichere Arbeitsschritte, keine privaten internen Gedanken."); e.actSum.append(e.actSpin, e.actTitle, e.actTime, e.actChev); e.activity.append(e.actSum, e.actSteps, e.actSafe); }
+  e.actTime.textContent = fmtLong(Date.now() - run.t0); const lastAct = (run.activity || [])[(run.activity || []).length - 1]; e.actTitle.textContent = run.phase || (lastAct ? lastAct.text : "Arbeitet …");
+  const acts = run.activity || []; if (e.activityCount !== acts.length) { e.actSteps.textContent = ""; acts.forEach((a, k) => { const row = el("div", "step" + (k === acts.length - 1 ? " now" : "")); row.append(el("span", "txt", a.text)); e.actSteps.appendChild(row); }); e.actSteps.scrollTop = 1e9; e.activityCount = acts.length; }
   col.appendChild(e.activity);
   if (vis) {
     if (!e.stream || !e.stream.isConnected) { e.stream = el("div", "m a streaming"); const img = el("img"); img.src = "icon.png"; e.body = el("div", "body"); e.stream.append(img, e.body); e.drawn = null; }
@@ -238,10 +238,12 @@ function paintRun(run) {
   } else if (e.out) e.out.remove();
   if (!e.live || !e.live.isConnected) e.live = el("div", "t live");
   const act = run.phase || (run.out == null && run.asking ? streamActivity(run.stream) : "");
-  e.live.textContent = "⏳ Mythos arbeitet… " + fmt(Date.now() - run.t0) + (act ? " · " + act : "");
-  col.appendChild(e.live);
+  // Das Arbeits-Protokoll zeigt Schritt und Zeit schon – die Extra-Zeile nur, solange es noch keine Schritte gibt.
+  e.live.textContent = "Arbeitet … " + fmtLong(Date.now() - run.t0) + (act ? " · " + act : "");
+  if (acts.length) e.live.remove(); else col.appendChild(e.live);
   if (stick) scrollDown();
 }
+function fmtLong(ms) { const s = Math.max(0, Math.round(ms / 1000)); return s < 60 ? s + " Sek." : Math.floor(s / 60) + " Min. " + (s % 60) + " Sek."; }
 function schedulePaint(run) { if (!run.paintTimer) run.paintTimer = setTimeout(() => { run.paintTimer = 0; paintRun(run); }, 60); }
 function clearRunEls(run) { clearTimeout(run.paintTimer); Object.values(run.els).forEach((x) => x && x.remove && x.remove()); run.els = {}; }
 setInterval(() => {
@@ -461,8 +463,12 @@ async function send() { follow = true;
 }
 function submit(c, q, att, opts) {
   if (q.startsWith("/")) return c === chat ? command(q) : noteTo(c, "Befehl übersprungen: " + q);
-  const files = att.filter((f) => !f.image);
-  let content = q; if (files.length) content += "\n\nHochgeladene Dateien:\n" + files.map((f) => "### " + f.name + "\n" + f.content).join("\n\n");
+  // Eingefügte lange Texte: an der Stelle des Platzhalters „[Eingefügt #1]“ einsetzen (wie bei Claude).
+  let content = q;
+  const pasted = att.filter((f) => f.pasted);
+  pasted.forEach((f) => { const tag = "[" + f.name + "]"; const block = "\n<eingefügter-text name=\"" + f.name + "\">\n" + f.content + "\n</eingefügter-text>\n"; if (content.includes(tag)) { content = content.split(tag).join(block); f.used = true; } });
+  const files = att.filter((f) => !f.image && !(f.pasted && f.used));
+  if (files.length) content += "\n\nHochgeladene Dateien:\n" + files.map((f) => "### " + f.name + "\n" + f.content).join("\n\n");
   pushUser(c, q + (files.length ? "\n📎 " + files.map((f) => f.name).join(", ") : ""), content, { q: q, att: att });
   runAgent(c, opts || { fresh: true });
 }
@@ -643,7 +649,7 @@ async function runAgent(c, opts) {
       addTo(c, "sum", summary, run.activity && run.activity.length ? { think: run.activity.map((a) => (a.icon || "•") + " " + a.text).join("\n") } : undefined);
     }
   } catch (e) { if (!run.stopped) addTo(c, "a", "⚠ " + e.message); }
-  if (run.els.activity) { run.els.activity.classList.add("done"); run.els.actTitle.textContent = run.stopped ? "Arbeit gestoppt" : "Arbeit abgeschlossen"; run.els.actTime.textContent = fmt(Date.now() - run.t0); run.els.activity.open = false; }
+  if (run.els.activity) { run.els.activity.classList.add("done"); run.els.actTitle.textContent = run.stopped ? "Gestoppt" : (run.activity || []).length + " Schritte erledigt"; run.els.actTime.textContent = fmtLong(Date.now() - run.t0); run.els.activity.open = false; }
   if (run.els.activity && run.els.box && run.els.box.isConnected) run.els.box.parentNode.insertBefore(run.els.activity, run.els.box);
   runs.delete(c.id); Object.values(run.els).forEach((x) => { if (x && x !== run.els.activity && x.remove) x.remove(); });
   if (finished && run.todoItem && run.todoItem.items) { run.todoItem.items.forEach((x) => x.done = true); const td = todoEls.get(run.todoItem); if (td && td.isConnected) renderTodo(td, run.todoItem); }
@@ -1665,9 +1671,24 @@ async function addFiles(files) {
   }
   renderFiles(); $("inp").focus();
 }
+// Lange Texte beim Einfügen als Anhang statt ins Eingabefeld (Platzhalter an der Einfügestelle).
+setTimeout(() => {
+  const inp = $("inp"); if (!inp) return;
+  inp.addEventListener("paste", (e) => {
+    const t = e.clipboardData && e.clipboardData.getData("text/plain");
+    if (!t || (t.length < 1500 && t.split("\n").length < 30)) return;
+    e.preventDefault();
+    const n = attach.filter((a) => a.pasted).length + 1, name = "Eingefügt #" + n, tag = "[" + name + "]";
+    attach.push({ name, content: t, pasted: true });
+    const a0 = inp.selectionStart ?? inp.value.length, b0 = inp.selectionEnd ?? inp.value.length;
+    inp.value = inp.value.slice(0, a0) + tag + inp.value.slice(b0);
+    inp.selectionStart = inp.selectionEnd = a0 + tag.length;
+    renderFiles(); grow();
+  });
+}, 0);
 function renderFiles() {
   const f = $("files"); f.textContent = "";
-  attach.forEach((a, i) => { const c = el("button", "chip", (a.image ? "🖼 " : a.video ? "🎬 " : "📎 ") + a.name + "  ✕"); c.title = "Entfernen"; c.onclick = () => { attach.splice(i, 1); renderFiles(); }; f.appendChild(c); });
+  attach.forEach((a, i) => { const c = el("button", "chip", (a.image ? "🖼 " : a.video ? "🎬 " : a.pasted ? "📄 " : "📎 ") + a.name + (a.pasted ? " · " + a.content.split("\n").length + " Zeilen" : "") + "  ✕"); c.title = "Entfernen"; c.onclick = () => { attach.splice(i, 1); renderFiles(); }; f.appendChild(c); });
 }
 let dragDepth = 0;
 document.addEventListener("dragenter", (e) => { if (!e.dataTransfer || !Array.from(e.dataTransfer.types).includes("Files")) return; dragDepth++; document.body.classList.add("dragging"); });
@@ -2191,9 +2212,13 @@ const todoEls = new WeakMap();
 function renderTodo(d, it) {
   d.textContent = "";
   const done = it.items.filter((x) => x.done).length;
-  d.appendChild(el("div", "th", "📋 Aufgabenliste " + (it.agent ? "(" + it.agent + ") " : "") + "– " + done + "/" + it.items.length + " erledigt"));
+  const head = el("div", "th"); head.append(el("span", "tic"), el("span", "tname", "Aufgaben" + (it.agent ? " · " + it.agent : "")), el("span", "tcount", done + "/" + it.items.length));
+  d.classList.toggle("alldone", done === it.items.length && it.items.length > 0);
+  d.appendChild(head);
   const bar = el("div", "tbar"); const fill = el("div", "tfill"); fill.style.width = Math.round((done / Math.max(1, it.items.length)) * 100) + "%"; bar.appendChild(fill); d.appendChild(bar);
-  it.items.forEach((x) => { const row = el("div", "ti" + (x.done ? " done" : "")); row.append(el("span", "tb", x.done ? "☑" : "☐"), el("span", "tt", x.text)); d.appendChild(row); });
+  const list = el("div", "tlist");
+  it.items.forEach((x) => { const row = el("div", "ti" + (x.done ? " done" : "")); row.append(el("span", "tb", x.done ? "✓" : ""), el("span", "tt", x.text)); list.appendChild(row); });
+  d.appendChild(list);
 }
 function normTodos(t) {
   const items = Array.isArray(t && t.items) ? t.items : [];
