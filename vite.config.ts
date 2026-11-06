@@ -156,8 +156,11 @@ export default defineConfig(({ mode }) => ({
         globIgnores: ["**/ort-wasm*", "**/*.wasm"],
         navigateFallbackDenylist: [/^\/~oauth/, /^\/api/, /^\/supabase/],
         cleanupOutdatedCaches: true,
+        // Neue Version wartet, bis die Seite sie übernimmt (main.tsx): beim Öffnen sofort,
+        // während der Arbeit erst nach Klick auf „Neu laden“. skipWaiting würde die neue Version
+        // still aktivieren, ohne dass die offene Seite sie anzeigt („manchmal alter Hintergrund“).
         clientsClaim: true,
-        skipWaiting: true,
+        skipWaiting: false,
         runtimeCaching: [
           {
             // Always go to network for HTML so a redeploy never traps users on a stale shell.

@@ -48,12 +48,17 @@ if (isPreviewHost || isInIframe) {
   import("virtual:pwa-register")
     .then(({ registerSW }) => {
       let shown = false;
+      let interacted = false;
+      for (const ev of ["keydown", "pointerdown"]) addEventListener(ev, () => { interacted = true; }, { once: true, capture: true });
       const updateSW = registerSW({
         immediate: true,
         // Neue Version gefunden: NICHT automatisch neu laden (sonst gehen offene Antworten,
         // Formulare und Checklisten verloren). Der User entscheidet per Klick; sonst greift sie
         // beim nächsten Öffnen der App von selbst.
         onNeedRefresh() {
+          // Direkt beim Öffnen (noch nichts getippt/geklickt): sofort auf die neue Version wechseln,
+          // sonst sieht man kurz die alte Seite aus dem Offline-Speicher.
+          if (!interacted && performance.now() < 15_000) { void updateSW(true); return; }
           if (shown) return;
           shown = true;
           import("sonner").then(({ toast }) => toast("Neue Version von Mythos AI ist da", {
