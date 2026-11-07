@@ -118,6 +118,9 @@ export default function Marktplatz() {
                   {e.description && <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{e.description}</p>}
                 </div>
                 <div className="flex items-center gap-1.5 mt-auto">
+                  {e.description && e.type === "app" && (
+                    <Button size="sm" variant="outline" className="h-10 min-w-0" onClick={() => nav(`/app?q=${encodeURIComponent(e.description)}`)} title="Gleichen Wunsch an Mythos schicken">Nachbauen</Button>
+                  )}
                   <Button size="sm" className="h-10 flex-1 min-w-0" onClick={() => take(e)} disabled={busyId === e.id}>
                     {busyId === e.id ? <Loader2 className="h-4 w-4 animate-spin" /> : e.type === "app" ? <><Hammer className="h-4 w-4 mr-1.5 shrink-0" /><span className="truncate">Übernehmen</span></> : <><Download className="h-4 w-4 mr-1.5 shrink-0" /><span className="truncate">Übernehmen</span></>}
                   </Button>

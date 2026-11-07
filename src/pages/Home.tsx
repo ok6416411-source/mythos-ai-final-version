@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { LegalLinks } from "@/components/CookieConsent";
 import { Link, Navigate, useNavigate } from "react-router-dom";
-import { Loader2, Send, MessageSquare, Image as ImageIcon, Music, Film, Code2, Phone, Download, LayoutDashboard, ArrowRight } from "lucide-react";
+import { Box, Loader2, Send, MessageSquare, Image as ImageIcon, Music, Film, Code2, Phone, Download, LayoutDashboard, ArrowRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,6 +16,7 @@ const QUICK = [
   { icon: Music, label: "Musik machen", prefix: "/music " },
   { icon: Film, label: "Video erstellen", prefix: "/video " },
   { icon: Code2, label: "Code schreiben", prefix: "Schreib mir Code für " },
+  { icon: Box, label: "3D-Szene", prefix: "Bau mir eine detaillierte 3D-Szene (Three.js): " },
 ];
 
 const greeting = () => {

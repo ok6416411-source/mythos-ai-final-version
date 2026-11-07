@@ -84,6 +84,14 @@ Deno.serve(async (req) => {
       const list = (await get<MarketEntry[]>(INDEX)) || [];
       return json({ items: list.map((e) => ({ ...e, likes: e.likes.length, liked: !!user && e.likes.includes(user.id), mine: !!user && e.user_id === user.id })) });
     }
+    // Öffentlich: geteiltes Ergebnis per Link ansehen (ohne Login).
+    if (kind === "share_get") {
+      const id = String(body.id || "");
+      if (!/^[a-z0-9]{6,16}$/.test(id)) return json({ error: "Unbekannter Link" }, 400);
+      const item = await get<Record<string, unknown>>(`shares/${id}.json`);
+      if (!item) return json({ error: "Dieser Link existiert nicht (mehr)." }, 404);
+      return json({ item });
+    }
     if (kind === "arena_board") {
       const votes = (await get<Votes>("arena/votes.json")) || {};
       return json({ board: Object.entries(ARENA_MODELS).map(([id, label]) => ({ id, label, ...(votes[id] || { wins: 0, losses: 0, ties: 0 }) })) });
@@ -119,6 +127,26 @@ Deno.serve(async (req) => {
       else { const w = winner === "a" ? a : b, l = winner === "a" ? b : a; votes[w].wins++; votes[l].losses++; }
       await put("arena/votes.json", votes);
       return json({ ok: true });
+    }
+
+    if (kind === "share_create") {
+      const fileName = String(body.name || "ergebnis.html").slice(0, 120);
+      const content = String(body.content || "");
+      const title = String(body.title || fileName).trim().slice(0, 80);
+      if (content.length < 10 || content.length > 600_000) return json({ error: "Inhalt ist leer oder zu groß" }, 400);
+      const id = Array.from(crypto.getRandomValues(new Uint8Array(8)), (b) => "abcdefghijkmnpqrstuvwxyz23456789"[b % 32]).join("");
+      const author = String(body.author || user.email?.split("@")[0] || "Mythos-Nutzer").slice(0, 40);
+      const prompt = String(body.prompt || "").slice(0, 1000);
+      await put(`shares/${id}.json`, { id, name: fileName, title, content, prompt, author, user_id: user.id, created_at: new Date().toISOString() });
+      // Optional zusätzlich in die öffentliche Galerie (Marktplatz)
+      if (body.gallery && /\.(html?|svg)$/i.test(fileName)) {
+        const html = /\.svg$/i.test(fileName) ? `<!doctype html><meta name=viewport content="width=device-width"><body style="margin:0;display:grid;place-items:center;min-height:100vh;background:#0b0d12">${content}</body>` : content;
+        const entry: MarketEntry = { id: crypto.randomUUID(), user_id: user.id, type: "app", title, author, description: prompt.slice(0, 300), likes: [], copies: 0, created_at: new Date().toISOString() };
+        await put(itemPath(entry.id), { ...entry, html, prompt });
+        const list = (await get<MarketEntry[]>(INDEX)) || [];
+        await put(INDEX, [entry, ...list].slice(0, 500));
+      }
+      return json({ ok: true, id });
     }
 
     if (kind === "market_publish") {

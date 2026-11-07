@@ -34,6 +34,7 @@ const Landing = () => {
               <div className="hidden md:flex gap-8 ml-8">
                 <Link to="/docs" className="text-white/80 hover:text-white text-sm font-medium transition-colors">Produkt</Link>
                 <Link to="/downloads" className="text-white/80 hover:text-white text-sm font-medium transition-colors">Downloads</Link>
+                <Link to="/galerie" className="text-white/80 hover:text-white text-sm font-medium transition-colors">Galerie</Link>
                 <Link to="/impressum" className="text-white/80 hover:text-white text-sm font-medium transition-colors">Kontakt</Link>
               </div>
             </div>

@@ -1,3 +1,4 @@
+import ErrorCenter from "@/components/ErrorCenter";
 import { lazy, Suspense, type ComponentType } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
@@ -46,6 +47,7 @@ const Groups = lazyPage(() => import("./pages/Groups"));
 const Twin = lazyPage(() => import("./pages/Twin"));
 const Games = lazyPage(() => import("./pages/Games"));
 const Try = lazyPage(() => import("./pages/Try"));
+const SharePage = lazyPage(() => import("./pages/SharePage"));
 const Werbung = lazyPage(() => import("./pages/Werbung"));
 const WerbungVorschau = lazyPage(() => import("./pages/WerbungVorschau"));
 const BrowserAgent = lazyPage(() => import("./pages/BrowserAgent"));
@@ -81,6 +83,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
+      <ErrorCenter />
       <BrowserRouter>
         <AuthProvider>
           <SplashScreen />
@@ -96,6 +99,8 @@ const App = () => (
             <Route path="/minecraft" element={<McEntry />} />
             <Route path="/onboarding" element={<RequireAuth skipOnboarding><Onboarding /></RequireAuth>} />
             <Route path="/try" element={<Try />} />
+            <Route path="/s/:id" element={<SharePage />} />
+            <Route path="/galerie" element={<Marktplatz />} />
             <Route path="/werbung" element={<Werbung />} />
             <Route path="/werbung/vorschau/:id" element={<RequireAuth><WerbungVorschau /></RequireAuth>} />
             <Route path="/docs" element={<Docs />} />

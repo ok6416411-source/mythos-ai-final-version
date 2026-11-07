@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { Check, Copy, Download, ExternalLink, X, Code2, Eye, Box } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -14,7 +14,8 @@ export type ViewFile = {
   frames?: { url: string; t: number }[]; duration?: number;
 };
 
-const previewable = (name: string) => /^(html?|svg|md|png|jpe?g|gif|webp|ico)$/.test(extOf(name));
+const BBModelViewer = lazy(() => import("@/components/preview/BBModelViewer"));
+const previewable = (name: string) => /^(html?|svg|md|png|jpe?g|gif|webp|ico|bbmodel)$/.test(extOf(name));
 
 /** Seitenfenster für eine Datei (wie bei Claude): Vorschau, Code, Kopieren, Download. */
 export default function FileViewer({ file, onClose }: { file: ViewFile | null; onClose: () => void }) {
@@ -74,7 +75,9 @@ export default function FileViewer({ file, onClose }: { file: ViewFile | null; o
           {file?.url ? (
             <RemoteFile file={file} />
           ) : file && tab === "preview" && canPreview ? (
-            imgUrl ? (
+            e === "bbmodel" ? (
+              <Suspense fallback={<div className="h-full animate-pulse bg-white/[0.03]" />}><BBModelViewer json={file.content} /></Suspense>
+            ) : imgUrl ? (
               <div className="flex h-full items-center justify-center p-6"><img src={imgUrl} alt={name} className="max-h-full max-w-full rounded-md [image-rendering:pixelated]" /></div>
             ) : e === "svg" ? (
               <div className="flex h-full items-center justify-center p-6" dangerouslySetInnerHTML={{ __html: file.content.replace(/<script[\s\S]*?<\/script>/gi, "") }} />

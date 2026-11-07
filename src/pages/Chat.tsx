@@ -57,6 +57,9 @@ import { FILE_PROMPT } from "@/lib/chatFiles";
 import { defaultChatMode } from "@/lib/entry";
 import { SMART_UI_PROMPT, SMART_UI_SEND, stripSmartUI, smartUIOptions } from "@/components/chat/SmartUI";
 import PinnedChecklist from "@/components/chat/PinnedChecklist";
+import { ChatSkeleton } from "@/components/chat/ChatSkeleton";
+import LivePreview from "@/components/preview/LivePreview";
+import { latestPreview } from "@/lib/livePreview";
 import UsageDialog from "@/components/UsageDialog";
 import FeedbackButtons from "@/components/chat/FeedbackButtons";
 import FileViewer, { type ViewFile } from "@/components/chat/FileViewer";
@@ -256,6 +259,7 @@ const Chat = () => {
   const abortRef = useRef<AbortController | null>(null);
   const sendingRef = useRef(false);
   const loadEpochRef = useRef(0);
+  const [loadingChat, setLoadingChat] = useState(false);
   const followRef = useRef(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -281,9 +285,11 @@ const Chat = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sub.loading, sub.tier]);
 
+  const [convsLoaded, setConvsLoaded] = useState(false);
   const loadConvs = async () => {
     const { data } = await supabase.from("conversations").select("*").order("updated_at", { ascending: false });
     if (data) setConvs(data as any);
+    setConvsLoaded(true);
   };
 
   useEffect(() => { if (user) loadConvs(); }, [user]);
@@ -330,6 +336,8 @@ const Chat = () => {
     setMobileSidebar(false);
     const cached = readChatRecovery<Msg>(user.id, id);
     setMessages(cached);
+    setLoadingChat(true);
+    try {
     const { data: conv, error } = await supabase.from("conversations").select("id,mode").eq("id", id).maybeSingle();
     if (epoch !== loadEpochRef.current) return;
     if (!conv) { toast.error(error ? "Chat derzeit nicht erreichbar. Gesicherter Verlauf bleibt erhalten." : "Chat nicht gefunden"); return; }
@@ -354,6 +362,7 @@ const Chat = () => {
       })) as Msg[];
       setMessages(cached.length > enriched.length ? cached : enriched);
     }
+    } finally { if (epoch === loadEpochRef.current) setLoadingChat(false); }
   };
 
   // Die URL bestimmt den offenen Chat: /app = neuer Chat, /app/c/<id> = genau dieser Chat.
@@ -369,6 +378,7 @@ const Chat = () => {
       if (sending) stop();
       setGoal(null);
       setActiveId(null);
+      setLoadingChat(false);
       setMessages([]);
       setMode(defaultChatMode());
     }
@@ -1343,7 +1353,7 @@ const Chat = () => {
             ref={searchRef}
             value={convSearch}
             onChange={(e) => setConvSearch(e.target.value)}
-            placeholder="Suchen"
+            placeholder="Suchen (Strg+K)"
             className="w-full bg-white/[0.04] border border-white/10 rounded-xl pl-9 pr-2 py-2 text-[15px] placeholder:text-muted-foreground focus:outline-none focus:border-white/25"
           />
         </div>
@@ -1378,7 +1388,8 @@ const Chat = () => {
       </div>
       <ScrollArea className="flex-1 px-2">
         <div className="space-y-0.5 pb-2">
-          {sidebarConvs.length === 0 && (
+          {!convsLoaded && Array.from({ length: 9 }).map((_, i) => <div key={i} className="mx-2.5 my-2 h-4 rounded-full bg-white/[0.06] animate-pulse" style={{ width: `${55 + ((i * 37) % 40)}%` }} />)}
+          {convsLoaded && sidebarConvs.length === 0 && (
             <p className="text-xs text-muted-foreground p-3 text-center">
               {convSearch ? "Keine Treffer" : activeProject ? "Noch keine Chats in diesem Projekt – klick auf „Neu“." : "Noch keine Chats"}
             </p>
@@ -1480,6 +1491,24 @@ const Chat = () => {
       </div>
     </div>
   );
+
+  // Live-Vorschau: neuestes Ergebnis (HTML/SVG/bbmodel) läuft rechts neben dem Chat.
+  const preview = useMemo(() => latestPreview(messages as any), [messages]);
+  const [previewHidden, setPreviewHidden] = useState<string | null>(null);
+  const [previewOn, setPreviewOn] = useState(true);
+  const showPreview = !!preview && previewOn && previewHidden !== preview.key;
+  useEffect(() => { if (preview && previewHidden && previewHidden !== preview.key) setPreviewHidden(null); }, [preview?.key]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Tastenkürzel: Strg+K Suche, Strg+Umschalt+O neuer Chat, Strg+. Vorschau an/aus, Esc schließt Vorschau
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && e.key.toLowerCase() === "k") { e.preventDefault(); setSidebarCollapsed(false); setTimeout(() => searchRef.current?.focus(), 50); }
+      else if (mod && e.shiftKey && e.key.toLowerCase() === "o") { e.preventDefault(); newChat(); }
+      else if (mod && e.key === ".") { e.preventDefault(); if (preview) { if (showPreview) setPreviewHidden(preview.key); else { setPreviewHidden(null); setPreviewOn(true); } } }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -1663,7 +1692,9 @@ const Chat = () => {
 
           {/* Messages */}
           <div ref={scrollRef} onScroll={() => { const box = scrollRef.current; if (box) followRef.current = shouldFollowChat(box.scrollTop, box.scrollHeight, box.clientHeight); }} className="flex-1 overflow-y-auto min-h-0">
-            {messages.length === 0 ? (
+            {messages.length === 0 && (loadingChat || (chatId && activeId !== chatId)) ? (
+              <ChatSkeleton />
+            ) : messages.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center px-4">
                 <div className="mb-6"><Logo size="lg" /></div>
                 <h1 className="font-display text-3xl md:text-4xl text-center mb-2 gradient-text">Womit kann ich helfen?</h1>
@@ -1911,7 +1942,7 @@ const Chat = () => {
               />
 
               <SuggestionBar
-                items={sending ? [] : suggestions}
+                items={sending || loadingChat || (chatId && activeId !== chatId) ? [] : suggestions}
                 onPick={(s) => { setSuggestions([]); send(s); }}
                 onRefresh={loadSuggestions}
                 refreshing={suggestLoading}
@@ -2078,6 +2109,10 @@ const Chat = () => {
             </div>
           </div>
         </main>
+
+        {showPreview && preview && (
+          <LivePreview item={preview} prompt={[...messages].reverse().find(m => m.role === "user")?.content?.slice(0, 1000)} onClose={() => setPreviewHidden(preview.key)} />
+        )}
 
         <ProjectsDialog
           open={dialog === "projects"}
