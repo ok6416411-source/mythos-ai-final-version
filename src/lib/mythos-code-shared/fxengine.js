@@ -12,7 +12,7 @@
   const HOT = "button, a, [role=button], [role=menuitem], input[type=submit], summary, .mfx-hot";
   let cv = null, ctx = null, raf = 0, theme = null, W = 0, H = 0, dpr = 1, last = 0;
   let parts = [], arcs = [], hot = null, hotRect = null, sprites = {}, pointer = { x: -1, y: -1 };
-  const MAX = 900;
+  const MAX = window.matchMedia && matchMedia("(pointer: coarse)").matches ? 160 : 900;
   const reduced = () => window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
   const rnd = (a, b) => a + Math.random() * (b - a);
   const hex = (h) => { const n = parseInt(String(h).replace("#", ""), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
@@ -30,9 +30,10 @@
     return (sprites[key] = s);
   }
 
+  const TOUCH = window.matchMedia && matchMedia("(pointer: coarse)").matches;
   function resize() {
     if (glc) glResize();
-    dpr = Math.min(2, window.devicePixelRatio || 1);
+    dpr = TOUCH ? 1 : Math.min(2, window.devicePixelRatio || 1);
     W = innerWidth; H = innerHeight;
     cv.width = W * dpr; cv.height = H * dpr; cv.style.width = W + "px"; cv.style.height = H + "px";
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -257,7 +258,8 @@
       document.addEventListener("pointermove", onMove, { passive: true }); addEventListener("scroll", onScroll, true);
     }
     parts = []; arcs = [];
-    if (theme.fx === "ember") { glStart(); } else glStop();
+    // Auf Handys kein WebGL-Feuer (spart viel Speicher), stattdessen die leichte Partikel-Variante.
+    if (theme.fx === "ember" && !TOUCH) { glStart(); } else glStop();
     if (!raf) { last = 0; raf = requestAnimationFrame(frame); }
   }
   function stop() {

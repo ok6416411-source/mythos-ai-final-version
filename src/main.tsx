@@ -11,23 +11,13 @@ import "@fontsource/jetbrains-mono/400.css";
 import "@fontsource/jetbrains-mono/500.css";
 import "./index.css";
 import { initPersistentSession } from "./lib/persistentSession";
-import { preloadPipeline } from "./lib/transformersLoader";
 import { installNoZoom } from "./lib/noZoom";
 
 installNoZoom();
 void initPersistentSession();
 
-// Background-preload the smallest offline model on idle so /sentiment is
-// instant and works fully offline after first visit. Skipped on slow/metered
-// connections to respect the user's data plan.
-const conn = (navigator as any).connection;
-if (!conn || (!conn.saveData && !["slow-2g", "2g"].includes(conn.effectiveType))) {
-  preloadPipeline({
-    task: "sentiment-analysis",
-    model: "Xenova/distilbert-base-uncased-finetuned-sst-2-english",
-    dtype: "fp32",
-  });
-}
+// Das Offline-Stimmungsmodell (~65 MB + Rechen-Engine) wird NICHT mehr beim Start geladen:
+// auf Handys hat das den Tab zum Absturz und Neuladen gebracht. Es lädt erst, wenn /sentiment genutzt wird.
 
 // Guard service worker registration: never register inside Lovable preview iframe.
 const isInIframe = (() => {
