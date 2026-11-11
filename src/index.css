@@ -427,7 +427,6 @@ html:not(.dark) .gradient-text {
 @keyframes mfx-flash { 0%,88%,100% { opacity: 0 } 90% { opacity: .9 } 92% { opacity: .1 } 94% { opacity: .6 } }
 @keyframes mfx-spin { to { transform: rotate(360deg) } }
 html.mfx-on ::selection { background: var(--mfx-a); color: #000; }
-html.mfx-on textarea:focus, html.mfx-on input:focus { box-shadow: 0 0 0 1px var(--mfx-a), 0 0 22px -6px var(--mfx-glow); }
 html.mfx-on ::-webkit-scrollbar-thumb { background: var(--mfx-a); }
 
 /* Hover-Animationen im Modell-Menü */

@@ -39,6 +39,8 @@
   }
 
   function onOver(e) {
+    // Hover-Effekte nur mit Maus – auf dem Handy bleibt ein „Hover“ nach dem Antippen sonst hängen.
+    if (e.pointerType && e.pointerType !== "mouse") { hot = null; hotRect = null; return; }
     const t = e.target && e.target.closest ? e.target.closest(HOT) : null;
     if (t === hot) return;
     hot = t; hotRect = t ? t.getBoundingClientRect() : null;
