@@ -1,4 +1,5 @@
 import ErrorCenter from "@/components/ErrorCenter";
+import ModelFxLayer from "@/components/ModelFxLayer";
 import { lazy, Suspense, type ComponentType } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
@@ -88,6 +89,7 @@ const App = () => (
       <Toaster />
       <Sonner />
       <ErrorCenter />
+      <ModelFxLayer />
       <BrowserRouter>
         <AuthProvider>
           <SplashScreen />

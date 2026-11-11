@@ -4,6 +4,10 @@ import CLI_JS from "./mythos-code-cli/mythos.js?raw";
 import SHARED_TOOLS_RAW from "./mythos-code-shared/tools.js?raw";
 import TOOL_PARSE from "./mythos-code-shared/toolparse.js?raw";
 import SMART_UI from "./mythos-code-shared/smartui.js?raw";
+import FX_ENGINE from "./mythos-code-shared/fxengine.js?raw";
+import { MODEL_FAMILIES, EFFORTS } from "../../supabase/functions/_shared/modelCatalog";
+/** Katalog für App/CLI – ohne die echte Technik (Anbieter-Modelle bleiben auf dem Server). */
+const modelCatalogJson = () => JSON.stringify({ families: MODEL_FAMILIES.map(({ efforts, changelog: _c, ...f }) => ({ ...f, efforts: efforts.map((e) => ({ id: e.id, minTier: e.minTier })) })), efforts: Object.fromEntries(Object.entries(EFFORTS).map(([k, v]) => [k, { label: v.label, hint: v.hint }])) });
 import APP_MAIN from "./mythos-code-app/main.js?raw";
 import APP_PRELOAD from "./mythos-code-app/preload.js?raw";
 import APP_HTML from "./mythos-code-app/index.html?raw";
@@ -33,7 +37,7 @@ const fill = (src: string, vars: Record<string, string> = {}) =>
   Object.entries(vars).reduce((out, [k, v]) => out.split(k).join(v.replace(/\r\n/g, "\n")), src.replace(/\r\n/g, "\n"));
 
 // Werkzeug-Parser steckt in tools.js (CLI, App-Hauptprozess) und wird zusätzlich in renderer.js eingefügt.
-const SHARED_TOOLS = fill(SHARED_TOOLS_RAW, { "// @@TOOL_PARSE@@": TOOL_PARSE });
+const SHARED_TOOLS = fill(SHARED_TOOLS_RAW, { "// @@TOOL_PARSE@@": TOOL_PARSE, "/*@@MODEL_CATALOG@@*/ { families: [], efforts: {} }": modelCatalogJson() });
 
 export const CLI_PKG = "mythos-code";
 export const CLI_VERSION = "1.12.0"; // in GitHub Actions automatisch 1.12.<Build-Nummer>
@@ -215,7 +219,7 @@ export async function buildAppZip(site: string): Promise<Blob> {
   root.file("voice.js", fill(APP_VOICE));
   root.file("tts-worker.js", await gunzipB64(APP_TTS_WORKER_GZ));
   root.file("stt-worker.js", await gunzipB64(APP_STT_WORKER_GZ));
-  root.file("renderer.js", fill(APP_RENDERER, { "// @@TOOL_PARSE@@": TOOL_PARSE, "__SITE__": site, "__FN__": FN_BASE }));
+  root.file("renderer.js", fill(APP_RENDERER, { "// @@FX_ENGINE@@": FX_ENGINE, "// @@TOOL_PARSE@@": TOOL_PARSE, "__SITE__": site, "__FN__": FN_BASE }));
   root.file("config.json", JSON.stringify({ site }, null, 2));
   root.file("README.md", "# Mythos Code App\n\nWird per GitHub Actions zu `MythosCode-Setup.exe` gebaut.\n");
   root.folder(".github")!.folder("workflows")!.file("build.yml", appWorkflow());

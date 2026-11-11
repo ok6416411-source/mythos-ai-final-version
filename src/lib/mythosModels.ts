@@ -1,84 +1,34 @@
-// Mythos model catalog — model + effort in one selectable id.
-// Frontend labels/tier gating. The edge function maps ids -> real gateway models.
+// Mythos model catalog for the website — generated from the shared catalog
+// (supabase/functions/_shared/modelCatalog.ts), the single source of truth.
+import {
+  EFFORTS, MODEL_FAMILIES, DEFAULT_MODEL_ID, familyLabel,
+  type EffortId, type Tier, type ModelFamily,
+} from "../../supabase/functions/_shared/modelCatalog";
 
-export type Tier = "free" | "light" | "pro";
-export type EffortId = "instant" | "low" | "normal" | "high" | "ultra" | "ultracode" | "giga";
+export type { Tier, EffortId };
 
-export type MythosEffort = {
-  id: EffortId;
-  label: string;
-  minTier: Tier;
-  hint: string;
-};
-
+export type MythosEffort = { id: EffortId; label: string; minTier: Tier; hint: string };
+export type MythosTheme = ModelFamily["theme"];
 export type MythosFamily = {
   id: string;
+  name: string;
+  version: string;
   label: string;
   minTier: Tier;
+  rank: number;
+  kind: "chat" | "code";
   desc: string;
+  theme: MythosTheme;
   efforts: MythosEffort[];
 };
 
-const E = (id: EffortId, label: string, minTier: Tier, hint: string): MythosEffort => ({ id, label, minTier, hint });
+export const MYTHOS_FAMILIES: MythosFamily[] = MODEL_FAMILIES.map((f) => ({
+  id: f.id, name: f.name, version: f.version, label: familyLabel(f), minTier: f.minTier,
+  rank: f.rank, kind: f.kind, desc: f.desc, theme: f.theme,
+  efforts: f.efforts.map((e) => ({ id: e.id, label: EFFORTS[e.id].label, minTier: e.minTier, hint: EFFORTS[e.id].hint })),
+}));
 
-export const MYTHOS_FAMILIES: MythosFamily[] = [
-  {
-    id: "v1",
-    label: "Mythos Spark 1",
-    minTier: "free",
-    desc: "Spark · schneller Allrounder für Alltag & Support",
-    efforts: [
-      E("instant", "Instant", "free", "Sofort, sehr kurz"),
-      E("low", "Low", "free", "Schnell, knapp"),
-      E("normal", "Normal", "free", "Ausbalanciert"),
-      E("high", "High", "free", "Gründlich & durchdacht"),
-      E("ultra", "Ultra", "light", "Tiefes Reasoning"),
-    ],
-  },
-  {
-    id: "code11",
-    label: "Mythos Bolt 1.1",
-    minTier: "free",
-    desc: "Bolt · Code, Debugging, Technik",
-    efforts: [
-      E("instant", "Instant", "free", "Schnelle Snippets"),
-      E("low", "Low", "free", "Kurze Lösungen"),
-      E("normal", "Normal", "free", "Solide Implementierung"),
-      E("high", "High", "free", "Architektur & Review"),
-      E("ultra", "Ultra", "light", "Große Refactorings"),
-      E("ultracode", "Ultra Code", "light", "Maximale Code-Tiefe"),
-    ],
-  },
-  {
-    id: "v2",
-    label: "Mythos Amber 2",
-    minTier: "pro",
-    desc: "Amber · Flaggschiff — stärkstes Reasoning",
-    efforts: [
-      E("instant", "Instant", "pro", "Blitzschnell"),
-      E("low", "Low", "pro", "Schnell & präzise"),
-      E("normal", "Normal", "pro", "Stark & ausbalanciert"),
-      E("high", "High", "pro", "Sehr gründlich"),
-      E("ultra", "Ultra", "pro", "Maximales Reasoning"),
-    ],
-  },
-  {
-    id: "code15",
-    label: "Mythos Atlas 1.5",
-    minTier: "pro",
-    desc: "Atlas · Profi-Code für ganze Projekte",
-    efforts: [
-      E("instant", "Instant", "pro", "Blitz-Snippets"),
-      E("low", "Low", "pro", "Schnelle Fixes"),
-      E("normal", "Normal", "pro", "Feature-Entwicklung"),
-      E("high", "High", "pro", "Komplexe Systeme"),
-      E("ultra", "Ultra", "pro", "Tiefe Analyse"),
-      E("giga", "Giga Code", "pro", "Ganze Projekte, maximal"),
-    ],
-  },
-];
-
-export const DEFAULT_MYTHOS_ID = "v1:normal";
+export const DEFAULT_MYTHOS_ID = DEFAULT_MODEL_ID;
 
 const RANK: Record<Tier, number> = { free: 0, light: 1, pro: 2 };
 export const tierAllows = (tier: Tier, min: Tier) => RANK[tier] >= RANK[min];
@@ -95,6 +45,10 @@ export function parseMythosId(id: string): { family: MythosFamily; effort: Mytho
 export function mythosLabel(id: string): string {
   const p = parseMythosId(id) ?? parseMythosId(DEFAULT_MYTHOS_ID)!;
   return `${p.family.label} · ${p.effort.label}`;
+}
+
+export function mythosTheme(id: string): MythosTheme {
+  return (parseMythosId(id) ?? parseMythosId(DEFAULT_MYTHOS_ID)!).family.theme;
 }
 
 export function isAllowed(id: string, tier: Tier): boolean {

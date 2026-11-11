@@ -47,7 +47,12 @@ const write = (dir, file, content, mode) => {
 };
 
 const TOOL_PARSE = lib("mythos-code-shared/toolparse.js");
-const SHARED_TOOLS = fill(lib("mythos-code-shared/tools.js"), { "// @@TOOL_PARSE@@": TOOL_PARSE });
+// Modellkatalog (TypeScript) mit esbuild laden – gleiche Daten wie Website und Server.
+const { transformSync } = await import("esbuild");
+const catSrc = transformSync(fs.readFileSync(path.join(root, "supabase/functions/_shared/modelCatalog.ts"), "utf8"), { loader: "ts", format: "esm" }).code;
+const CAT = await import("data:text/javascript;base64," + Buffer.from(catSrc).toString("base64"));
+const MODEL_CATALOG_JSON = JSON.stringify({ families: CAT.MODEL_FAMILIES.map(({ efforts, changelog: _c, ...f }) => ({ ...f, efforts: efforts.map((e) => ({ id: e.id, minTier: e.minTier })) })), efforts: Object.fromEntries(Object.entries(CAT.EFFORTS).map(([k, v]) => [k, { label: v.label, hint: v.hint }])) });
+const SHARED_TOOLS = fill(lib("mythos-code-shared/tools.js"), { "// @@TOOL_PARSE@@": TOOL_PARSE, "/*@@MODEL_CATALOG@@*/ { families: [], efforts: {} }": MODEL_CATALOG_JSON });
 fs.rmSync(out, { recursive: true, force: true });
 
 // ---- Desktop-App ----
@@ -79,7 +84,7 @@ for (const f of ["preload.js", "index.html", "markdown.js", "mcp.js", "voice.js"
 write(app, "smartui.js", fill(lib("mythos-code-shared/smartui.js")));
 write(app, "tts-worker.js", gunzipB64(lib("mythos-code-app/tts-worker.js.gz.b64")));
 write(app, "stt-worker.js", gunzipB64(lib("mythos-code-app/stt-worker.js.gz.b64")));
-write(app, "renderer.js", fill(lib("mythos-code-app/renderer.js"), { "// @@TOOL_PARSE@@": TOOL_PARSE, "__SITE__": SITE, "__FN__": FN_BASE }));
+write(app, "renderer.js", fill(lib("mythos-code-app/renderer.js"), { "// @@FX_ENGINE@@": lib("mythos-code-shared/fxengine.js"), "// @@TOOL_PARSE@@": TOOL_PARSE, "__SITE__": SITE, "__FN__": FN_BASE }));
 write(app, "config.json", JSON.stringify({ site: SITE }, null, 2));
 
 // ---- CLI (npm-Paket) ----

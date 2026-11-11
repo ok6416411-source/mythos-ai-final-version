@@ -1,3 +1,4 @@
+// @@FX_ENGINE@@
 const CFG = { site: "__SITE__", fn: "__FN__" };
 const $ = (id) => document.getElementById(id);
 let cfg = {}, chat = null, attach = [], editing = null, gitInfo = null, searchQ = "", mcpStatus = [], browserStatus = { running: false, paired: false, connected: false };
@@ -312,7 +313,7 @@ async function once(run, messages, system, onText, onThink) {
   try {
     const r = await fetch(CFG.fn + "/v1-messages", { method: "POST", signal: c.signal,
       headers: { "content-type": "application/json", "x-api-key": cfg.key, "anthropic-version": "2023-06-01", "x-mythos-client": "app" },
-      body: JSON.stringify({ model: run.model, route: run.route || undefined, effort: cfg.effort || "normal", task_id: run.taskId, max_tokens: EFFORT_TOKENS[cfg.effort] || 8000, system: system, messages: messages, stream: true }) });
+      body: JSON.stringify({ model: run.model, route: run.route || undefined, effort: wireEffort(), task_id: run.taskId, max_tokens: wireTokens(), system: system, messages: messages, stream: true }) });
     if (!r.ok) { const j = await r.json().catch(() => ({})); const e = new Error((j.error && j.error.message) || ("HTTP " + r.status)); e.status = r.status; throw e; }
     const rd = r.body.getReader(), dec = new TextDecoder(); let buf = "", out = "", think = "", measured = null;
     for (;;) { const x = await rd.read(); if (x.done) break; buf += dec.decode(x.value, { stream: true }); let i;
@@ -359,7 +360,7 @@ async function call(run, h, system, onText, onThink) {
   throw new Error("Mythos ist gerade nicht erreichbar – bitte gleich nochmal versuchen.");
 }
 // Einzelne Anfrage außerhalb einer Aufgabe (z. B. Commit-Nachricht).
-const quickCall = async (content, system) => (await call({ stopped: false, ctl: null, model: cfg.model || "mythos-code", chat: chat }, [{ role: "user", content: content }], system)).text;
+const quickCall = async (content, system) => (await call({ stopped: false, ctl: null, model: normModel(cfg.model), chat: chat }, [{ role: "user", content: content }], system)).text;
 let lastUsage = null;
 async function usage() { try { const j = await (await post("cli-auth", { action: "usage", api_key: cfg.key })).json();
   lastUsage = j;
@@ -584,7 +585,7 @@ const PRUEF_HINWEIS = (tracker) => (tracker.projectDir() ? "\nDein Projektordner
 async function runAgent(c, opts) {
   if (runs.has(c.id)) return;
   const run = { id: "run-" + c.id + "-" + Date.now(), chat: c, stopped: false, ctl: null, t0: Date.now(), stream: "", out: null, els: {}, phase: "", activity: [],
-    folder: c.folder || cfg.folder || "", model: cfg.model || "mythos-code" };
+    folder: c.folder || cfg.folder || "", model: normModel(cfg.model) };
   runs.set(c.id, run); c.unfinished = true; c.folder = run.folder;
   activityPush(run, "◎", "Aufgabe verstanden und Arbeitskontext vorbereitet");
   window.mythos.working(true);
@@ -1303,10 +1304,21 @@ async function command(q) {
   if (cmd === "/film" || cmd === "/filmstudio" || cmd === "/kurzfilm") return openFilmStudio(arg);
   if (cmd === "/cloudpc" || cmd === "/cloud-pc" || cmd === "/pc" || cmd === "/computer") return openCloudPc(arg);
   if (cmd === "/modell" || cmd === "/model") {
-    if (!arg) return note("🧠 Modelle:\n" + prompts.models.map((m) => (m.id === (cfg.model || "mythos-code") ? "● " : "○ ") + m.label + " – " + m.desc).join("\n") + "\nWechseln: oben im Auswahlfeld oder /modell <name>");
-    const m = prompts.models.find((x) => x.id === arg.toLowerCase() || x.label.toLowerCase() === arg.toLowerCase());
-    if (!m) return note("Unbekanntes Modell. Verfügbar: " + prompts.models.map((x) => x.label).join(", "));
-    return setModel(m.id);
+    const c = curModel();
+    if (!arg) return note("🧠 Modelle (Aufwand mit /aufwand):\n" + fams().map((f) => (c.fam && f.id === c.fam.id ? "● " : "○ ") + famName(f) + " – " + f.desc).join("\n") + "\nWechseln: oben im Auswahlfeld oder /modell <name>");
+    const q = arg.toLowerCase().replace(/^mythos\s*/, "");
+    const f = fams().find((x) => x.id === q || x.name.toLowerCase() === q || q.startsWith(x.name.toLowerCase()));
+    if (!f) return note("Unbekanntes Modell. Verfügbar: " + fams().map((x) => x.name).join(", "));
+    const keep = f.efforts.find((x) => x.id === c.eff);
+    return setModel(f.id + ":" + (keep ? keep.id : (f.efforts.find((x) => x.id === "normal") || f.efforts[0]).id));
+  }
+  if (cmd === "/aufwand" || cmd === "/effort") {
+    const c = curModel(); const list = c.fam ? c.fam.efforts : [];
+    if (!arg) return note("⚡ Aufwand für " + famName(c.fam) + ":\n" + list.map((e) => (e.id === c.eff ? "● " : "○ ") + effInfo(e.id).label + " – " + effInfo(e.id).hint).join("\n"));
+    const q = arg.toLowerCase().replace(/\s+/g, "");
+    const e = list.find((x) => x.id === q || effInfo(x.id).label.toLowerCase().replace(/\s+/g, "") === q);
+    if (!e) return note("Gibt es bei " + famName(c.fam) + " nicht. Verfügbar: " + list.map((x) => effInfo(x.id).label).join(", "));
+    return setModel(c.fam.id + ":" + e.id);
   }
   if (cmd === "/vorschau") { if (!arg && needFolder()) return; const r = await window.mythos.preview(arg, cfg.folder); if (r.error) return note("👁 " + r.error); inappOpen("preview", "👁 Vorschau", r.url, true, "mythos-preview"); return note("👁 Vorschau geöffnet: " + r.shown + "\nSie lädt automatisch neu, wenn sich Dateien im Projekt ändern."); }
   if (cmd === "/dateien") return toggleTree();
@@ -1453,37 +1465,101 @@ async function generateImage(prompt) {
 }
 
 // ---------- Einstellungen: Modell + Aufwand (oben, wie bei Claude), Design, automatisch testen ----------
-const EFFORTS = [
-  { id: "low", label: "Schnell", desc: "kurze Antworten, wenig Nachdenken" },
-  { id: "normal", label: "Normal", desc: "ausgewogen" },
-  { id: "high", label: "Gründlich", desc: "denkt länger nach" },
-  { id: "max", label: "Maximal", desc: "größte Tiefe, am langsamsten" },
-];
-const EFFORT_TOKENS = { low: 4000, normal: 8000, high: 16000, max: 32000 };
-function setModel(id, quiet) {
-  cfg.model = id; window.mythos.setCfg(cfg); $("model").value = id; renderModelBtn();
-  const m = prompts.models.find((x) => x.id === id); if (!quiet) note("🧠 Modell: " + (m ? m.label : id) + " – gilt ab der nächsten Aufgabe.");
+// Modelle + Aufwände kommen aus dem gemeinsamen Katalog (prompts.catalog) – wie auf der Website.
+const LEGACY_MODEL = { "mythos-code": "code15:high", "mythos-v2": "v2:high", "mythos-sonnet": "v1:high", "mythos-lite": "pebble:normal" };
+const fams = () => (prompts.catalog && prompts.catalog.families) || [];
+const effInfo = (id) => ((prompts.catalog && prompts.catalog.efforts) || {})[id] || { label: id, hint: "" };
+function normModel(id) {
+  const s = LEGACY_MODEL[id] || String(id || "code15:high");
+  const [f, e] = s.split(":");
+  const fam = fams().find((x) => x.id === f) || fams().find((x) => x.id === "code15") || fams()[0];
+  if (!fam) return s;
+  const eff = fam.efforts.find((x) => x.id === e) || fam.efforts.find((x) => x.id === "high") || fam.efforts.find((x) => x.id === "normal") || fam.efforts[0];
+  return fam.id + ":" + eff.id;
 }
-function setEffort(id) { cfg.effort = id; window.mythos.setCfg(cfg); renderModelBtn(); }
+function curModel() { const n = normModel(cfg.model); const [f, e] = n.split(":"); const fam = fams().find((x) => x.id === f); return { id: n, fam, eff: e }; }
+const famName = (f) => f ? "Mythos " + f.name + " " + f.version : "Mythos";
+// Aufwand → Denk-Tiefe und Antwortlänge für v1-messages
+const EFFORT_WIRE = { instant: "low", low: "low", normal: "normal", high: "high", ultra: "max", ultracode: "max", giga: "max" };
+const EFFORT_TOKENS = { instant: 2000, low: 4000, normal: 8000, high: 16000, ultra: 24000, ultracode: 28000, giga: 32000 };
+const wireEffort = () => EFFORT_WIRE[curModel().eff] || "normal";
+const wireTokens = () => EFFORT_TOKENS[curModel().eff] || 8000;
+function setModel(id, quiet, origin) {
+  const prev = curModel().fam;
+  cfg.model = normModel(id); window.mythos.setCfg(cfg); renderModelBtn();
+  const c = curModel();
+  if (c.fam && (!prev || prev.id !== c.fam.id)) playSelectFx(c.fam.theme, origin);
+  pushFx({ model: c.id });
+  if (!quiet) note("🧠 Modell: " + famName(c.fam) + " · " + effInfo(c.eff).label + " – gilt ab der nächsten Aufgabe.");
+}
+function setEffort(id) { const c = curModel(); setModel(c.fam.id + ":" + id, true); }
 function renderModelBtn() {
-  const m = prompts.models.find((x) => x.id === (cfg.model || "mythos-code")) || prompts.models[0];
-  const e = EFFORTS.find((x) => x.id === (cfg.effort || "normal"));
-  $("modelBtn").textContent = ""; $("modelBtn").append(el("b", "", m ? m.label : "Modell"), el("span", "eff", e.label), el("span", "car", "▾"));
+  const c = curModel(); const btn = $("modelBtn"); btn.textContent = "";
+  const gem = el("span", "mfx-gem"); if (c.fam) { gem.style.setProperty("--ia", c.fam.theme.a); gem.style.setProperty("--ib", c.fam.theme.b); }
+  btn.append(gem, el("b", "", famName(c.fam)), el("span", "eff", effInfo(c.eff).label), el("span", "car", "▾"));
 }
 function renderModelMenu() {
-  const box = $("modelMenu"); box.textContent = "";
-  prompts.models.forEach((m) => {
-    const b = el("button", "mm" + (m.id === (cfg.model || "mythos-code") ? " on" : ""));
-    b.append(el("span", "mt", m.label), el("span", "md", m.desc)); b.onclick = () => { setModel(m.id, true); renderModelMenu(); };
+  const box = $("modelMenu"); box.textContent = ""; const c = curModel();
+  fams().forEach((f) => {
+    const b = el("button", "mm mfx-item" + (c.fam && f.id === c.fam.id ? " on" : ""));
+    b.dataset.fx = f.theme.fx; b.style.setProperty("--ia", f.theme.a); b.style.setProperty("--ib", f.theme.b);
+    const txt = el("span", "mmtx"); txt.append(el("span", "mt", famName(f) + (f.minTier === "pro" ? "  ·  Pro" : "")), el("span", "md", f.desc));
+    b.append(el("span", "mfx-gem"), txt);
+    b.onclick = (ev) => { const keep = f.efforts.find((x) => x.id === c.eff); setModel(f.id + ":" + (keep ? keep.id : (f.efforts.find((x) => x.id === "normal") || f.efforts[0]).id), true, { x: ev.clientX, y: ev.clientY }); renderModelMenu(); };
     box.appendChild(b);
   });
   box.appendChild(el("div", "mmsec", "Aufwand"));
-  EFFORTS.forEach((e) => {
-    const b = el("button", "mm row" + (e.id === (cfg.effort || "normal") ? " on" : ""));
-    b.append(el("span", "mt", e.label), el("span", "md", e.desc)); b.onclick = () => { setEffort(e.id); renderModelMenu(); };
+  (c.fam ? c.fam.efforts : []).forEach((e) => {
+    const i = effInfo(e.id);
+    const b = el("button", "mm row" + (e.id === c.eff ? " on" : ""));
+    b.append(el("span", "mt", i.label), el("span", "md", i.hint)); b.onclick = () => { setEffort(e.id); renderModelMenu(); };
     box.appendChild(b);
   });
+  const fxRow = el("label", "mmfx"); const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!fxState.on;
+  cb.onchange = () => pushFx({ on: cb.checked, model: curModel().id });
+  fxRow.append(cb, el("span", "", "Modell-Animationseffekte (überall mit deinem Konto)"));
+  box.appendChild(fxRow);
 }
+
+// ---------- Modell-Animationseffekte (kontoweit über cli-auth „prefs“) ----------
+let fxState = cfg.fx || { on: false, model: "", at: 0 };
+function applyFx() {
+  const on = !!fxState.on, n = normModel(fxState.model || cfg.model), fam = fams().find((x) => x.id === n.split(":")[0]);
+  document.body.classList.toggle("mfx-on", on && !!fam);
+  let layer = document.getElementById("mfxLayer");
+  if (!on || !fam) { if (layer) layer.remove(); if (window.MythosFx) window.MythosFx.stop(); return; }
+  if (window.MythosFx) window.MythosFx.start(fam.theme);
+  const r = document.body.style; r.setProperty("--mfx-a", fam.theme.a); r.setProperty("--mfx-b", fam.theme.b); r.setProperty("--mfx-glow", fam.theme.glow);
+  if (layer && layer.dataset.fam === fam.id) return;
+  if (layer) layer.remove();
+  layer = el("div", "mfx-layer mfx-" + fam.theme.fx); layer.id = "mfxLayer"; layer.dataset.fam = fam.id;
+  layer.append(el("div", "mfx-aurora"), el("div", "mfx-edge"));
+  for (let k = 0; k < 0; k++) { const d = el("i", "mfx-dot"); const sz = 2 + (k * 5) % 4; d.style.cssText = "left:" + (k * 37 % 100) + "%;animation-delay:-" + (k * 1.7 % 14) + "s;animation-duration:" + (10 + k * 7 % 9) + "s;width:" + sz + "px;height:" + sz + "px"; layer.appendChild(d); }
+  if (fam.theme.fx === "lightning") layer.appendChild(el("div", "mfx-bolt")); if (fam.theme.fx === "orbit") layer.appendChild(el("div", "mfx-ring"));
+  document.body.appendChild(layer);
+}
+function playSelectFx(theme, origin) {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const o = origin || { x: 120, y: 30 }; const fx = el("div", "mfx-select mfx-select-" + theme.fx);
+  fx.style.cssText = "--sa:" + theme.a + ";--sb:" + theme.b + ";--sg:" + theme.glow + ";--sx:" + o.x + "px;--sy:" + o.y + "px";
+  for (let k = 0; k < 18; k++) { const p = el("i"); const an = k / 18 * Math.PI * 2, ds = 120 + Math.random() * 240; p.style.setProperty("--dx", Math.cos(an) * ds + "px"); p.style.setProperty("--dy", Math.sin(an) * ds + "px"); fx.appendChild(p); }
+  document.body.appendChild(fx); setTimeout(() => fx.remove(), 1400);
+  if (window.MythosFx) setTimeout(() => window.MythosFx.burst(o.x, o.y, 1.4), 60);
+}
+async function pushFx(change) {
+  fxState = Object.assign({}, fxState, change, { at: Date.now() }); cfg.fx = fxState; window.mythos.setCfg(cfg); applyFx();
+  if (!cfg.key) return;
+  try { await post("cli-auth", { action: "prefs", api_key: cfg.key, set: { on: fxState.on, model: fxState.model } }); } catch { /* offline */ }
+}
+async function pullFx() {
+  if (!cfg.key) return applyFx();
+  try {
+    const r = await post("cli-auth", { action: "prefs", api_key: cfg.key }); const j = await r.json();
+    if (j && j.fx && (j.fx.at || 0) > (fxState.at || 0)) { fxState = j.fx; cfg.fx = fxState; window.mythos.setCfg(cfg); }
+  } catch { /* offline */ }
+  applyFx();
+}
+setInterval(() => { if (document.visibilityState === "visible") pullFx(); }, 20000);
 function toggleModelMenu(open) {
   const box = $("modelMenu"), on = open ?? box.style.display !== "flex";
   if (on) renderModelMenu();
@@ -1492,8 +1568,8 @@ function toggleModelMenu(open) {
 function renderModels() {
   const s = $("model"); s.textContent = "";
   prompts.models.forEach((m) => { const o = el("option", "", m.label); o.value = m.id; o.title = m.desc; s.appendChild(o); });
-  s.value = cfg.model || "mythos-code";
-  renderModelBtn();
+  cfg.model = normModel(cfg.model); s.value = cfg.model;
+  renderModelBtn(); pullFx();
 }
 function applyTheme() { document.body.classList.toggle("light", cfg.theme === "light"); $("btnTheme").textContent = cfg.theme === "light" ? "🌙" : "☀"; }
 function setTheme(t) { cfg.theme = t; window.mythos.setCfg(cfg); applyTheme(); }
@@ -1539,7 +1615,7 @@ async function titleChat(c) {
   const first = (cls) => (c.view.find((v) => cls.includes(v.cls)) || {}).text || "";
   const q = first(["u"]), a = first(["a", "sum"]);
   if (!q) return;
-  const run = { stopped: false, ctl: null, model: cfg.model || "mythos-code", chat: c };
+  const run = { stopped: false, ctl: null, model: normModel(cfg.model), chat: c };
   const t0 = setTimeout(() => { run.stopped = true; if (run.ctl) run.ctl.abort(); }, 30000);
   try {
     const raw = (await call(run, [{ role: "user", content: "Erste Nachricht:\n" + q.slice(0, 1200) + "\n\nAntwort:\n" + a.slice(0, 1200) + "\n\nGib diesem Chat einen Titel." }],
@@ -1898,7 +1974,7 @@ async function installUpdate() {
 // Neue Version: hier oben einen Eintrag ergänzen (neueste zuerst), Schlüssel "2.16" gilt für alle 2.16.x.
 // Wird einmal nach jedem Update gezeigt.
 const WHATS_NEW = {
-  "2.18": ["Auswahl-Fragen haben jetzt einen „Weiter mit …“-Knopf", "Warteschlange: Nachrichten warten sichtbar über dem Eingabefeld (bearbeiten/löschen) und werden zuverlässig gelesen", "Kein Dauer-Gefrickel mehr: Mythos erkennt Schleifen, hört auf und sagt ehrlich, was hakt", "Prüfungen laufen nur im Projektordner – nie mehr über C:\\ oder Steam", "Neues Werkzeug publish: Projekte wirklich unter /build/<name> veröffentlichen", "Neue Modellnamen: Pebble, Spark, Bolt, Amber und Atlas"],
+  "2.18": ["Auswahl-Fragen haben jetzt einen „Weiter mit …“-Knopf", "Warteschlange: Nachrichten warten sichtbar über dem Eingabefeld (bearbeiten/löschen) und werden zuverlässig gelesen", "Kein Dauer-Gefrickel mehr: Mythos erkennt Schleifen, hört auf und sagt ehrlich, was hakt", "Prüfungen laufen nur im Projektordner – nie mehr über C:\\ oder Steam", "Neues Werkzeug publish: Projekte wirklich unter /build/<name> veröffentlichen", "Neue Modellnamen: Pebble, Spark, Bolt, Amber und Atlas – mit Aufwand-Auswahl je Modell (/aufwand)", "Modell-Animationseffekte: CGI-Feuer, Blitze, Funken, Orbit und Wellen – synchron mit Website und CLI"],
   "2.17": ["Deutlich besser beim Programmieren: Mythos liest Dateien mit Zeilennummern und in Ausschnitten, ändert mehrere Stellen auf einmal und trifft die Stelle auch bei anderer Einrückung", "Syntaxfehler werden direkt nach dem Schreiben erkannt (JavaScript, JSON, Python, HTML, CSS) und sofort behoben", "Kennt dein Projekt von Anfang an (Stack, Skripte, Ordner) und merkt, wenn er sich im Kreis dreht", "Neues Werkzeug zum Finden von Dateien, Suche mit Zeilen drumherum, lange Ausgaben behalten Anfang und Ende", "Schutz davor, große Dateien versehentlich mit gekürztem Inhalt zu überschreiben"],
   "2.16": [
     "Eingabefeld bleibt immer anklickbar – auch nach Rückfragen wie „Mythos möchte ausführen …“",
@@ -2068,7 +2144,7 @@ $("btnUp").onclick = async () => {
 };
 $("btnOut").onclick = async () => {
   runs.forEach((r) => stop(r.chat));
-  cfg = { projects: cfg.projects, folder: cfg.folder, auto: cfg.auto, notify: cfg.notify, model: cfg.model, theme: cfg.theme, autoTest: cfg.autoTest, testCmd: cfg.testCmd };
+  cfg = { projects: cfg.projects, folder: cfg.folder, auto: cfg.auto, notify: cfg.notify, model: cfg.model, fx: cfg.fx, theme: cfg.theme, autoTest: cfg.autoTest, testCmd: cfg.testCmd };
   await window.mythos.setCfg(cfg); location.reload();
 };
 Promise.all([window.mythos.prompts(), window.mythos.getCfg()]).then(([p, c]) => {

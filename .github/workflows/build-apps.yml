@@ -25,6 +25,8 @@ on:
       - 'src/lib/mythosCli.ts'
       - 'public/icon.png'
       - 'scripts/build-desktop.mjs'
+      - 'supabase/functions/_shared/modelCatalog.ts'
+      - 'src/lib/mythos-code-shared/**'
       - 'backend.json'
       - '.github/workflows/build-apps.yml'
   schedule:

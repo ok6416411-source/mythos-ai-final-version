@@ -162,6 +162,27 @@ Deno.serve(async (req) => {
       return json({ used: count || 0, limit: pro ? null : k.daily_limit, tier: pro ? "pro" : (sub?.tier || "free"), admin, tokens });
     }
 
+    // Konto-weite Design-Einstellung „Modell-Animationseffekte“ (Website, App und CLI teilen sie).
+    // Gespeichert in den Nutzer-Metadaten: { on, model, at }.
+    if (action === "prefs") {
+      const key = String(body.api_key || "");
+      const { data: k } = await db.from("api_keys").select("user_id,revoked").eq("key_hash", await sha256(key)).maybeSingle();
+      if (!k || k.revoked) return json({ error: "Key ungültig" }, 401);
+      const { data: u } = await db.auth.admin.getUserById(k.user_id);
+      const meta = (u?.user?.user_metadata || {}) as Record<string, unknown>;
+      let fx = (meta.mythos_fx || { on: false, model: "", at: 0 }) as { on: boolean; model: string; at: number };
+      if (body.set && typeof body.set === "object") {
+        const n = body.set as Record<string, unknown>;
+        fx = {
+          on: typeof n.on === "boolean" ? n.on : !!fx.on,
+          model: typeof n.model === "string" ? n.model.slice(0, 40) : fx.model,
+          at: Date.now(),
+        };
+        await db.auth.admin.updateUserById(k.user_id, { user_metadata: { ...meta, mythos_fx: fx } });
+      }
+      return json({ fx });
+    }
+
     return json({ error: "Unbekannte Aktion" }, 400);
   } catch (e) {
     console.error(e);

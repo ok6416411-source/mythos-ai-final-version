@@ -452,6 +452,69 @@ body.light ::-webkit-scrollbar-thumb{background:rgba(0,0,0,.14);border:2.5px sol
 #tip.on{opacity:1;transform:none}body.light #tip{background:#161616;color:#f5f5f5}
 kbd{font:500 11px/1 ui-monospace,Consolas,monospace;padding:3px 6px;border-radius:5px;border:1px solid var(--line2);border-bottom-width:2px;background:rgba(255,255,255,.04)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+/* ===================== Modell-Animationseffekte ===================== */
+/* Auswahl-Blitz über die ganze App */
+.mfx-select { position: fixed; inset: 0; z-index: 9999; pointer-events: none; overflow: hidden; }
+.mfx-select::before { content: ""; position: absolute; left: var(--sx); top: var(--sy); width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 9999px;
+  background: radial-gradient(circle, var(--sg) 0%, transparent 70%); animation: mfx-burst 1.1s cubic-bezier(.2,.7,.2,1) forwards; }
+.mfx-select::after { content: ""; position: absolute; inset: 0; border: 2px solid var(--sa); border-radius: 0;
+  box-shadow: inset 0 0 80px var(--sg); opacity: 0; animation: mfx-frame 1.1s ease-out forwards; }
+.mfx-select i { position: absolute; left: var(--sx); top: var(--sy); width: 6px; height: 6px; border-radius: 9999px;
+  background: linear-gradient(135deg, var(--sa), var(--sb)); box-shadow: 0 0 10px var(--sa); animation: mfx-fly .9s cubic-bezier(.15,.7,.3,1) forwards; }
+.mfx-select-lightning i { width: 2px; height: 14px; border-radius: 1px; }
+.mfx-select-ripple i { display: none; }
+.mfx-select-ripple::before { animation-duration: 1.3s; }
+@keyframes mfx-burst { 0% { transform: scale(0); opacity: 1 } 70% { opacity: .8 } 100% { transform: scale(90); opacity: 0 } }
+@keyframes mfx-frame { 0% { opacity: 0 } 25% { opacity: 1 } 100% { opacity: 0 } }
+@keyframes mfx-fly { 0% { transform: translate(0,0) scale(1); opacity: 1 } 100% { transform: translate(var(--dx), var(--dy)) scale(.2); opacity: 0 } }
+
+/* Live-Ebene */
+.mfx-layer { position: fixed; inset: 0; z-index: 40; pointer-events: none; overflow: hidden; animation: fade-in .6s ease-out; }
+.mfx-aurora { position: absolute; left: -10%; right: -10%; top: 0; height: 3px;
+  background: linear-gradient(90deg, transparent, var(--mfx-a), var(--mfx-b), var(--mfx-a), transparent); background-size: 200% 100%;
+  box-shadow: 0 0 18px var(--mfx-glow); animation: mfx-slide 4s linear infinite; }
+.mfx-edge { position: absolute; inset: 0; box-shadow: inset 0 0 120px -40px var(--mfx-glow); animation: mfx-breathe 5s ease-in-out infinite; }
+.mfx-dot { position: absolute; bottom: -10px; border-radius: 9999px; background: var(--mfx-a); box-shadow: 0 0 8px var(--mfx-a); opacity: .0; animation: mfx-rise linear infinite; }
+.mfx-ripple .mfx-dot { background: var(--mfx-b); box-shadow: none; }
+.mfx-ember .mfx-dot { background: radial-gradient(circle, #fff7, var(--mfx-a)); }
+.mfx-lightning .mfx-dot { border-radius: 1px; width: 1px !important; height: 10px !important; }
+.mfx-bolt { position: absolute; inset: 0; background: linear-gradient(115deg, transparent 45%, var(--mfx-glow) 50%, transparent 55%); opacity: 0; animation: mfx-flash 7s ease-in-out infinite; }
+.mfx-ring { position: absolute; right: -180px; bottom: -180px; width: 420px; height: 420px; border-radius: 9999px; border: 1px dashed var(--mfx-a); opacity: .25; animation: mfx-spin 40s linear infinite; }
+@keyframes mfx-slide { to { background-position: -200% 0 } }
+@keyframes mfx-breathe { 0%,100% { opacity: .55 } 50% { opacity: 1 } }
+@keyframes mfx-rise { 0% { transform: translateY(0); opacity: 0 } 10% { opacity: .7 } 90% { opacity: .5 } 100% { transform: translateY(-105vh); opacity: 0 } }
+@keyframes mfx-flash { 0%,88%,100% { opacity: 0 } 90% { opacity: .9 } 92% { opacity: .1 } 94% { opacity: .6 } }
+@keyframes mfx-spin { to { transform: rotate(360deg) } }
+body.mfx-on ::selection { background: var(--mfx-a); color: #000; }
+body.mfx-on textarea:focus, body.mfx-on input:focus { box-shadow: 0 0 0 1px var(--mfx-a), 0 0 22px -6px var(--mfx-glow); }
+body.mfx-on ::-webkit-scrollbar-thumb { background: var(--mfx-a); }
+
+/* Hover-Animationen im Modell-Menü */
+.mfx-item { position: relative; overflow: hidden; isolation: isolate; transition: transform .2s ease; }
+.mfx-item::before { content: ""; position: absolute; inset: 0; z-index: -1; opacity: 0; transition: opacity .25s ease;
+  background: linear-gradient(110deg, transparent 20%, color-mix(in srgb, var(--ia) 22%, transparent) 50%, transparent 80%); background-size: 250% 100%; }
+.mfx-item:hover::before, .mfx-item[data-highlighted]::before { opacity: 1; animation: mfx-sheen 1.4s linear infinite; }
+.mfx-item:hover, .mfx-item[data-highlighted] { transform: translateX(2px); box-shadow: inset 2px 0 0 var(--ia), 0 0 24px -10px var(--ia); }
+.mfx-gem { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; margin-top: 4px; background: linear-gradient(135deg, var(--ia), var(--ib)); box-shadow: 0 0 8px -1px var(--ia); transition: transform .3s cubic-bezier(.3,1.6,.5,1); }
+.mfx-item:hover .mfx-gem, .mfx-item[data-highlighted] .mfx-gem { transform: rotate(45deg) scale(1.35); }
+.mfx-item[data-fx="sparks"]:hover .mfx-gem { animation: mfx-twinkle .5s ease-in-out infinite alternate; }
+.mfx-item[data-fx="lightning"]:hover .mfx-gem { animation: mfx-zap .35s steps(2) infinite; }
+.mfx-item[data-fx="ember"]:hover .mfx-gem { animation: mfx-glow 1s ease-in-out infinite; }
+.mfx-item[data-fx="orbit"]:hover .mfx-gem { animation: mfx-spin 1.2s linear infinite; border-radius: 9999px; }
+.mfx-item[data-fx="ripple"]:hover .mfx-gem { animation: mfx-pulse 1s ease-out infinite; border-radius: 9999px; }
+@keyframes mfx-sheen { to { background-position: -250% 0 } }
+@keyframes mfx-twinkle { from { filter: brightness(1) } to { filter: brightness(1.8); box-shadow: 0 0 14px 2px var(--ia) } }
+@keyframes mfx-zap { 0% { filter: brightness(2.2); box-shadow: 0 0 16px 3px var(--ia) } 100% { filter: brightness(1) } }
+@keyframes mfx-glow { 0%,100% { box-shadow: 0 0 6px var(--ia) } 50% { box-shadow: 0 0 18px 4px var(--ib) } }
+@keyframes mfx-pulse { 0% { box-shadow: 0 0 0 0 var(--ia) } 100% { box-shadow: 0 0 0 9px transparent } }
+@media (prefers-reduced-motion: reduce) { .mfx-layer, .mfx-select { display: none } .mfx-item, .mfx-item * { animation: none !important } }
+
+@keyframes fade-in{from{opacity:0}to{opacity:1}}
+#modelBtn .mfx-gem{margin:0 2px 0 0}
+#modelMenu .mm.mfx-item{flex-direction:row;align-items:flex-start;gap:9px}
+#modelMenu .mmtx{display:flex;flex-direction:column;gap:1px}
+#modelMenu .mmfx{display:flex;gap:8px;align-items:center;font-size:11px;color:var(--muted);padding:9px 10px 5px;border-top:1px solid var(--line);margin-top:4px;cursor:pointer}
+body.mfx-on #modelBtn{box-shadow:0 0 0 1px var(--mfx-a),0 0 18px -6px var(--mfx-glow)}
 </style></head><body>
 <div class="bg"><div class="blob b1"></div><div class="blob b2"></div></div>
 <div id="login" class="screen">

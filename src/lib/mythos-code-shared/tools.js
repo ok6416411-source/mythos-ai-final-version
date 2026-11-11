@@ -78,13 +78,31 @@ const TOOL_PROMPT = [
   "ABSCHLUSS: Genau EIN kurzer Abschlussbericht am Ende – keine Zwischen-Berichte wiederholen. Wenn du nach 2 Versuchen feststeckst (z. B. Zahlen hin- und herprobieren), höre auf und beschreibe ehrlich das Problem.",
 ].join("\n");
 
-// Modelle, die v1-messages versteht (siehe mapModel dort).
-const MODELS = [
-  { id: "mythos-code", label: "MythosCode", desc: "Standard fürs Programmieren" },
-  { id: "mythos-v2", label: "Mythos Amber 2", desc: "am stärksten, etwas langsamer" },
-  { id: "mythos-sonnet", label: "Mythos Spark 1", desc: "ausgewogen" },
-  { id: "mythos-lite", label: "Mythos Lite", desc: "am schnellsten" },
-];
+// Modelle + Aufwände – aus dem gemeinsamen Katalog (supabase/functions/_shared/modelCatalog.ts),
+// beim Paketieren eingesetzt. v1-messages versteht „familie:aufwand“ (z. B. code15:high).
+const MODEL_CATALOG = /*@@MODEL_CATALOG@@*/ { families: [], efforts: {} };
+const MODEL_FAMILIES = MODEL_CATALOG.families;
+const EFFORT_INFO = MODEL_CATALOG.efforts;
+const DEFAULT_CODE_MODEL = "code15:high";
+const famLabel = (f) => "Mythos " + f.name + " " + f.version;
+/** Alte gespeicherte IDs (mythos-code …) auf das neue Schema bringen. */
+function normModelId(id) {
+  const legacy = { "mythos-code": "code15:high", "mythos-v2": "v2:high", "mythos-sonnet": "v1:high", "mythos-lite": "pebble:normal" };
+  let s = legacy[String(id || "")] || String(id || DEFAULT_CODE_MODEL);
+  let [f, e] = s.split(":");
+  const fam = MODEL_FAMILIES.find((x) => x.id === f || x.name.toLowerCase() === String(f).toLowerCase()) || MODEL_FAMILIES.find((x) => x.id === "code15") || MODEL_FAMILIES[0];
+  if (!fam) return s;
+  const eff = fam.efforts.find((x) => x.id === e) || fam.efforts.find((x) => x.id === "high") || fam.efforts.find((x) => x.id === "normal") || fam.efforts[0];
+  return fam.id + ":" + eff.id;
+}
+function modelInfo(id) {
+  const n = normModelId(id); const [f, e] = n.split(":");
+  const fam = MODEL_FAMILIES.find((x) => x.id === f) || { id: f, name: f, version: "", theme: { a: "#a78bfa", b: "#6366f1", glow: "rgba(167,139,250,.5)", fx: "sparks" }, efforts: [], desc: "" };
+  const eff = fam.efforts.find((x) => x.id === e) || { id: e, minTier: "pro" };
+  return { id: n, fam, eff, label: famLabel(fam), effLabel: (EFFORT_INFO[e] || {}).label || e, full: famLabel(fam) + " · " + ((EFFORT_INFO[e] || {}).label || e) };
+}
+// Kompatibel zur alten Liste (ID = Familie mit Standard-Aufwand)
+const MODELS = MODEL_FAMILIES.map((f) => ({ id: normModelId(f.id), label: famLabel(f), desc: f.desc }));
 /** Grobe Token-Schätzung (≈ 4 Zeichen pro Token, Bilder pauschal). */
 function estimateTokens(system, messages) {
   let chars = String(system || "").length, images = 0;

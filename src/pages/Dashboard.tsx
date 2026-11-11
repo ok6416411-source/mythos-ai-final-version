@@ -16,7 +16,8 @@ import { PUTER_MODELS, DEFAULT_MODEL_ID } from "@/lib/puterAi";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
-import { Plus, Key, Trash2, Copy, Check, BarChart3, Save, User as UserIcon, ShieldCheck, MessageSquare, Gift } from "lucide-react";
+import { Plus, Key, Trash2, Copy, Check, BarChart3, Save, User as UserIcon, ShieldCheck, MessageSquare, Gift, Sparkles } from "lucide-react";
+import DesignSettings from "@/components/DesignSettings";
 import { Switch } from "@/components/ui/switch";
 import { isPersistentSessionEnabled, setPersistentSessionEnabled } from "@/lib/persistentSession";
 import { toast } from "sonner";
@@ -135,6 +136,7 @@ const Dashboard = () => {
             <TabsTrigger value="keys"><Key className="h-3.5 w-3.5 mr-1.5" />API Keys</TabsTrigger>
             <TabsTrigger value="profile"><UserIcon className="h-3.5 w-3.5 mr-1.5" />Profil</TabsTrigger>
             <TabsTrigger value="invite"><Gift className="h-3.5 w-3.5 mr-1.5" />Einladen</TabsTrigger>
+            <TabsTrigger value="design"><Sparkles className="h-3.5 w-3.5 mr-1.5" />Design</TabsTrigger>
           </TabsList>
 
           {/* ========== KEYS TAB ========== */}
@@ -403,6 +405,8 @@ const Dashboard = () => {
           </TabsContent>
 
           {/* ========== INVITE TAB ========== */}
+          <TabsContent value="design" className="mt-6"><DesignSettings /></TabsContent>
+
           <TabsContent value="invite" className="mt-6">
             <InvitePanel />
           </TabsContent>

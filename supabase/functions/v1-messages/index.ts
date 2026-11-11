@@ -1,4 +1,5 @@
 import { relevantCraftKnowledge } from "../_shared/craftKnowledge.ts";
+import { resolveModelId, familyLabel, modelCatalogPrompt, EFFORTS as CATALOG_EFFORTS } from "../_shared/modelCatalog.ts";
 import { aiChat } from "../_shared/ai.ts";
 import { buildSystemMessages } from "../_shared/identity.ts";
 import { MYTHOS_CATALOG } from "../_shared/catalog.ts";
@@ -30,23 +31,21 @@ function err(code: string, message: string, status: number) {
   });
 }
 
-function mapModel(m: string): string {
+// Modellnamen kommen aus dem gemeinsamen Katalog. Erlaubt sind z. B. „code15:high“, „mythos-atlas:giga“,
+// „amber:ultra“ und die alten IDs („mythos-code“, „mythos-v2“, „mythos-sonnet“, „mythos-lite“).
+function pickModel(m: string) {
   const lc = (m || "").toLowerCase();
-  if (lc.includes("mythos-v2") || lc.includes("opus")) return "openai/gpt-5.6-sol";
-  if (lc.includes("code")) return "openai/gpt-5.6-sol";
-  if (lc.includes("sonnet")) return "google/gemini-3.1-pro-preview";
-  if (lc.includes("haiku") || lc.includes("lite")) return "google/gemini-3.1-flash-lite";
-  return "google/gemini-3.6-flash";
+  // Alte App-/CLI-IDs → passende Familie mit sinnvollem Aufwand
+  const legacy: Record<string, string> = { "mythos-code": "code15:high", "mythos-v2": "v2:high", "mythos-sonnet": "v1:high", "mythos-lite": "pebble:normal" };
+  const id = legacy[lc] || (/opus/.test(lc) ? "v2:high" : /haiku/.test(lc) ? "pebble:normal" : /sonnet/.test(lc) ? "code15:normal" : lc);
+  return resolveModelId(id);
 }
+function mapModel(m: string): string { return pickModel(m).effort.tune.model; }
 
 /** Nach außen sichtbarer Mythos-Modellname (nie der echte Anbieter). */
 function mythosLabelFor(m: string): string {
-  const lc = (m || "").toLowerCase();
-  if (lc.includes("mythos-v2") || lc.includes("opus")) return "Mythos Amber 2";
-  if (lc.includes("code")) return "Mythos Atlas 1.5";
-  if (lc.includes("sonnet")) return "Mythos Spark 1";
-  if (lc.includes("haiku") || lc.includes("lite")) return "Mythos Pebble 1";
-  return "Mythos Spark 1";
+  const p = pickModel(m);
+  return `${familyLabel(p.family)} · ${CATALOG_EFFORTS[p.effort.id].label}`;
 }
 
 function blockText(b: any): string {
@@ -129,6 +128,7 @@ Deno.serve(async (req) => {
   // Mythos Code (App/CLI) nur mit Pro: Schlüssel aus der Geräte-Anmeldung heißen „Mythos Code“.
   // Auch alte, vor der Sperre angelegte Anmeldungen von Free-Konten funktionieren damit nicht mehr.
   if ((keyRow.name === "Mythos Code" || /^(?:app|cli)$/i.test(req.headers.get("x-mythos-client") || "")) && !isPro) return err("permission_error", "Mythos Code und die CLI gibt es mit Mythos Pro. Dein Konto hat kein Pro – hol es dir auf der Website unter /dashboard.", 403);
+  { const pk = pickModel(model); if (!isPro && (pk.family.minTier === "pro" || pk.effort.minTier === "pro")) return err("permission_error", `${familyLabel(pk.family)} gibt es mit Mythos Pro.`, 403); }
 
   let body: any;
   try { body = await req.json(); } catch { return err("invalid_request_error", "Invalid JSON", 400); }
@@ -191,7 +191,10 @@ Deno.serve(async (req) => {
     b.mythos_max_tokens = Math.max(Number(max_tokens) || 0, 8000);
     if (body.route === "alt") b.mythos_route = "alt";
     // Sichtbare Gedanken: bei unterstützten Modellen kurz mitdenken lassen und live mitschicken.
-    if (a.model.startsWith("openai/")) b.reasoning_effort = effort === "high" ? "medium" : effort === "max" ? "high" : "low";
+    if (a.model.startsWith("openai/")) {
+      const tuned = pickModel(model).effort.tune.reasoning;
+      b.reasoning_effort = effort === "max" ? "high" : effort === "high" ? "medium" : tuned && tuned !== "none" ? tuned : "low";
+    }
     return b;
   };
 

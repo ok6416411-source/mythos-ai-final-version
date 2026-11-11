@@ -1,4 +1,5 @@
 import { aiFetch } from "../_shared/ai.ts";
+import { resolveModelId, familyLabel, EFFORTS as CATALOG_EFFORTS } from "../_shared/modelCatalog.ts";
 import { explainErrors, generateImage, PROVIDER_LABEL } from "../_shared/image.ts";
 import { classifyImageRequest, isImageRequest, maybeImageRequest, resolveImagePrompt } from "../_shared/imageIntent.ts";
 import { mythosIdentity, mythosIdentityReminder } from "../_shared/identity.ts";
@@ -6,7 +7,7 @@ import { MYTHOS_CATALOG, MYTHOS_FILES } from "../_shared/catalog.ts";
 import { CRAFT_CATEGORY_PREFIX, abilities, learnedRules, relevantCraftKnowledge, wantsLongOutput, workRules, type CraftOverrides } from "../_shared/craftKnowledge.ts";
 import { PLUGIN_CATEGORY_PREFIX, formatServerArticles, isServerQuestion, relevantServerArticles, serverKnowledgeText } from "../_shared/serverKnowledge.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.103.3";
-import { admitTask, recordUsage, validTaskId, limitInfo, LIMIT_HEADERS } from "../_shared/tokens.ts";
+import { tierOf as planTierOf, admitTask, recordUsage, validTaskId, limitInfo, LIMIT_HEADERS } from "../_shared/tokens.ts";
 import { forwardUsageStream } from "../_shared/usageStream.ts";
 import { prepareVideos } from "../_shared/video.ts";
 import type { TokenUsage } from "../_shared/usageParse.ts";
@@ -54,73 +55,11 @@ type Tune = {
 };
 type Resolved = Tune & { effortLabel: string; familyLabel: string; style: string };
 
-const MYTHOS_MAP: Record<string, Tune> = {
-  // --- Mythos Spark 1: Allrounder ---
-  "v1:instant": { model: "google/gemini-3.1-flash-lite", maxOut: 220, web: false, temperature: 0.3, lean: true },
-  "v1:low": { model: "google/gemini-3.1-flash-lite", maxOut: 550, web: false, temperature: 0.5, lean: true },
-  "v1:normal": { model: "google/gemini-3.6-flash", maxOut: 3200, web: true, temperature: 0.7 },
-  "v1:high": { model: "google/gemini-3.1-pro-preview", maxOut: 7000, web: true, temperature: 0.7, depth: true },
-  "v1:ultra": { model: "openai/gpt-5.5", reasoning: "medium", maxOut: 10000, web: true, depth: true },
-
-  // --- Mythos Bolt 1.1 ---
-  "code11:instant": { model: "openai/gpt-5.4-nano", reasoning: "none", maxOut: 300, web: false, lean: true },
-  "code11:low": { model: "openai/gpt-5.4-mini", reasoning: "none", fast: true, maxOut: 700, web: false, lean: true },
-  "code11:normal": { model: "openai/gpt-5.4", reasoning: "low", maxOut: 4400, web: true },
-  "code11:high": { model: "openai/gpt-5.4", reasoning: "high", maxOut: 8000, web: true, depth: true },
-  "code11:ultra": { model: "openai/gpt-5.5", reasoning: "medium", maxOut: 12000, web: true, depth: true },
-  "code11:ultracode": { model: "openai/gpt-5.5", reasoning: "high", maxOut: 18000, web: true, depth: true },
-
-  // --- Mythos Amber 2 (Pro) — mehr Denk-Tiefe ---
-  "v2:instant": { model: "openai/gpt-5.6-luna", reasoning: "none", maxOut: 300, web: false, lean: true },
-  "v2:low": { model: "openai/gpt-5.6-luna", reasoning: "none", fast: true, maxOut: 750, web: false, lean: true },
-  "v2:normal": { model: "openai/gpt-5.6-sol", reasoning: "medium", fast: true, maxOut: 7000, web: true, depth: true },
-  "v2:high": { model: "openai/gpt-5.6-sol", reasoning: "high", fast: true, maxOut: 14000, web: true, depth: true },
-  "v2:ultra": { model: "openai/gpt-5.6-sol", reasoning: "high", maxOut: 28000, web: true, depth: true },
-
-  // --- Mythos Atlas 1.5 (Pro) ---
-  "code15:instant": { model: "openai/gpt-5.6-luna", reasoning: "none", maxOut: 400, web: false, lean: true },
-  "code15:low": { model: "openai/gpt-5.6-terra", reasoning: "none", fast: true, maxOut: 900, web: false, lean: true },
-  "code15:normal": { model: "openai/gpt-5.6-sol", reasoning: "low", fast: true, maxOut: 6000, web: true },
-  "code15:high": { model: "openai/gpt-5.6-sol", reasoning: "medium", fast: true, maxOut: 11000, web: true, depth: true },
-  "code15:ultra": { model: "openai/gpt-5.5", reasoning: "high", maxOut: 18000, web: true, depth: true },
-  "code15:giga": { model: "openai/gpt-5.5", reasoning: "high", maxOut: 32000, web: true, depth: true },
-};
-
-
-const FAMILY_LABEL: Record<string, string> = {
-  v1: "Mythos Spark 1", code11: "Mythos Bolt 1.1", v2: "Mythos Amber 2", code15: "Mythos Atlas 1.5",
-};
-const EFFORT_MEMORY: Record<string, boolean> = {
-  instant: false, low: false, normal: true, high: true, ultra: true, ultracode: true, giga: true,
-};
-const EFFORT_LABEL: Record<string, string> = {
-  instant: "Instant", low: "Low", normal: "Normal", high: "High",
-  ultra: "Ultra", ultracode: "Ultra Code", giga: "Giga Code",
-};
-const EFFORT_STYLE: Record<string, string> = {
-  instant: "Modus INSTANT: Antworte in maximal 1-2 Sätzen. Keine Vorrede, keine Überschriften, keine Listen, keine Rückfragen, kein Markdown außer Code-Blöcken. Direkt die Antwort, sofort.",
-  low: "Modus LOW: Antworte kurz und direkt — ein kleiner Absatz oder max. 3 Bullets. Keine Einleitung, kein Fazit.",
-  normal: "Modus NORMAL: Ausbalanciert — klar strukturiert, angemessen ausführlich, mit kurzem Beispiel wenn hilfreich.",
-  high: "Modus HIGH: Denke gründlich durch, prüfe Randfälle, strukturiere mit Überschriften/Bullets und begründe deine Empfehlung.",
-  ultra: "Modus ULTRA: Maximal sorgfältig — Annahmen offenlegen, Alternativen vergleichen, tiefe, vollständige und präzise Antwort mit klarer Struktur.",
-  ultracode: "Modus ULTRA CODE: Vollständige, lauffähige Implementierungen, Fehlerbehandlung, Tests/Beispiele und kurze Architektur-Begründung.",
-  giga: "Modus GIGA CODE: Projekt-Qualität — Architektur, vollständiger Code, Edge-Cases, Tests, Performance- und Security-Hinweise.",
-};
-
+// Modelle, Aufwände und echte Technik kommen aus dem gemeinsamen Katalog (_shared/modelCatalog.ts).
 function resolveMythos(id: unknown): Resolved {
-  // Auch Kurzformen wie "v2", "mythos-v2" oder "v2-high" akzeptieren statt still auf v1 zu fallen.
-  let s = typeof id === "string" ? id.toLowerCase().replace(/^mythos-?/, "").replace(/[-_ ]/g, ":") : "";
-  if (s && !s.includes(":")) s += ":normal";
-  const key = MYTHOS_MAP[s] ? s : "v1:normal";
-  const [fam, eff] = key.split(":");
-  const m = MYTHOS_MAP[key];
-  return {
-    ...m,
-    memory: m.memory ?? EFFORT_MEMORY[eff] ?? true,
-    familyLabel: FAMILY_LABEL[fam],
-    effortLabel: EFFORT_LABEL[eff],
-    style: EFFORT_STYLE[eff],
-  };
+  const { family, effort } = resolveModelId(id);
+  const meta = CATALOG_EFFORTS[effort.id];
+  return { ...effort.tune, memory: meta.memory, familyLabel: familyLabel(family), effortLabel: meta.label, style: meta.style };
 }
 
 
@@ -167,6 +106,16 @@ Deno.serve(async (req) => {
     if (conversationId) {
       const { data: own } = await supabase.from("conversations").select("user_id").eq("id", conversationId).maybeSingle();
       if (!own || own.user_id !== clientUserId) return new Response(JSON.stringify({ error: "Chat nicht gefunden." }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    // Modell- und Aufwand-Freigabe nach Plan (Free/Light/Pro) – serverseitig, nicht nur in der Oberfläche.
+    {
+      const R: Record<string, number> = { free: 0, light: 1, pro: 2, admin: 2 };
+      const pick = resolveModelId(mythos);
+      const plan = R[await planTierOf(supabase, clientUserId).catch(() => "free")] ?? 0;
+      if (plan < R[pick.family.minTier] || plan < R[pick.effort.minTier]) {
+        const need = R[pick.family.minTier] === 2 || R[pick.effort.minTier] === 2 ? "Pro" : "Light";
+        return new Response(JSON.stringify({ error: `${familyLabel(pick.family)} · ${CATALOG_EFFORTS[pick.effort.id].label} braucht Mythos ${need}.` }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
     }
     const admission = await admitTask(supabase, clientUserId, validTaskId(requestedTaskId) ?? crypto.randomUUID(), "web");
     const taskId = admission.taskId;

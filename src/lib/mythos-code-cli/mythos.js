@@ -66,7 +66,42 @@ async function autoUpdate(force = false) {
 // Farben aus dem Mythos-Logo (Magenta → Violett → Blau → Türkis), 24-Bit-Farbe wenn möglich.
 const TRUE = process.env.COLORTERM === "truecolor" || process.env.COLORTERM === "24bit" || process.platform === "win32" || !!process.env.WT_SESSION;
 const rgb = (r, g, b) => (TRUE ? `\x1b[38;2;${r};${g};${b}m` : "\x1b[35m");
-const GRAD = [[217, 70, 239], [168, 85, 247], [99, 102, 241], [59, 130, 246], [34, 211, 238]];
+const BASE_GRAD = [[217, 70, 239], [168, 85, 247], [99, 102, 241], [59, 130, 246], [34, 211, 238]];
+let GRAD = BASE_GRAD;
+// Modell-Animationseffekte: Farben der CLI folgen dem zuletzt gewählten Modell (kontoweit, wie Website & App).
+const hexRgb = (h) => { const n = parseInt(String(h).replace("#", ""), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+function applyFxCli() {
+  const fx = cfg.fx || {};
+  const fam = fx.on ? modelInfo(fx.model || cfg.model).fam : null;
+  GRAD = fam && fam.theme ? [hexRgb(fam.theme.a), hexRgb(fam.theme.b), hexRgb(fam.theme.a)] : BASE_GRAD;
+}
+async function pullFxCli() {
+  if (!cfg.key) return applyFxCli();
+  try { const j = await authPost({ action: "prefs", api_key: cfg.key }); if (j && j.fx && (j.fx.at || 0) > ((cfg.fx || {}).at || 0)) { cfg.fx = j.fx; save(cfg); } } catch { /* offline */ }
+  applyFxCli();
+}
+async function pushFxCli(change) {
+  cfg.fx = Object.assign({ on: false, model: "" }, cfg.fx, change, { at: Date.now() }); save(cfg); applyFxCli();
+  if (cfg.key) try { await authPost({ action: "prefs", api_key: cfg.key, set: { on: cfg.fx.on, model: cfg.fx.model } }); } catch { /* offline */ }
+}
+/** Kurze Live-Animation beim Modellwechsel: Funken/Blitz/Glut in den Modellfarben. */
+async function selectFxCli(fam) {
+  if (!process.stdout.isTTY || !fam || !fam.theme) return;
+  const a = hexRgb(fam.theme.a), b = hexRgb(fam.theme.b);
+  const glyph = { sparks: "✦✧·", lightning: "⚡╱╲", ember: "•◦∙", orbit: "◜◝◞◟", ripple: "○◌◯" }[fam.theme.fx] || "✦·";
+  const W = Math.min(46, (process.stdout.columns || 60) - 4);
+  for (let fr = 0; fr < 14; fr++) {
+    let line = "";
+    for (let i = 0; i < W; i++) {
+      const t = (i / W + fr / 14) % 1, mix = a.map((v, k) => Math.round(v + (b[k] - v) * t));
+      const lit = Math.abs(i - fr * (W / 13)) < 3 || Math.random() < 0.08;
+      line += rgb(...mix) + (lit ? glyph[(i + fr) % glyph.length] : " ");
+    }
+    process.stdout.write("\r\x1b[K  " + line + C.x);
+    await new Promise((r) => setTimeout(r, 45));
+  }
+  process.stdout.write("\r\x1b[K");
+}
 const grad = (t) => { const x = Math.max(0, Math.min(1, t)) * (GRAD.length - 1), i = Math.min(GRAD.length - 2, Math.floor(x)), f = x - i; const [a, b] = [GRAD[i], GRAD[i + 1]]; return rgb(...a.map((v, k) => Math.round(v + (b[k] - v) * f))); };
 // Myth: kleiner Kristall-Geist mit Augen – 11 Zeichen breit, 4 Zeilen
 const MASCOT = [
@@ -76,7 +111,7 @@ const MASCOT = [
   "   ▀▄ ▄▀   ",
 ];
 const paintMascot = (line, row) => [...line].map((ch, i) => (ch === " " ? ch : grad((i + row) / 13) + ch)).join("") + C.x;
-const modelLabel = () => { const m = (typeof MODELS !== "undefined" ? MODELS : []).find((x) => x.id === (cfg.model || "mythos-code")); return m ? m.label : "MythosCode"; };
+const modelLabel = () => modelInfo(cfg.model).full;
 function banner(info) {
   const tips = ["/hilfe zeigt alle Befehle", "Dateien mit @name anhängen", "Bilder einfach ins Terminal ziehen", "/goal <ziel> – Mythos bleibt dran, bis es fertig ist", "/modell wechselt das Modell"];
   const right = [
@@ -280,7 +315,7 @@ async function once(messages, onText, onThink) {
     const r = await fetch(API, {
       method: "POST", signal: c.signal,
       headers: { "content-type": "application/json", "x-api-key": cfg.key, "anthropic-version": "2023-06-01", "x-mythos-client": "cli" },
-      body: JSON.stringify({ model: cfg.model || "mythos-code", route: altRoute ? "alt" : undefined, task_id: currentTaskId, max_tokens: 8000, system, messages, stream: true }),
+      body: JSON.stringify({ model: normModelId(cfg.model), effort: ({ instant: "low", low: "low", normal: "normal", high: "high" })[modelInfo(cfg.model).eff.id] || "max", route: altRoute ? "alt" : undefined, task_id: currentTaskId, max_tokens: ({ instant: 2000, low: 4000, normal: 8000, high: 16000, ultra: 24000, ultracode: 28000 })[modelInfo(cfg.model).eff.id] || 32000, system, messages, stream: true }),
     });
     if (!r.ok) { const j = await r.json().catch(() => ({})); const e = new Error(j?.error?.message || ("HTTP " + r.status)); e.status = r.status; throw e; }
     const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = "", out = "", think = "", measured = null;
@@ -588,7 +623,9 @@ const HELP = [
   ["/push", "git push"],
   ["/handy <url>", "Handy-Benachrichtigung (ntfy.sh-Thema oder Discord-Webhook) · /handy test · /handy aus"],
   ["/vollzugriff an|aus", "Ohne Nachfragen arbeiten"],
-  ["/modell [name]", "Modell anzeigen oder wechseln"],
+  ["/modell [name]", "Modell anzeigen oder wechseln (Pebble, Spark, Bolt, Amber, Atlas)"],
+  ["/aufwand [stufe]", "Aufwand anzeigen oder wechseln (Instant … Giga Code)"],
+  ["/effekte an|aus", "Modell-Animationseffekte (gilt auch für Website und App)"],
   ["/tokens", "Gemessenen MythosAI-Verbrauch dieser Sitzung anzeigen"],
   ["/clear", "Verlauf leeren"],
   ["/review [schwerpunkt]", "Code-Review der Git-Änderungen (ändert nichts)"],
@@ -665,12 +702,29 @@ async function command(q, history) {
     return console.log(C.g + "✓ Gespeichert. Bei /goal und Aufgaben über 1 Minute bekommst du eine Nachricht. Test: /handy test" + C.x + "\n");
   }
   if (cmd === "/modell" || cmd === "/model") {
-    const cur = cfg.model || "mythos-code";
-    if (!arg) return console.log(MODELS.map((m) => (m.id === cur ? C.g + "● " : "  ") + m.id.padEnd(15) + C.x + m.label + C.d + " – " + m.desc + C.x).join("\n") + "\n\nWechseln mit /modell <name>\n");
-    const m = MODELS.find((x) => x.id === arg.toLowerCase() || x.label.toLowerCase() === arg.toLowerCase());
-    if (!m) return console.log(C.r + "Unbekanntes Modell. Verfügbar: " + MODELS.map((x) => x.id).join(", ") + C.x + "\n");
-    cfg.model = m.id; save(cfg);
-    return console.log(C.g + "✓ Modell: " + m.label + C.x + "\n");
+    const cur = modelInfo(cfg.model);
+    if (!arg) return console.log(MODEL_FAMILIES.map((f) => { const [r, g, bb] = hexRgb(f.theme.a); return (f.id === cur.fam.id ? C.g + "● " : "  ") + rgb(r, g, bb) + "◆ " + C.x + C.b + famLabel(f) + C.x + (f.minTier === "pro" ? C.m + " Pro" + C.x : "") + C.d + " – " + f.desc + C.x; }).join("\n") + "\n\nWechseln: /modell <name> (z. B. /modell atlas) · Aufwand: /aufwand <stufe> · Effekte: /effekte an|aus\n");
+    const q = arg.toLowerCase().replace(/^mythos\s*/, "");
+    const f = MODEL_FAMILIES.find((x) => x.id === q || x.name.toLowerCase() === q || q.startsWith(x.name.toLowerCase()));
+    if (!f) return console.log(C.r + "Unbekanntes Modell. Verfügbar: " + MODEL_FAMILIES.map((x) => x.name).join(", ") + C.x + "\n");
+    cfg.model = normModelId(f.id + ":" + cur.eff.id); save(cfg);
+    await selectFxCli(f); pushFxCli({ model: cfg.model });
+    return console.log(C.g + "✓ Modell: " + modelLabel() + C.x + "\n");
+  }
+  if (cmd === "/aufwand" || cmd === "/effort") {
+    const cur = modelInfo(cfg.model), list = cur.fam.efforts || [];
+    if (!arg) return console.log(list.map((e) => (e.id === cur.eff.id ? C.g + "● " : "  ") + (EFFORT_INFO[e.id] || {}).label + C.d + " – " + (EFFORT_INFO[e.id] || {}).hint + C.x).join("\n") + "\n\nWechseln mit /aufwand <stufe>\n");
+    const q = arg.toLowerCase().replace(/\s+/g, "");
+    const e = list.find((x) => x.id === q || String((EFFORT_INFO[x.id] || {}).label).toLowerCase().replace(/\s+/g, "") === q);
+    if (!e) return console.log(C.r + "Gibt es bei " + cur.label + " nicht. Verfügbar: " + list.map((x) => (EFFORT_INFO[x.id] || {}).label).join(", ") + C.x + "\n");
+    cfg.model = cur.fam.id + ":" + e.id; save(cfg); pushFxCli({ model: cfg.model });
+    return console.log(C.g + "✓ " + modelLabel() + C.x + "\n");
+  }
+  if (cmd === "/effekte" || cmd === "/effects") {
+    const on = !/^(aus|off|0)$/i.test(arg);
+    await pushFxCli({ on, model: normModelId(cfg.model) });
+    if (on) await selectFxCli(modelInfo(cfg.model).fam);
+    return console.log((on ? C.g + "✓ Modell-Animationseffekte an – gilt auch auf Website und in der App." : "Modell-Animationseffekte aus.") + C.x + "\n");
   }
   if (cmd === "/tokens") return console.log(fmtTokens(tokens.in) + " Eingabe + " + fmtTokens(tokens.out) + " Ausgabe = " + fmtTokens(tokens.in + tokens.out) + " MythosAI Tokens" + (tokens.unknown ? " · " + tokens.unknown + " Aufrufe ohne Anbieterwerte" : "") + "\n");
   if (cmd === "/vollzugriff") { autoYes = !/^(aus|off)$/i.test(arg); return console.log(autoYes ? "Vollzugriff an.\n" : "Vollzugriff aus – Mythos fragt vor Befehlen nach.\n"); }
@@ -724,6 +778,7 @@ async function main() {
   if (args[0] === "--version" || args[0] === "-v") { console.log(VERSION); process.exit(0); }
   await autoUpdate();
   const branch = gitBranch();
+  await Promise.race([pullFxCli(), new Promise((r) => setTimeout(r, 1500))]);
   banner({ dir: "📁 " + path.basename(ROOT) + (branch ? "  ⎇ " + branch : ""), extra: (cfg.name ? "angemeldet als " + cfg.name : "by Mythoscraft") + (readMemory(ROOT) ? " · Gedächtnis ✓" : "") + " · Strg+C stoppt" });
   const history = [];
   if (args.length) { const { text, images } = extractImages(args.join(" ")); await turn(history, text, images); }

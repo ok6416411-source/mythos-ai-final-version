@@ -3,7 +3,10 @@ import {
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { Check, ChevronDown, Crown, Gauge, Lock } from "lucide-react";
+import { Check, ChevronDown, Crown, Gauge, Lock, Sparkles } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { playModelSelect, setFxEnabled, setFxModel, useModelFx } from "@/lib/modelFx";
+import type { CSSProperties } from "react";
 import {
   DEFAULT_MYTHOS_ID, MYTHOS_FAMILIES, isAllowed, parseMythosId, tierAllows, type Tier,
 } from "@/lib/mythosModels";
@@ -20,21 +23,31 @@ const needs = (t: Tier) => (t === "pro" ? "Pro" : "Light");
 /** Modell- und Aufwand-Auswahl wie bei Claude: oben das Modell, darunter der Aufwand. */
 export default function ModelPicker({ value, tier, onChange, onLocked }: Props) {
   const current = parseMythosId(value) ?? parseMythosId(DEFAULT_MYTHOS_ID)!;
+  const fx = useModelFx();
+  const choose = (id: string, ev?: Event) => {
+    const p = parseMythosId(id);
+    if (p && p.family.id !== current.family.id) {
+      const r = (ev?.target as HTMLElement | undefined)?.getBoundingClientRect?.();
+      playModelSelect(p.family.theme, r ? { x: r.left + 20, y: r.top + r.height / 2 } : undefined);
+    }
+    setFxModel(id);
+    choose(id);
+  };
 
-  const pickFamily = (famId: string) => {
+  const pickFamily = (famId: string, ev?: Event) => {
     const fam = MYTHOS_FAMILIES.find(f => f.id === famId)!;
     if (!tierAllows(tier, fam.minTier)) { onLocked(`${fam.label} braucht ${needs(fam.minTier)}.`); return; }
     // Aufwand beibehalten, wenn das neue Modell ihn hat und der Plan ihn erlaubt.
     const keep = fam.efforts.find(e => e.id === current.effort.id && tierAllows(tier, e.minTier));
     const fallback = fam.efforts.find(e => e.id === "normal") ?? fam.efforts[0];
-    onChange(`${fam.id}:${(keep ?? fallback).id}`);
+    choose(`${fam.id}:${(keep ?? fallback).id}`, ev);
   };
 
   const pickEffort = (effId: string) => {
     const id = `${current.family.id}:${effId}`;
     const eff = current.family.efforts.find(e => e.id === effId)!;
     if (!isAllowed(id, tier)) { onLocked(`${current.family.label} · ${eff.label} braucht ${needs(eff.minTier)}.`); return; }
-    onChange(id);
+    choose(id);
   };
 
   return (
@@ -44,6 +57,7 @@ export default function ModelPicker({ value, tier, onChange, onLocked }: Props) 
           variant="ghost"
           className="h-9 px-2.5 gap-1.5 text-sm font-medium hover:bg-white/5 max-w-[62vw] sm:max-w-none"
         >
+          <span className="mfx-gem !mt-0" style={{ "--ia": current.family.theme.a, "--ib": current.family.theme.b } as CSSProperties} />
           <span className="truncate">{current.family.label}</span>
           <span className="text-muted-foreground font-normal truncate hidden sm:inline">{current.effort.label}</span>
           <ChevronDown className="h-3.5 w-3.5 opacity-60 shrink-0" />
@@ -56,9 +70,12 @@ export default function ModelPicker({ value, tier, onChange, onLocked }: Props) 
           return (
             <DropdownMenuItem
               key={f.id}
-              onSelect={(e) => { e.preventDefault(); pickFamily(f.id); }}
-              className={`flex items-start gap-2 rounded-lg px-2 py-2 ${!ok ? "opacity-60" : ""}`}
+              onSelect={(e) => { e.preventDefault(); pickFamily(f.id, e); }}
+              data-fx={f.theme.fx}
+              style={{ "--ia": f.theme.a, "--ib": f.theme.b } as CSSProperties}
+              className={`mfx-item flex items-start gap-2 rounded-lg px-2 py-2 ${!ok ? "opacity-60" : ""}`}
             >
+              <span className="mfx-gem" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 text-sm font-medium">
                   {f.label}
@@ -94,6 +111,12 @@ export default function ModelPicker({ value, tier, onChange, onLocked }: Props) 
             </DropdownMenuItem>
           );
         })}
+        <DropdownMenuSeparator />
+        <div className="flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground">
+          <Sparkles className="h-3.5 w-3.5" />
+          <span className="flex-1">Modell-Animationseffekte<br /><span className="opacity-70">Design passt sich überall an (Web, App, CLI)</span></span>
+          <Switch checked={fx.on} onCheckedChange={(v) => { setFxEnabled(v); setFxModel(value); }} />
+        </div>
       </DropdownMenuContent>
     </DropdownMenu>
   );

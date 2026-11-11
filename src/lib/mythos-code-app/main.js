@@ -283,7 +283,7 @@ const FILES_PROMPT = "\n\nDateien schicken: Will der Nutzer eine Datei BEKOMMEN 
 ipcMain.handle("bg:list", () => [...BG.values()].filter((j) => j.code == null).map((j) => ({ id: j.id, cmd: j.cmd, url: j.url, cwd: j.cwd })));
 ipcMain.handle("bg:stop", (_e, id) => bgStop(id));
 ipcMain.handle("prompt:system", (_e, folder, goal) => (browserBridge.paired ? "WICHTIG – LIVE-STATUS: Das Mythos-Browser-Plugin ist JETZT VERBUNDEN. Zusätzliches Werkzeug: browser. Auf „bist du mit dem Browser verbunden?“ antwortest du mit JA.\n\n" : "") + TOOL_PROMPT + FILES_PROMPT + projectOverview(folder) + mcpPrompt() + browserPrompt() + memoryPrompt(folder ? readMemory(folder) : "") + goalPrompt(goal));
-ipcMain.handle("prompts", () => ({ nudge: GOAL_NUDGE, summary: SUMMARY_PROMPT, review: REVIEW_PROMPT, memoryFile: MEMORY_FILE, models: MODELS }));
+ipcMain.handle("prompts", () => ({ nudge: GOAL_NUDGE, summary: SUMMARY_PROMPT, review: REVIEW_PROMPT, memoryFile: MEMORY_FILE, models: MODELS, catalog: MODEL_CATALOG }));
 
 // Laufende Prozesse je Kennung – mehrere Aufgaben (und das Terminal) laufen parallel.
 const children = new Map();
