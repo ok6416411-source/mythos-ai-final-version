@@ -36,7 +36,7 @@ const fill = (src: string, vars: Record<string, string> = {}) =>
 const SHARED_TOOLS = fill(SHARED_TOOLS_RAW, { "// @@TOOL_PARSE@@": TOOL_PARSE });
 
 export const CLI_PKG = "mythos-code";
-export const CLI_VERSION = "1.11.0"; // in GitHub Actions automatisch 1.11.<Build-Nummer>
+export const CLI_VERSION = "1.12.0"; // in GitHub Actions automatisch 1.12.<Build-Nummer>
 /** Version für die ZIP von der Website (zum selbst `npm publish`en): jede ZIP bekommt eine neue,
  *  höhere Nummer (Minuten seit 2026), damit npm nie „Version existiert schon“ meldet und alle Nutzer
  *  beim nächsten Start automatisch updaten. */
