@@ -4,6 +4,7 @@ import { readChatRecovery, writeChatRecovery, shouldFollowChat } from "@/lib/cha
 import { useState, useEffect, useRef, useMemo } from "react";
 import ImageGeneration, { type GeneratedImage } from "@/components/chat/ImageGeneration";
 import { isImageRequest } from "@/lib/imageIntent";
+import { grafikPrompt, grafikRequest } from "@/lib/grafik";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import MinecraftAvatar from "@/components/MinecraftAvatar";
@@ -73,6 +74,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 const SLASH_COMMANDS = [
+  { cmd: "/grafik",    args: "<motiv>",         icon: ImageIcon, desc: "Grafik zeichnen lassen (Logo, Poster, Szene, Icon …) – erscheint direkt als Bild" },
   { cmd: "/goal",      args: "<ziel>",          icon: Target,    desc: "Ziel setzen – Mythos arbeitet selbstständig Schritt für Schritt, bis es erreicht ist" },
   { cmd: "/music",     args: "<stil/vibe>",     icon: Music,     desc: "Song mit Gesang erzeugen (1–3 Minuten)" },
   { cmd: "/video",     args: "<szene>",         icon: Film,      desc: "Kurzes KI-Video (Bild + Animation, kostenlos im Browser)" },
@@ -808,7 +810,9 @@ const Chat = () => {
       }
       return parts;
     };
-    const userContentForAI = buildContent(text);
+    // Grafik-Wunsch (/grafik oder „zeichne …“, „mach ein Logo …“): als SVG-Auftrag an die KI.
+    const grafikMotif = grafikRequest(text, attachments.length > 0);
+    const userContentForAI = buildContent(grafikMotif ? grafikPrompt(grafikMotif) : text);
     setMessages(prev => [...prev, { role: "assistant", content: "" }]);
     // Nicht auf das Speichern warten: die KI-Anfrage startet sofort (spart eine Server-Runde).
     supabase.from("messages").insert({
@@ -2078,7 +2082,7 @@ const Chat = () => {
                     <DropdownMenuContent align="start" side="top" className="w-60">
                       <DropdownMenuLabel>Erstellen</DropdownMenuLabel>
                       {[
-                        { cmd: "Zeichne als Grafik (SVG): ", label: "Grafik zeichnen", icon: ImageIcon },
+                        { cmd: "/grafik ", label: "Grafik zeichnen", icon: ImageIcon },
                         { cmd: "/music ", label: "Song mit Gesang", icon: Music },
                         { cmd: "/video ", label: "Kurzes Video", icon: Film },
                         { cmd: "/goal ", label: "Ziel selbstständig erledigen", icon: Target },

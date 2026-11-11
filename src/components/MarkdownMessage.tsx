@@ -119,6 +119,9 @@ function CodeCard({ lang, code }: { lang: string; code: string }) {
   const [copied, setCopied] = useState(false);
   const ext = EXT[lang] || "txt";
   const isHtml = lang === "html" || /^\s*<(!doctype|html)/i.test(code);
+  const isSvg = (lang === "svg" || lang === "xml" || !lang) && /^\s*(<\?xml[^>]*>\s*)?<svg[\s>]/i.test(code) && /<\/svg>\s*$/i.test(code.trim());
+  const [showCode, setShowCode] = useState(false);
+  const svgUrl = useMemo(() => isSvg ? "data:image/svg+xml;charset=utf-8," + encodeURIComponent(code.replace(/<script[\s\S]*?<\/script>/gi, "")) : "", [isSvg, code]);
 
   const copy = async () => {
     if (!(await copyText(code))) { toast.error("Kopieren hat nicht geklappt. Halte den Code gedrückt und kopiere ihn von Hand."); return; }
@@ -145,7 +148,17 @@ function CodeCard({ lang, code }: { lang: string; code: string }) {
           </IconBtn>
         </div>
       </div>
-      <pre className="overflow-x-auto p-3 text-[13px] leading-relaxed"><code>{code}</code></pre>
+      {isSvg && (
+        <button type="button" onClick={() => openInMythosBrowser({ html: `<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><body style="margin:0;display:grid;place-items:center;min-height:100vh;background:#0b0b0f">${code.replace(/<script[\s\S]*?<\/script>/gi, "")}<style>svg{max-width:100vw;max-height:100vh;width:100%;height:auto}</style>`, title: "Grafik" })} className="block w-full bg-[#0b0b0f]" title="Groß ansehen">
+          <img src={svgUrl} alt="Grafik" className="mx-auto max-h-[70vh] w-full object-contain" />
+        </button>
+      )}
+      {isSvg && (
+        <button type="button" onClick={() => setShowCode(!showCode)} className="w-full border-t border-white/5 px-3 py-1.5 text-left text-[11px] text-muted-foreground hover:text-foreground">
+          {showCode ? "Code ausblenden" : "SVG-Code anzeigen"}
+        </button>
+      )}
+      {(!isSvg || showCode) && <pre className="overflow-x-auto p-3 text-[13px] leading-relaxed"><code>{code}</code></pre>}
     </div>
   );
 }
