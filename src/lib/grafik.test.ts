@@ -17,3 +17,12 @@ describe("grafik", () => {
     expect(grafikPrompt("Drache")).toMatch(/SVG/);
   });
 });
+
+import { renameLegacyModels } from "./mythosModels";
+describe("alte Modellnamen", () => {
+  it("werden ersetzt, Mythos Code (App) bleibt", () => {
+    expect(renameLegacyModels("Ich bin Mythos v2.")).toBe("Ich bin Mythos Amber 2.");
+    expect(renameLegacyModels("MythosCode v1.5 und Mythos v1")).toBe("Mythos Atlas 1.6 und Mythos Spark 1");
+    expect(renameLegacyModels("Lade Mythos Code herunter")).toBe("Lade Mythos Code herunter");
+  });
+});

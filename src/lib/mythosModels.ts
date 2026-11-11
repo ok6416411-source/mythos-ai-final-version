@@ -59,3 +59,15 @@ export function isAllowed(id: string, tier: Tier): boolean {
   if (!p) return false;
   return tierAllows(tier, p.family.minTier) && tierAllows(tier, p.effort.minTier);
 }
+
+/** Alte Modellnamen (kommen noch von älteren Server-Versionen) durch die aktuellen ersetzen. */
+const label = (id: string) => MYTHOS_FAMILIES.find((f) => f.id === id)?.label ?? "";
+export function renameLegacyModels(text: string): string {
+  if (!text || !/Mythos ?Code v1|Mythos v[12]/i.test(text)) return text;
+  return text
+    .replace(/Mythos ?Code v1\.5/gi, label("code15"))
+    .replace(/Mythos ?Code v1\.1/gi, label("code11"))
+    .replace(/Mythos v1 Lite/gi, label("pebble"))
+    .replace(/Mythos v2(?:\.0)?\b/gi, label("v2"))
+    .replace(/Mythos v1(?:\.0)?\b/gi, label("v1"));
+}

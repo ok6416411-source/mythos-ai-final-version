@@ -44,7 +44,7 @@ import BrowserExtensionPanel from "@/components/BrowserExtensionPanel";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { isPuterModel, getPuterLabel } from "@/lib/puterAi";
 import ModelPicker from "@/components/ModelPicker";
-import { DEFAULT_MYTHOS_ID, isAllowed, mythosLabel } from "@/lib/mythosModels";
+import { DEFAULT_MYTHOS_ID, isAllowed, mythosLabel, renameLegacyModels } from "@/lib/mythosModels";
 
 import { nvidiaChat, nvidiaLLM } from "@/lib/nvidiaApi";
 import CustomizeDialog from "@/components/chat/CustomizeDialog";
@@ -201,7 +201,7 @@ function parseToolCall(text: string): { name: string; arguments: unknown } | nul
 
 /** Technische Markierungen aus einer Antwort entfernen, bevor sie angezeigt wird. */
 const forDisplay = (text: string) =>
-  text.replace(TOOL_BLOCK, "").replace(/<\/(?:tool_call|tool_use|tool)\s*>/gi, "").replace(GOAL_DONE, "").trimEnd();
+  renameLegacyModels(text).replace(TOOL_BLOCK, "").replace(/<\/(?:tool_call|tool_use|tool)\s*>/gi, "").replace(GOAL_DONE, "").trimEnd();
 
 const Chat = () => {
   const { user, session, profile, isAdmin, signOut } = useAuth();
@@ -1113,6 +1113,7 @@ const Chat = () => {
         res.interrupted = next.interrupted;
         if (next.aborted) { res.aborted = true; break; }
       }
+      res.full = renameLegacyModels(res.full);
       if (res.full || res.image || res.music) {
         await supabase.from("messages").insert({
           conversation_id: convId, role: "assistant", content: res.full,
