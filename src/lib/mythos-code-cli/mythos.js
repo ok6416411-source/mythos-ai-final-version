@@ -112,6 +112,10 @@ function openBrowser(url) {
 async function loginWithKey() {
   const k = (await ask("API-Key (sk-ant-mythos-...): ")).trim();
   if (!k.startsWith("sk-ant-mythos-")) { console.log(C.r + "Ungültiger Key." + C.x); process.exit(1); }
+  // Auch beim Anmelden per Schlüssel: Die CLI gibt es nur mit Pro.
+  let u = null; try { u = await authPost({ action: "usage", api_key: k }); } catch { /* unten */ }
+  if (!u || u.error) { console.log(C.r + "Schlüssel ungültig oder Server nicht erreichbar." + C.x); process.exit(1); }
+  if (!u.admin && u.tier !== "pro") { console.log(C.r + "Die CLI gibt es mit Mythos Pro – dein Konto hat kein Pro." + C.x); process.exit(1); }
   cfg.key = k; save(cfg); console.log(C.g + "✓ Angemeldet" + C.x);
 }
 
@@ -121,7 +125,7 @@ async function login() {
   let s;
   try { s = await authPost({ action: "start", client: "cli" }); } catch { s = null; }
   if (!s?.code) { console.log(C.r + "Anmeldung gerade nicht möglich – versuch es gleich nochmal." + C.x); process.exit(1); }
-  const url = SITE + "/cli-auth?code=" + s.code;
+  const url = s.url || (SITE + "/cli-auth?code=" + s.code);
   console.log(C.c + "\n  Anmeldung mit MythosAI" + C.x);
   console.log("  Dein Browser öffnet sich. Klicke dort auf " + C.b + "Authentifizieren" + C.x + ".");
   console.log(C.d + "  Code: " + s.code + "  ·  Falls sich nichts öffnet: " + url + C.x + "\n");
@@ -275,7 +279,7 @@ async function once(messages, onText, onThink) {
   try {
     const r = await fetch(API, {
       method: "POST", signal: c.signal,
-      headers: { "content-type": "application/json", "x-api-key": cfg.key, "anthropic-version": "2023-06-01" },
+      headers: { "content-type": "application/json", "x-api-key": cfg.key, "anthropic-version": "2023-06-01", "x-mythos-client": "cli" },
       body: JSON.stringify({ model: cfg.model || "mythos-code", route: altRoute ? "alt" : undefined, task_id: currentTaskId, max_tokens: 8000, system, messages, stream: true }),
     });
     if (!r.ok) { const j = await r.json().catch(() => ({})); const e = new Error(j?.error?.message || ("HTTP " + r.status)); e.status = r.status; throw e; }
@@ -307,6 +311,7 @@ async function call(history, onText, onThink) {
     catch (e) {
       if (stopped) throw e;
       if (e.status === 401) throw new Error("Anmeldung ungültig – bitte neu anmelden: mythos login");
+      if (e.status === 403 || /mit Mythos Pro/i.test(e.message)) { const pe = new Error(e.message || "Die CLI gibt es mit Mythos Pro."); pe.limit = true; throw pe; }
       if (/Daily limit/i.test(e.message)) throw new Error("Tageslimit erreicht – mit Pro unbegrenzt.");
       // Token-Limit (Stunde/Woche/Monat): neue Aufgabe abgelehnt – nicht wiederholen, klar melden.
       if (/Limit ist erreicht/i.test(e.message)) { const le = new Error("Limit erreicht – " + e.message); le.limit = true; throw le; }
@@ -419,6 +424,16 @@ async function runTool(t) {
   }
   if (t.name === "run") return runLive(t.cmd);
   if (t.name === "cloud") return cloudConnect(t);
+  if (t.name === "publish") {
+    const b = bundleSite(process.cwd(), t.path || ".");
+    if (b.error) return "FEHLER: " + b.error;
+    const key = cfg.key;
+    const slug = String(t.slug || require("path").basename(require("path").resolve(t.path || ".")) || "meine-app");
+    const j = await authPost({ action: "publish_app", api_key: key, slug, title: t.title || slug, html: b.html }).catch((e) => ({ error: e.message }));
+    if (!j.url) return "FEHLER beim Veröffentlichen: " + (j.error || "unbekannt") + " – sag ehrlich, dass es NICHT online ist.";
+    say(C.g + "   🌐 " + j.url + C.x);
+    return "✓ Veröffentlicht: " + j.url + (b.notes && b.notes.length ? "\nHinweise: " + b.notes.join("; ") : "");
+  }
   if (isDevTool(t)) return cliDevTool(t);
   if (isWebTool(t)) {
     const r = await webTool(t);
@@ -450,7 +465,7 @@ async function turnInner(history) {
     const pb = parseToolBlock(out);
     if (!pb.tool && !pb.error) {
       const nudge = tracker.nudge(out, question);
-      if (nudge) { say(C.d + "🔎 Mythos prüft seine Arbeit …" + C.x); history.push({ role: "user", content: nudge }); continue; }
+      if (nudge) { say(C.d + "🔎 Mythos prüft seine Arbeit …" + C.x); history.push({ role: "user", content: nudge + (tracker.projectDir() ? "\nDein Projektordner ist „" + tracker.projectDir() + "“ – verify mit {\"path\":\"" + tracker.projectDir() + "\"}." : "") + "\nWICHTIG: check ✓ heißt nur „lädt ohne Fehler“ – ob es gut aussieht und funktioniert, siehst du am Screenshot und Tastatur-Test. Danach KEIN neuer langer Abschlussbericht, nur 1–3 Sätze, was sich geändert hat." }); continue; }
       if (!goal || /ZIEL ERREICHT/.test(out)) return goal ? "reached" : "done";
       if (++nudges > 40) { say(C.y + "🎯 Mythos kommt beim Ziel nicht weiter – schau es dir bitte an (/weiter macht weiter)." + C.x); return "stuck"; }
       history.push({ role: "user", content: GOAL_NUDGE });
@@ -458,10 +473,18 @@ async function turnInner(history) {
     }
     nudges = 0;
     if (pb.error) { history.push({ role: "user", content: pb.error + " Sende den Block vollständig als gültiges JSON in <tool>…</tool>." }); continue; }
-    const t = pb.tool, bad = toolProblem(t);
+    let t = pb.tool; const bad = toolProblem(t);
+    if (t && t.name === "verify" && !t.path && tracker.projectDir()) t = Object.assign({}, t, { path: tracker.projectDir() });
     if (bad) { history.push({ role: "user", content: "Werkzeug-Ergebnis:\n" + bad }); continue; }
     const res = await runTool(t), resText = typeof res === "string" ? res : res.text;
     let loopHint = tracker.note(t, resText) || "";
+    const stuckWhy = goal ? "" : tracker.stuck();
+    if (stuckWhy) {
+      history.push({ role: "user", content: "Werkzeug-Ergebnis:\n" + String(resText).slice(0, 4000) });
+      say(C.y + "⏸ " + stuckWhy + " Sag mir kurz, was genau nicht passt – oder „mach weiter“ für einen ganz anderen Ansatz." + C.x);
+      history.push({ role: "assistant", content: "(Angehalten: " + stuckWhy + " Ich habe den Nutzer gefragt, was genau nicht passt.)" });
+      return "done";
+    }
     if (/Fehlschläge in Folge/.test(loopHint) && !stopped) loopHint += await secondOpinion(history, resText);
     // Screenshot nur in der neuesten Prüfung mitschicken (spart Tokens).
     if (res.image) history.forEach((m) => { if (m.shot) { delete m.images; delete m.shot; } });

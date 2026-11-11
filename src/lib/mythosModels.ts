@@ -24,9 +24,9 @@ const E = (id: EffortId, label: string, minTier: Tier, hint: string): MythosEffo
 export const MYTHOS_FAMILIES: MythosFamily[] = [
   {
     id: "v1",
-    label: "Mythos v1",
+    label: "Mythos Hermes 1",
     minTier: "free",
-    desc: "Allrounder für Alltag & Support",
+    desc: "Hermes · schneller Allrounder für Alltag & Support",
     efforts: [
       E("instant", "Instant", "free", "Sofort, sehr kurz"),
       E("low", "Low", "free", "Schnell, knapp"),
@@ -37,9 +37,9 @@ export const MYTHOS_FAMILIES: MythosFamily[] = [
   },
   {
     id: "code11",
-    label: "MythosCode v1.1",
+    label: "Mythos Forge 1.1",
     minTier: "free",
-    desc: "Code, Debugging, Technik",
+    desc: "Forge · Code, Debugging, Technik",
     efforts: [
       E("instant", "Instant", "free", "Schnelle Snippets"),
       E("low", "Low", "free", "Kurze Lösungen"),
@@ -51,9 +51,9 @@ export const MYTHOS_FAMILIES: MythosFamily[] = [
   },
   {
     id: "v2",
-    label: "Mythos v2",
+    label: "Mythos Zeus 2",
     minTier: "pro",
-    desc: "Nächste Generation — stärkstes Reasoning",
+    desc: "Zeus · Flaggschiff — stärkstes Reasoning",
     efforts: [
       E("instant", "Instant", "pro", "Blitzschnell"),
       E("low", "Low", "pro", "Schnell & präzise"),
@@ -64,9 +64,9 @@ export const MYTHOS_FAMILIES: MythosFamily[] = [
   },
   {
     id: "code15",
-    label: "MythosCode v1.5",
+    label: "Mythos Prometheus 1.5",
     minTier: "pro",
-    desc: "Profi-Code-Modell",
+    desc: "Prometheus · Profi-Code für ganze Projekte",
     efforts: [
       E("instant", "Instant", "pro", "Blitz-Snippets"),
       E("low", "Low", "pro", "Schnelle Fixes"),

@@ -66,6 +66,7 @@ const CliAuth = () => {
                 Authentifizieren
               </Button>
               {error && <p className="text-sm text-destructive">{error}</p>}
+              {/Pro/.test(error) && <Button asChild variant="outline" className="w-full"><a href="/dashboard">Pro holen</a></Button>}
             </>
           )}
         </div>

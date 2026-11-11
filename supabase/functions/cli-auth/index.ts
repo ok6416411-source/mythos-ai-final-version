@@ -2,7 +2,13 @@
 // actions: start (App) -> approve (Website, eingeloggt) -> poll (App) ; usage (App, mit API-Key)
 import { createClient } from "npm:@supabase/supabase-js@2.103.3";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
-import { usageSummary } from "../_shared/tokens.ts";
+import { usageSummary, tierOf } from "../_shared/tokens.ts";
+import { SITE_URL } from "../_shared/site.ts";
+import { publishApp } from "../_shared/apps.ts";
+
+// Mythos Code (App) und die CLI gibt es nur mit Pro – genau wie der Download auf der Website.
+const CODE_TIERS = new Set(["pro", "admin"]);
+const CODE_LOCKED = "Mythos Code und die CLI gibt es mit Mythos Pro. Mit deinem Konto kannst du sie leider nicht nutzen – hol dir Pro unter " + SITE_URL + "/dashboard.";
 import { watchVideoBytes } from "../_shared/video.ts";
 
 const json = (d: unknown, status = 200) =>
@@ -31,7 +37,8 @@ Deno.serve(async (req) => {
       await db.from("cli_device_auth").delete().lt("created_at", new Date(Date.now() - 15 * 60e3).toISOString());
       const { error } = await db.from("cli_device_auth").insert({ code, poll_secret });
       if (error) throw error;
-      return json({ code, poll_secret });
+      // Adresse zum Bestätigen kommt vom Server – installierte Versionen haben so nie eine veraltete Domain.
+      return json({ code, poll_secret, site: SITE_URL, url: SITE_URL + "/cli-auth?code=" + code });
     }
 
     if (action === "approve") {
@@ -41,6 +48,7 @@ Deno.serve(async (req) => {
       const { data: c } = await authClient.auth.getClaims(token);
       const userId = c?.claims?.sub;
       if (!userId) return json({ error: "Bitte zuerst anmelden." }, 401);
+      if (!CODE_TIERS.has(await tierOf(db, userId))) return json({ error: CODE_LOCKED, code: "pro_required" }, 403);
       const code = String(body.code || "").toUpperCase().slice(0, 16);
       const { data: row } = await db.from("cli_device_auth").select("*").eq("code", code).maybeSingle();
       if (!row) return json({ error: "Code ungültig oder abgelaufen." }, 404);
@@ -59,7 +67,7 @@ Deno.serve(async (req) => {
       const { data: row } = await db.from("cli_device_auth").select("*")
         .eq("code", String(body.code || "")).eq("poll_secret", String(body.poll_secret || "")).maybeSingle();
       if (!row) return json({ status: "expired" });
-      if (!row.api_key) return json({ status: "pending" });
+      if (!row.api_key) return json({ status: "pending", url: SITE_URL + "/cli-auth?code=" + row.code });
       await db.from("cli_device_auth").delete().eq("code", row.code);
       const { data: prof } = await db.from("profiles").select("display_name,email").eq("user_id", row.user_id).maybeSingle();
       return json({ status: "ok", api_key: row.api_key, name: prof?.display_name || prof?.email || "Mythos-Nutzer" });
@@ -78,6 +86,7 @@ Deno.serve(async (req) => {
       const key = String(body.api_key || "");
       const { data: k } = await db.from("api_keys").select("id,revoked").eq("key_hash", await sha256(key)).maybeSingle();
       if (!k || k.revoked) return json({ error: "Ungültiger Schlüssel – bitte neu anmelden" }, 401);
+      { const { data: kr } = await db.from("api_keys").select("user_id").eq("id", k.id).maybeSingle(); if (!kr || !CODE_TIERS.has(await tierOf(db, kr.user_id))) return json({ error: CODE_LOCKED }, 403); }
       const b64 = String(body.data || "");
       if (!b64 || b64.length > 56_000_000) return json({ error: "Video fehlt oder ist zu groß (max. 40 MB)" }, 400);
       const bin = atob(b64); const bytes = new Uint8Array(bin.length);
@@ -122,6 +131,18 @@ Deno.serve(async (req) => {
         body: `**Regel-Vorschlag:** ${rule || "(keiner)"}\n\n**Kritik:** ${c || "(keine)"}\n\n**Frage:** ${q.slice(0, 600)}\n\n**Antwort (Auszug):** ${a.slice(0, 1200)}`,
       });
       return json({ ok: true });
+    }
+
+    // Code-App/CLI: Projekt wirklich veröffentlichen – unter <Website>/build/<name>, wie im App-Builder.
+    if (action === "publish_app") {
+      const key = String(body.api_key || "");
+      const { data: k } = await db.from("api_keys").select("id,user_id,revoked").eq("key_hash", await sha256(key)).maybeSingle();
+      if (!k || k.revoked) return json({ error: "Ungültiger Schlüssel – bitte neu anmelden" }, 401);
+      if (!CODE_TIERS.has(await tierOf(db, k.user_id))) return json({ error: CODE_LOCKED }, 403);
+      const { data: prof } = await db.from("profiles").select("display_name,email").eq("user_id", k.user_id).maybeSingle();
+      const r = await publishApp(db, { id: k.user_id, email: prof?.email }, { slug: body.slug, title: body.title, html: body.html, author: prof?.display_name || undefined });
+      if ("error" in r) return json({ error: r.error }, r.status);
+      return json({ ok: true, slug: r.slug, url: SITE_URL + "/build/" + r.slug, updated: r.existed });
     }
 
     if (action === "usage") {

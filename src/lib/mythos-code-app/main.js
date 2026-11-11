@@ -354,6 +354,7 @@ ipcMain.handle("tool", async (_e, t, cwd, runId) => {
   } else if (isWebTool(t)) r = await webTool(t);
   else if (t.name === "mcp") { const x = await mcp.call(t.server, t.tool, t.args || {}); r = { result: String(x.output).slice(0, 20000) }; }
   else if (t.name === "browser") { const st = bridgeState(); if (!st.paired) r = { result: "FEHLER: Browser-Plugin nicht gekoppelt – der Nutzer muss es unter Anpassungen → Plugins mit dem Code koppeln." }; else { const item = { id: crypto.randomUUID(), task: String(t.task || "").slice(0, 1500), at: Date.now() }; browserBridge.stopped = false; const done = new Promise((res) => { browserBridge.pending.set(item.id, res); setTimeout(() => { if (browserBridge.pending.delete(item.id)) res({ kind: "error", text: "Zeitüberschreitung (5 Min)" }); }, 300000); }); browserBridge.tasks.push(item); bridgeEvent({ kind: "task", text: item.task, taskId: item.id }); const ev = await done; r = { result: (ev.kind === "done" ? "Browser-Ergebnis: " : "FEHLER: ") + String(ev.text || "").slice(0, 8000) }; } }
+  else if (t.name === "publish") { const b = bundleSite(root, t.path || "."); r = b.error ? { result: "FEHLER: " + b.error } : { result: "BUNDLE bereit", bundle: b }; }
   else r = fileTool(t, root);
   const post = await runHooks("PostToolUse", { tool_name: toolName, tool_input: t, tool_output: r.result.slice(0, 4000) }, cwd);
   const notes = post.filter((h) => h.out || h.code).map((h) => "[Hook „" + h.command + "“ → Exit " + h.code + "]\n" + h.out);
@@ -366,7 +367,7 @@ async function appDevTool(t, root, runId) {
   const r = await devTool(t, root, { onChunk: (s) => send("tool-output", { id: runId, chunk: s }), track: (p) => children.set(runId, p) });
   if (t.name === "verify") children.delete(runId);
   if (t.name === "check" && wantsRender(r)) {
-    const rv = await renderCheck(r.url).catch((e) => { logError(e); return null; });
+    const rv = await renderCheck(r.url, { keys: t.keys }).catch((e) => { logError(e); return null; });
     r.result = rv ? checkReport(r.url, r.http, renderVerdict(rv)) : checkReport(r.url, r.http, null, "ℹ Browser-Test nicht möglich – nur HTTP-Prüfung.");
     if (rv && rv.image) r.image = rv.image;
   }
@@ -387,7 +388,14 @@ function getCheckSession() {
   return checkSession;
 }
 /** Seite wie im echten Browser laden: sichtbarer Inhalt, Konsolenfehler, fehlgeschlagene Dateien, Screenshot. */
-function renderCheck(url) {
+/** Tasten für den Eingabe-Test: Standard = rechts laufen, springen, links laufen, hoch. */
+const KEYMAP = { right: ["ArrowRight", 39], left: ["ArrowLeft", 37], up: ["ArrowUp", 38], down: ["ArrowDown", 40], space: [" ", 32, "Space"], enter: ["Enter", 13], w: ["w", 87, "KeyW"], a: ["a", 65, "KeyA"], s: ["s", 83, "KeyS"], d: ["d", 68, "KeyD"], shift: ["Shift", 16, "ShiftLeft"], x: ["x", 88, "KeyX"], z: ["z", 90, "KeyZ"], j: ["j", 74, "KeyJ"], k: ["k", 75, "KeyK"] };
+function keyPlan(keys) {
+  const list = Array.isArray(keys) && keys.length ? keys : ["right:900", "space:120", "right:400", "left:500", "up:150"];
+  return list.slice(0, 12).map((k) => { const [name, ms] = String(k).toLowerCase().replace(/^arrow/, "").split(":"); const m = KEYMAP[name] || KEYMAP[name.replace(/^key/, "")]; return m ? { key: m[0], keyCode: m[1], code: m[2] || m[0], ms: Math.max(60, Math.min(3000, Number(ms) || 300)), label: name } : null; }).filter(Boolean);
+}
+function renderCheck(url, opts) {
+  opts = opts || {};
   return new Promise((resolve) => {
     const win = new BrowserWindow({ show: false, width: 1280, height: 800, paintWhenInitiallyHidden: true,
       webPreferences: { session: getCheckSession(), sandbox: true, contextIsolation: true, backgroundThrottling: false } });
@@ -410,17 +418,47 @@ function renderCheck(url) {
           const b = document.body; if (!b) return { text: 0, vis: 0, sample: "", overlay: "" };
           const t = (b.innerText || "").trim();
           let vis = 0;
-          for (const el of b.querySelectorAll("img,svg,canvas,video,button,input,textarea,select,iframe")) { const r = el.getBoundingClientRect(); if (r.width > 4 && r.height > 4) vis++; }
+          let canvas = 0;
+          for (const el of b.querySelectorAll("img,svg,canvas,video,button,input,textarea,select,iframe")) { const r = el.getBoundingClientRect(); if (r.width > 4 && r.height > 4) { vis++; if (el.tagName === "CANVAS" && r.width > 120 && r.height > 80) canvas++; } }
           const ov = document.querySelector("vite-error-overlay");
           const overlay = ov ? ((ov.shadowRoot && ov.shadowRoot.textContent) || "Vite-Fehler").replace(/\s+/g, " ").trim()
             : (document.querySelector("nextjs-portal") ? "Next.js-Fehleranzeige" : "");
-          return { text: t.length, vis, sample: t.replace(/\s+/g, " ").slice(0, 200), overlay, title: document.title };
+          return { text: t.length, vis, canvas, sample: t.replace(/\s+/g, " ").slice(0, 200), overlay, title: document.title };
         })()`), new Promise((_, rej) => setTimeout(() => rej(new Error("Zeitüberschreitung")), 5000))]);
       } catch (e) { errors.push("Seite konnte nicht ausgewertet werden: " + e.message); }
       try {
         const img = await wc.capturePage();
         if (!img.isEmpty()) { const small = img.getSize().width > 1024 ? img.resize({ width: 1024 }) : img; image = { media_type: "image/jpeg", data: small.toJPEG(70).toString("base64") }; }
       } catch { /* kein Screenshot */ }
+      // Tastatur-Test bei Spielen/Canvas (oder wenn Mythos ihn mit "keys" anfordert): Bild ohne und mit Eingaben vergleichen.
+      let input = null;
+      if (opts.keys !== false && (info.canvas > 0 || (Array.isArray(opts.keys) && opts.keys.length))) {
+        try {
+          const plan = keyPlan(opts.keys);
+          const snap = async () => { const im = await wc.capturePage(); return im.isEmpty() ? null : im.resize({ width: 160 }).toBitmap(); };
+          const diff = (a, b) => { if (!a || !b || a.length !== b.length) return 0; let n = 0; for (let i = 0; i < a.length; i += 4) if (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]) > 40) n++; return n / (a.length / 4); };
+          const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+          const a0 = await snap(); await wait(700); const a1 = await snap();
+          const idle = diff(a0, a1);
+          // Einmal in die Mitte klicken (viele Spiele starten erst per Klick/Fokus), dann Tasten wie ein Mensch halten.
+          const needsClick = await wc.executeJavaScript(`(() => { const t = (document.body && document.body.innerText || "").toLowerCase(); const c = document.querySelector("canvas") || document.body; const r = c.getBoundingClientRect(); const x = r.left + r.width / 2, y = r.top + r.height / 2; for (const ty of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) c.dispatchEvent(new (ty.startsWith("pointer") ? PointerEvent : MouseEvent)(ty, { bubbles: true, clientX: x, clientY: y })); try { c.focus && c.focus(); } catch (e) {} return /start|spielen|play|klick|press|drück/.test(t); })()`).catch(() => false);
+          await wait(250);
+          const b0 = await snap();
+          for (const k of plan) {
+            const ev = JSON.stringify({ key: k.key, code: k.code, keyCode: k.keyCode, which: k.keyCode, bubbles: true, cancelable: true });
+            await wc.executeJavaScript(`(() => { const t = document.activeElement && document.activeElement !== document.body ? document.activeElement : (document.querySelector("canvas") || document.body); t.dispatchEvent(new KeyboardEvent("keydown", ${ev})); })()`).catch(() => {});
+            await wait(k.ms);
+            await wc.executeJavaScript(`(() => { const t = document.activeElement && document.activeElement !== document.body ? document.activeElement : (document.querySelector("canvas") || document.body); t.dispatchEvent(new KeyboardEvent("keyup", ${ev})); })()`).catch(() => {});
+            await wait(60);
+          }
+          await wait(250);
+          const b1 = await snap();
+          input = { idle, moved: diff(b0, b1), needsClick: !!needsClick, keys: plan.map((k) => k.label + " " + k.ms + " ms").join(", ") };
+          const after = await wc.capturePage();
+          if (!after.isEmpty()) { const small = after.getSize().width > 1024 ? after.resize({ width: 1024 }) : after; image = { media_type: "image/jpeg", data: small.toJPEG(70).toString("base64") }; }
+        } catch (e) { input = { error: e.message || String(e) }; }
+      }
+      info.input = input;
       const failed = checkFails.get(id) || []; checkFails.delete(id);
       if (loadErr) errors.unshift("Seite lädt nicht: " + loadErr);
       try { win.destroy(); } catch { /* egal */ }

@@ -246,7 +246,8 @@ const Chat = () => {
   // Chats, in deren Nachrichten der Suchtext vorkommt (nicht nur im Titel).
   const [contentHits, setContentHits] = useState<Set<string>>(new Set());
   // Nachrichten, die während einer laufenden Antwort eingegeben wurden – werden danach der Reihe nach gesendet.
-  const [queue, setQueue] = useState<string[]>([]);
+  // Warteschlange: gehört immer zu einem bestimmten Chat (sonst landet sie nach einem Chat-Wechsel im falschen).
+  const [queue, setQueue] = useState<{ id: string; text: string; chat: string | null }[]>([]);
   const [dragging, setDragging] = useState(false);
   // Seitenleiste wie bei Claude
   const [projectId, setProjectId] = useState<string | null>(null);
@@ -1178,8 +1179,10 @@ const Chat = () => {
   const stop = () => {
     stopRef.current = true;
     abortRef.current?.abort();
-    setQueue([]);
+    // Wartende Nachrichten bleiben stehen (wie bei Claude) – sie gehen raus, sobald du sie abschickst.
+    queuePausedRef.current = true;
   };
+  const queuePausedRef = useRef(false);
 
   useEffect(() => { if (input) setSuggestions([]); }, [input]);
   useEffect(() => { setSuggestions([]); suggestBodyRef.current = null; }, [activeId]);
@@ -1226,20 +1229,16 @@ const Chat = () => {
     const onSmart = (e: Event) => {
       const t = (e as CustomEvent<string>).detail; if (!t) return;
       // Schreibt Mythos gerade noch, geht der Klick nicht verloren: Er wird direkt danach gesendet.
-      if (sendingRef.current || sendingStateRef.current) { smartQueueRef.current.push(t); toast("Wird gesendet, sobald Mythos fertig ist", { duration: 2500 }); }
+      if (sendingRef.current || sendingStateRef.current) enqueueRef.current?.(t);
       else sendRef.current?.(t);
     };
     window.addEventListener(SMART_UI_SEND, onSmart);
     return () => window.removeEventListener(SMART_UI_SEND, onSmart);
   }, []);
-  const smartQueueRef = useRef<string[]>([]);
+  const enqueueRef = useRef<((t: string) => void) | null>(null);
   const sendingStateRef = useRef(false);
   sendingStateRef.current = sending;
-  useEffect(() => {
-    if (sending || !smartQueueRef.current.length) return;
-    const t = setTimeout(() => { if (sendingRef.current) return; const next = smartQueueRef.current.shift(); if (next) sendRef.current?.(next); }, 250);
-    return () => clearTimeout(t);
-  }, [sending, messages.length]);
+
 
   // /app?mode=support (Minecraft-Link) stellt den Modus für den neuen Chat ein.
   useEffect(() => {
@@ -1300,19 +1299,30 @@ const Chat = () => {
     ? convs.filter(c => c.title.toLowerCase().includes(convSearch.toLowerCase()) || contentHits.has(c.id))
     : convs;
 
-  // Warteschlange abarbeiten, sobald die aktuelle Antwort fertig ist.
+  const enqueue = (text: string) => { queuePausedRef.current = false; setQueue((q) => [...q, { id: Math.random().toString(36).slice(2), text, chat: activeId }]); };
+  enqueueRef.current = enqueue;
+  const myQueue = queue.filter((q) => q.chat === activeId);
+  // Warteschlange abarbeiten, sobald die aktuelle Antwort wirklich fertig ist (inkl. Selbstprüfung).
+  // Kurz warten und erst dann nehmen: so geht nichts verloren, wenn direkt danach noch etwas läuft.
+  const [queueTick, setQueueTick] = useState(0);
   useEffect(() => {
-    if (sending || !queue.length) return;
-    const [next, ...rest] = queue;
-    setQueue(rest);
-    send(next);
+    if (sending || queuePausedRef.current || loadingChat) return;
+    const next = queue.find((q) => q.chat === activeId);
+    if (!next) return;
+    const t = setTimeout(() => {
+      if (sendingRef.current) { setQueueTick((n) => n + 1); return; }
+      setQueue((q) => q.filter((x) => x.id !== next.id));
+      void send(next.text);
+    }, 400);
+    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sending, queue]);
+  }, [sending, queue, activeId, queueTick, loadingChat]);
 
   const submitOrQueue = () => {
     const text = input.trim();
     if (!text) return;
-    if (sending) { setQueue(q => [...q, text]); setInput(""); return; }
+    if (sending) { enqueue(text); setInput(""); return; }
+    queuePausedRef.current = false;
     send();
   };
 
@@ -1888,17 +1898,22 @@ const Chat = () => {
                 </div>
               )}
 
-              {queue.length > 0 && (
-                <div className="flex flex-wrap items-center gap-1.5 mb-2 text-xs text-muted-foreground">
-                  <span>⏳ Warteschlange:</span>
-                  {queue.map((q, i) => (
-                    <div key={i} className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-foreground/90">
-                      <span className="max-w-[180px] truncate">{q}</span>
-                      <button onClick={() => setQueue(prev => prev.filter((_, j) => j !== i))} aria-label="Aus Warteschlange entfernen">
-                        <XIcon className="h-3 w-3 hover:text-destructive" />
-                      </button>
+              {myQueue.length > 0 && (
+                <div className="mb-2 rounded-2xl border border-border bg-muted/30 p-2" role="status" aria-live="polite">
+                  <div className="px-1.5 pb-1 text-[11px] text-muted-foreground">
+                    {sending ? `Wartet – wird gesendet, sobald Mythos fertig ist` : queuePausedRef.current ? "Gestoppt – wartende Nachrichten" : "Wird gleich gesendet …"}
+                  </div>
+                  {myQueue.map((q) => (
+                    <div key={q.id} className="group flex items-center gap-2 rounded-xl px-1.5 py-1 hover:bg-white/5">
+                      <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-muted-foreground" />
+                      <span className="min-w-0 flex-1 truncate text-sm text-foreground/90" title={q.text}>{q.text}</span>
+                      <button onClick={() => { setQueue((prev) => prev.filter((x) => x.id !== q.id)); setInput(q.text); }} className="rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-white/10 hover:text-foreground" title="Zurück ins Eingabefeld holen">Bearbeiten</button>
+                      <button onClick={() => setQueue((prev) => prev.filter((x) => x.id !== q.id))} className="rounded-md p-1 text-muted-foreground hover:bg-white/10 hover:text-destructive" aria-label="Aus Warteschlange entfernen"><XIcon className="h-3.5 w-3.5" /></button>
                     </div>
                   ))}
+                  {!sending && queuePausedRef.current && (
+                    <button onClick={() => { queuePausedRef.current = false; setQueueTick((n) => n + 1); }} className="mt-1 rounded-full border border-border px-3 py-1 text-xs hover:bg-muted">Jetzt abschicken</button>
+                  )}
                 </div>
               )}
 
@@ -2011,7 +2026,7 @@ const Chat = () => {
                     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submitOrQueue(); }
                   }}
                   placeholder={
-                    sending ? "Nächste Nachricht? Enter reiht sie in die Warteschlange ein" :
+                    sending ? "Nachricht schreiben – wartet und geht raus, sobald Mythos fertig ist" :
                     voiceMode ? "Tippe oder drücke das Mikro..." :
                     mode === "support" ? "Frage Mythos AI…" :
                     mode === "agent" ? "Was soll der Agent tun?" : "Frag mich alles…"

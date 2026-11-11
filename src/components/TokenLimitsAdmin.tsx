@@ -5,14 +5,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-const TIERS = [["free", "Free"], ["plus", "Plus"], ["pro", "Pro"], ["ultra", "Ultra"], ["admin", "Admin"]] as const;
+// Die echten Stufen der App (siehe useSubscription): free, light, pro – dazu Admin.
+const TIERS = [["free", "Free"], ["light", "Light"], ["pro", "Pro"], ["admin", "Admin"]] as const;
 const WINDOWS = [["hour", "pro Stunde"], ["week", "pro Woche"], ["month", "pro Monat"]] as const;
 /** Vorschlag in Tokens. Leer = kein Limit. */
 export const RECOMMENDED: Record<string, Record<string, string>> = {
   free: { hour: "60000", week: "400000", month: "1000000" },
-  plus: { hour: "250000", week: "2000000", month: "6000000" },
-  pro: { hour: "600000", week: "6000000", month: "20000000" },
-  ultra: { hour: "1500000", week: "15000000", month: "50000000" },
+  light: { hour: "250000", week: "2000000", month: "6000000" },
+  pro: { hour: "800000", week: "8000000", month: "25000000" },
   admin: { hour: "", week: "", month: "" },
 };
 const key = (tier: string, win: string) => `token_limit_${tier}_${win}`;

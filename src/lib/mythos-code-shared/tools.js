@@ -12,7 +12,8 @@ const TOOL_PROMPT = [
   '<tool>{"name":"stop","id":"p1"}</tool>  Hintergrundprozess beenden ("all" = alle)',
   '<tool>{"name":"serve","path":"."}</tool>  Eingebauter Webserver für statische Seiten (Ordner mit index.html, z. B. "." oder "dist"). Liefert die Adresse. Kein npx/http-server/Express nötig.',
   '<tool>{"name":"check","url":"http://localhost:5173"}</tool>  Webseite WIRKLICH prüfen: HTTP-Status, lädt jedes Skript/CSS, Browser-Test mit Konsolenfehlern, erkennt weiße Seiten und „Cannot GET /“, macht (in der App) einen Screenshot. url darf auch ein Pfad sein ("index.html").',
-  '<tool>{"name":"verify"}</tool>  Projekt automatisch prüfen: installiert fehlende Pakete, führt Typecheck, Lint, Build und Tests aus (was es im Projekt gibt) und meldet ✓/✗ je Prüfung mit Fehlerausgabe.',
+  '<tool>{"name":"verify","path":"MeinProjekt"}</tool>  Projekt automatisch prüfen (path = Projektordner, wenn der Arbeitsordner größer ist, z. B. C:\\ oder der Benutzer-Ordner): installiert fehlende Pakete, führt Typecheck, Lint, Build und Tests aus (was es im Projekt gibt) und meldet ✓/✗ je Prüfung mit Fehlerausgabe.',
+  '<tool>{"name":"publish","path":"MeinSpiel","slug":"mein-spiel","title":"Mein Spiel"}</tool>  Webprojekt WIRKLICH online stellen: bündelt den Ordner (index.html + CSS/JS/Bilder) zu einer Seite und veröffentlicht sie öffentlich unter <Website>/build/<slug> (slug: klein, a-z 0-9 -, frei wählbar; gleicher slug = Update). Liefert den echten Link. „Veröffentlichen/publishen/online stellen“ heißt IMMER dieses Werkzeug – nie nur eine ZIP-Datei.',
   '<tool>{"name":"read","path":"...","from":1,"to":200}</tool>  Datei lesen – mit Zeilennummern („ 12| “ gehört NICHT zum Inhalt). from/to optional für Ausschnitte großer Dateien. Mehrere Dateien auf einmal: "paths":["a.js","b.js"] (bis 8) – spart Schritte.',
   '<tool>{"name":"edit","path":"...","old":"exakter alter Text","new":"neuer Text"}</tool>  Datei gezielt ändern (bevorzugt! "old" muss genau einmal vorkommen, sonst "all":true). Mehrere Stellen derselben Datei in EINEM Aufruf: "edits":[{"old":"…","new":"…"},{"old":"…","new":"…"}]. Nach jedem edit/write läuft automatisch ein Syntax-Check – meldet er ⚠, behebe das sofort.',
   '<tool>{"name":"write","path":"...","content":"..."}</tool>  Neue Datei anlegen oder komplett neu schreiben',
@@ -71,13 +72,17 @@ const TOOL_PROMPT = [
   "**Ansehen/Starten** – Adresse (läuft schon) oder Befehl, falls relevant",
   "**Offen** – nur, wenn etwas fehlt oder der Nutzer etwas tun muss",
   "Keine langen Fließtexte, keinen Code wiederholen. Bei reinen Fragen ohne Codeänderung einfach direkt und gegliedert antworten.",
+
+  "EHRLICHKEIT (Pflicht): Schreibe ✓, „fertig“, „getestet“ oder „veröffentlicht“ NUR, wenn ein Werkzeug-Ergebnis es in diesem Lauf bestätigt hat. Ohne publish-Ergebnis mit Link ist nichts online. check ✓ heißt nur „lädt ohne Fehler“.",
+  "ORDNER: Ist der Arbeitsordner groß (Laufwerk, Benutzer-Ordner, Desktop), lege neue Projekte in einem eigenen Unterordner an und gib bei verify/check/publish diesen Ordner als path an.",
+  "ABSCHLUSS: Genau EIN kurzer Abschlussbericht am Ende – keine Zwischen-Berichte wiederholen. Wenn du nach 2 Versuchen feststeckst (z. B. Zahlen hin- und herprobieren), höre auf und beschreibe ehrlich das Problem.",
 ].join("\n");
 
 // Modelle, die v1-messages versteht (siehe mapModel dort).
 const MODELS = [
   { id: "mythos-code", label: "MythosCode", desc: "Standard fürs Programmieren" },
-  { id: "mythos-v2", label: "Mythos v2", desc: "am stärksten, etwas langsamer" },
-  { id: "mythos-sonnet", label: "Mythos v1", desc: "ausgewogen" },
+  { id: "mythos-v2", label: "Mythos Zeus 2", desc: "am stärksten, etwas langsamer" },
+  { id: "mythos-sonnet", label: "Mythos Hermes 1", desc: "ausgewogen" },
   { id: "mythos-lite", label: "Mythos Lite", desc: "am schnellsten" },
 ];
 /** Grobe Token-Schätzung (≈ 4 Zeichen pro Token, Bilder pauschal). */
@@ -972,6 +977,81 @@ function staticRefCheck(root) {
   }
   return { pages: pages.length, missing };
 }
+// ---------- Veröffentlichen: Webprojekt zu EINER HTML-Datei bündeln (CSS, Skripte, ES-Module, Bilder eingebettet) ----------
+const BUNDLE_MIME = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp", ".svg": "image/svg+xml", ".ico": "image/x-icon", ".mp3": "audio/mpeg", ".wav": "audio/wav", ".ogg": "audio/ogg", ".mp4": "video/mp4", ".webm": "video/webm", ".woff2": "font/woff2", ".woff": "font/woff", ".ttf": "font/ttf", ".json": "application/json", ".glb": "model/gltf-binary", ".gltf": "model/gltf+json" };
+function bundleSite(root, rel) {
+  rel = String(rel || ".");
+  if (!insideRoot(root, rel)) return { error: "FEHLER: path liegt außerhalb des Arbeitsordners." };
+  const target = path.resolve(root, rel);
+  let file = "";
+  try {
+    if (fs.statSync(target).isDirectory()) {
+      let pkg = null; try { pkg = JSON.parse(fs.readFileSync(path.join(target, "package.json"), "utf8")); } catch { pkg = null; }
+      const order = pkg && pkg.scripts && pkg.scripts.build ? ["dist/index.html", "build/index.html", "out/index.html"] : ["index.html", "public/index.html", "dist/index.html", "build/index.html"];
+      file = order.map((f) => path.join(target, f)).find((f) => fs.existsSync(f)) || "";
+      if (!file && pkg && pkg.scripts && pkg.scripts.build) return { error: "FEHLER: Das ist ein Projekt mit Build-Schritt, aber es gibt noch keinen fertigen Build (dist/build). Führe erst den Build aus (z. B. npm run build) und veröffentliche dann den Ordner erneut." };
+    } else file = target;
+  } catch { return { error: "FEHLER: " + rel + " gibt es nicht." }; }
+  if (!file || !/\.html?$/i.test(file)) return { error: "FEHLER: Keine index.html gefunden in " + rel + "." };
+  const dir = path.dirname(file), notes = [];
+  const local = (ref) => !!ref && !/^(?:[a-z][a-z0-9+.-]*:|\/\/|#|data:|blob:)/i.test(ref) && !/\{\{|\$\{/.test(ref);
+  const res = (ref, base) => path.resolve(ref.startsWith("/") ? dir : base, decodeURIComponent(ref.replace(/^\/+/, "").split(/[?#]/)[0]));
+  const dataUrl = (f) => "data:" + (BUNDLE_MIME[path.extname(f).toLowerCase()] || "application/octet-stream") + ";base64," + fs.readFileSync(f).toString("base64");
+  const modules = new Map();
+  const IMPORT_RE = /(\bimport\s*(?:[\w$*{}\s,]+?\s*from\s*)?|\bexport\s*[\w$*{}\s,]*?\s*from\s*|\bimport\s*\(\s*)(["'])(\.{1,2}\/[^"']+|\/[^"'/][^"']*)\2/g;
+  const moduleUrl = (f, stack) => {
+    if (modules.has(f)) return modules.get(f);
+    if ((stack || []).includes(f)) { notes.push("Zirkulärer Import bei " + path.basename(f) + " – bitte prüfen"); return ""; }
+    let code = readText(f) || "";
+    code = code.replace(IMPORT_RE, (m, pre, q, spec) => { const t = res(spec, path.dirname(f)); if (!fs.existsSync(t)) { notes.push("Import fehlt: " + spec); return m; } const u = moduleUrl(t, (stack || []).concat(f)); return u ? pre + q + u + q : m; });
+    code = code.replace(/(["'`])(\.{1,2}\/[^"'`\s]+\.(?:png|jpe?g|gif|webp|svg|mp3|wav|ogg|glb|gltf|json))\1/gi, (m, q, spec) => { const t = res(spec, path.dirname(f)); return fs.existsSync(t) && fs.statSync(t).size < 6e6 ? q + dataUrl(t) + q : m; });
+    const u = "data:text/javascript;base64," + Buffer.from(code).toString("base64");
+    modules.set(f, u); return u;
+  };
+  let html = readText(file) || "";
+  html = html.replace(/<link\b[^>]*>/gi, (tag) => {
+    const href = (tag.match(/\bhref=["']([^"']+)/i) || [])[1];
+    if (!local(href)) return tag;
+    const f = res(href, dir);
+    if (!fs.existsSync(f)) { notes.push("Datei fehlt: " + href); return tag; }
+    if (/rel=["']?stylesheet/i.test(tag)) {
+      let css = readText(f) || "";
+      css = css.replace(/url\(\s*["']?([^"')]+)["']?\s*\)/g, (m, u) => { if (!local(u)) return m; const af = res(u, path.dirname(f)); return fs.existsSync(af) && fs.statSync(af).size < 4e6 ? 'url("' + dataUrl(af) + '")' : m; });
+      return "<style>\n" + css + "\n</style>";
+    }
+    if (/rel=["']?(?:icon|shortcut icon|apple-touch-icon|manifest)/i.test(tag)) return /manifest/i.test(tag) ? "" : tag.replace(href, dataUrl(f));
+    return tag;
+  });
+  html = html.replace(/<script\b([^>]*?)\bsrc=["']([^"']+)["']([^>]*)>\s*<\/script>/gi, (tag, a, src, b) => {
+    if (!local(src)) return tag;
+    const f = res(src, dir);
+    if (!fs.existsSync(f)) { notes.push("Skript fehlt: " + src); return tag; }
+    const attrs = (a + " " + b).replace(/\s+/g, " ").trim();
+    if (/type=["']?module/i.test(attrs)) { const u = moduleUrl(f); return u ? '<script type="module" src="' + u + '"></script>' : tag; }
+    return "<script" + (attrs ? " " + attrs : "") + ">\n" + (readText(f) || "").replace(/<\/script/gi, "<\\/script") + "\n</script>";
+  });
+  html = html.replace(/<script\b([^>]*type=["']?module["']?[^>]*)>([\s\S]*?)<\/script>/gi, (tag, attrs, code) => /\bsrc=/.test(attrs) ? tag
+    : "<script" + attrs + ">" + code.replace(IMPORT_RE, (m, pre, q, spec) => { const t = res(spec, dir); if (!fs.existsSync(t)) { notes.push("Import fehlt: " + spec); return m; } const u = moduleUrl(t); return u ? pre + q + u + q : m; }) + "</script>");
+  html = html.replace(/(<(?:img|source|video|audio|input)\b[^>]*?\b(?:src|poster)=["'])([^"']+)(["'])/gi, (m, a, src, b) => {
+    if (!local(src)) return m;
+    const f = res(src, dir);
+    if (!fs.existsSync(f)) { notes.push("Datei fehlt: " + src); return m; }
+    if (fs.statSync(f).size > 8e6) { notes.push("Zu groß zum Einbetten (über 8 MB): " + src); return m; }
+    return a + dataUrl(f) + b;
+  });
+  if (/\bfetch\(\s*["'](?:\.{0,2}\/)?[\w./-]+\.json/i.test(html)) notes.push("Die Seite lädt per fetch lokale Dateien nach – die funktionieren online nicht. Daten besser direkt ins Skript schreiben.");
+  return { html, file: path.relative(root, file) || path.basename(file), notes, size: Buffer.byteLength(html) };
+}
+
+/** Ordner, in dem keine Projekt-Prüfung laufen darf: Laufwerk, Benutzer-Ordner, Desktop/Downloads/Dokumente. */
+function broadFolder(dir) {
+  const d = path.resolve(String(dir || "")).replace(/[\\/]+$/, "");
+  if (!d || /^[a-z]:$/i.test(d) || d === "" || d === "/") return true;
+  let home = ""; try { home = (typeof os !== "undefined" ? os : require("os")).homedir().replace(/[\\/]+$/, ""); } catch { /* egal */ }
+  const low = d.toLowerCase();
+  if (home && (low === home.toLowerCase() || [home + path.sep + "Desktop", home + path.sep + "Downloads", home + path.sep + "Documents", home + path.sep + "Dokumente", home + path.sep + "OneDrive"].some((x) => x.toLowerCase() === low))) return true;
+  return /^(?:[a-z]:)?[\\/](?:users|home)$/i.test(d) || /^[a-z]:[\\/](?:program files|windows)/i.test(d);
+}
 async function verifyProject(root, opts) {
   opts = opts || {};
   const { checks, pkg } = detectChecks(root);
@@ -1034,7 +1114,14 @@ async function devTool(t, root, opts) {
     if (t.name === "logs") return { result: bgLogs(t.id) };
     if (t.name === "stop") return { result: bgStop(t.id) };
     if (t.name === "serve") return await serveDir(root, t.path);
-    if (t.name === "verify") return await verifyProject(root, opts);
+    if (t.name === "verify") {
+      // Nur das Projekt prüfen – nie die ganze Festplatte (Arbeitsordner kann z. B. C:\ sein).
+      let dir = root;
+      if (t.path) { if (!insideRoot(root, String(t.path))) return { result: "FEHLER: path liegt außerhalb des Arbeitsordners." }; dir = path.resolve(root, String(t.path)); }
+      if (broadFolder(dir)) return { result: "FEHLER: verify braucht den Projektordner. Der Arbeitsordner " + dir + " ist zu groß (ganze Festplatte bzw. Benutzer-Ordner) – eine Prüfung würde fremde Programme durchsuchen. Rufe verify mit \"path\" auf, z. B. {\"name\":\"verify\",\"path\":\"MeinSpiel\"}." };
+      const r = await verifyProject(dir, opts);
+      return dir !== root ? Object.assign(r, { result: "Geprüfter Ordner: " + path.relative(root, dir) + "\n" + r.result }) : r;
+    }
     if (t.name === "check") {
       const tg = await checkTarget(t, root);
       if (tg.error) return { result: tg.error };
@@ -1103,5 +1190,15 @@ function renderVerdict(r) {
   if (errs.length) { fail++; lines.push("✗ Konsolenfehler (" + errs.length + "):\n" + errs.slice(0, 12).map((e) => "    " + e.slice(0, 400)).join("\n")); }
   else lines.push("✓ Keine Konsolenfehler");
   if (r.failed && r.failed.length) { fail++; lines.push("✗ Nicht geladene Dateien:\n" + r.failed.slice(0, 12).map((e) => "    " + e).join("\n")); }
+  // Tastatur-Test (Spiele/Canvas): ändert sich das Bild durch Eingaben wirklich?
+  if (r.input) {
+    const pct = (x) => (Math.round(x * 1000) / 10).toLocaleString("de-DE") + " %";
+    const keys = r.input.keys || "Pfeiltasten + Leertaste";
+    if (r.input.error) lines.push("ℹ Tastatur-Test nicht möglich: " + r.input.error);
+    else if (r.input.moved >= 0.004 && r.input.moved > r.input.idle * 1.5 + 0.002) lines.push("✓ Tastatur-Test (" + keys + "): Das Bild reagiert – " + pct(r.input.moved) + " der Pixel haben sich durch die Eingaben verändert (ohne Eingabe " + pct(r.input.idle) + ").");
+    else if (r.input.idle >= 0.02) lines.push("⚠ Tastatur-Test (" + keys + "): Das Bild bewegt sich auch OHNE Eingaben (" + pct(r.input.idle) + ") – ob die Steuerung wirkt, ist so nicht sicher zu sagen. Sieh dir den Screenshot nach den Eingaben genau an.");
+    else { fail++; lines.push("✗ Tastatur-Test (" + keys + "): Das Bild hat sich durch die Eingaben NICHT verändert (" + pct(r.input.moved) + "). Die Steuerung funktioniert vermutlich nicht – prüfe die Tasten-Abfrage (keydown/keyup auf window), ob die Spiel-Schleife läuft und ob der Spieler gezeichnet wird." + (r.input.needsClick ? " (Es gibt einen Start-Knopf/-Bildschirm – der Test hat einmal in die Mitte geklickt.)" : "")); }
+    lines.push("ℹ Der Screenshot zeigt den Stand NACH dem Tastatur-Test.");
+  }
   return { lines, fail };
 }

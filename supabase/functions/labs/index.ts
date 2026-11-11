@@ -7,6 +7,7 @@ import { aiChat } from "../_shared/ai.ts";
 import { relevantCraftKnowledge } from "../_shared/craftKnowledge.ts";
 import { generateImage } from "../_shared/image.ts";
 import { webSearch, readPage, safeUrl, commonsMedia, pexelsMedia, type Media } from "../_shared/web.ts";
+import { publishApp } from "../_shared/apps.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -170,24 +171,8 @@ Deno.serve(async (req) => {
       return app.user_id === user.id ? json({ free: true, mine: true, title: app.title }) : json({ free: false, reason: "Schon vergeben" });
     }
     if (kind === "app_publish") {
-      const slug = cleanSlug(body.slug);
-      const problem = slugProblem(slug);
-      if (problem) return json({ error: problem }, 400);
-      const html = String(body.html || "");
-      if (html.length < 50 || html.length > 1_500_000) return json({ error: "Die App ist leer oder zu groß (max. 1,5 MB)." }, 400);
-      const existing = await get<AppEntry>(appPath(slug));
-      if (existing && existing.user_id !== user.id) return json({ error: "Dieser Name ist schon vergeben." }, 409);
-      const mine = (await get<MyApp[]>(myAppsPath(user.id))) || [];
-      if (!existing && mine.length >= 50) return json({ error: "Du hast schon 50 veröffentlichte Apps. Nimm zuerst eine offline." }, 400);
-      const nowIso = new Date().toISOString();
-      const title = String(body.title || slug).trim().slice(0, 80);
-      const entry: AppEntry = { slug, title, html, user_id: user.id, author: String(body.author || user.email?.split("@")[0] || "Mythos-Nutzer").slice(0, 40), project_id: body.project_id ? String(body.project_id).slice(0, 60) : existing?.project_id, created_at: existing?.created_at || nowIso, updated_at: nowIso };
-      await put(appPath(slug), entry);
-      // Kurz danach nochmal lesen: haben zwei gleichzeitig denselben Namen genommen, gewinnt der, der drinsteht.
-      const check = await get<AppEntry>(appPath(slug));
-      if (check && check.user_id !== user.id) return json({ error: "Dieser Name wurde gerade vergeben." }, 409);
-      await put(myAppsPath(user.id), [{ slug, title, project_id: entry.project_id, updated_at: nowIso }, ...mine.filter((m) => m.slug !== slug)].slice(0, 60));
-      return json({ ok: true, slug, updated_at: nowIso });
+      const r = await publishApp(admin, user, { slug: body.slug, title: body.title, html: body.html, author: body.author, project_id: body.project_id });
+      return "error" in r ? json({ error: r.error }, r.status) : json({ ok: true, slug: r.slug, updated_at: r.updated_at });
     }
     if (kind === "app_unpublish") {
       const slug = cleanSlug(body.slug);

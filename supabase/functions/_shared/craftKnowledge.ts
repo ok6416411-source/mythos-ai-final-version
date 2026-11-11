@@ -381,6 +381,327 @@ const CODE = `## Programmieren – Qualitätsmaßstab für jede Sprache
 - **Sprach-Spezifisches:** Python: Type Hints, \`pathlib\`, \`with\`, f-Strings, \`if __name__ == "__main__"\`. JavaScript/TypeScript: \`const\`/\`let\`, async/await mit try/catch, strikte Typen statt \`any\`, ES-Module. Java: aktuelle Sprachmittel (records, var, Streams), Ressourcen in try-with-resources. C#: async bis oben durchziehen, \`using\`, nullable beachten.
 - **Antwort:** erst ein Satz, was der Code tut, dann der Code, dann kurz „So startest du es“ und ggf. bekannte Grenzen. Keine langen Vorreden.`;
 
+const GAME2D = `## 2D-Spiele (Jump'n'Run, Plattformer, Arcade) – richtig, nicht als Rechteck
+Ein „2D-Mario-Klon“ / Jump'n'Run ist ein kleines, aber VOLLSTÄNDIGES Spiel – nie ein Viereck auf zwei Balken. Pflicht:
+- **Technik:** Canvas 2D in EINER HTML-Datei (kein Three.js für 2D!). Feste Logik-Rate 60/s mit Akkumulator, Zeichnen per requestAnimationFrame. Spielwelt in Spiel-Pixeln, per ganzzahligem scale aufs Fenster skaliert, \`imageSmoothingEnabled=false\`.
+- **Level als Text-Kachelkarte** (16 px Kacheln): Boden, Ziegel, ?-Blöcke, Einweg-Plattformen, Münzen, Gegner, Start, Ziel. Mindestens 3 verschiedene, lange Level (≥ 90 Kacheln breit) mit Abgründen, Treppen, Plattformen in mehreren Höhen.
+- **Kollision achsenweise** (erst x bewegen + auflösen, dann y) gegen die Kacheln – so fällt man nie durch den Boden und bleibt nie stecken. Einweg-Plattformen nur von oben.
+- **Steuerung wie ein echtes Spiel:** Tasten in einem Set merken (keydown/keyup auf window, e.code), Beschleunigung + Reibung, Sprung mit Sprungpuffer und „Coyote Time“, variable Sprunghöhe (Taste kurz = kleiner Sprung), Pfeiltasten UND WASD, Leertaste/↑ springen.
+- **Kamera:** folgt dem Spieler weich (Lerp), wird an den Levelrändern begrenzt (\`clamp(0, levelBreite − Sichtbreite)\`). Kamera-Werte werden AUSGERECHNET, nicht geraten.
+- **Spielinhalt:** Gegner, die patrouillieren und an Kanten umdrehen, durch Draufspringen besiegbar; Münzen; ?-Blöcke von unten anstoßen; Ziel-Flagge → nächstes Level; Leben, Punkte, HUD; Titel-, Pause-, Game-Over- und Gewonnen-Bildschirm; Partikel; kleine WebAudio-Töne.
+- **Grafik:** eigene Pixel-Sprites aus Zahlen-Rastern + Palette (keine externen Bilder), Parallax-Hintergrund. NIE Nintendo-Figuren, -Namen oder -Grafiken kopieren – eigene Figur, eigener Name.
+- **Testen:** Nach dem Bauen mit check prüfen – der Tastatur-Test drückt Pfeiltasten/Leertaste und meldet, ob sich das Bild bewegt. Stell \`window.game\` (Zustand + Spieler) zum Prüfen bereit.
+
+Getestete Vorlage (läuft fehlerfrei; laufen, springen, Gegner, Münzen, 3 Level). Baue darauf auf und passe sie an den Wunsch an – statt bei null anzufangen:
+\`\`\`html
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pixel Quest</title>
+<style>
+  html,body{margin:0;height:100%;background:#0b0d12;overflow:hidden;font-family:system-ui,sans-serif}
+  canvas{display:block;width:100vw;height:100vh;image-rendering:pixelated}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<script>
+"use strict";
+// ===== Pixel Quest – 2D-Plattformer (Canvas 2D, keine Bibliotheken) =====
+// Aufbau: feste Logik-Rate (60/s) · Kachel-Level als Text · Kamera folgt dem Spieler · Pixel-Sprites aus Zahlen-Rastern.
+const T = 16;                 // Kachelgröße in Spiel-Pixeln
+const VIEW_H = 15 * T;        // sichtbare Höhe: 15 Kacheln (Breite ergibt sich aus dem Fenster)
+const GRAV = 0.42, MAX_FALL = 7.5, RUN = 2.4, ACC = 0.18, FRICTION = 0.82, JUMP = 7.6;
+const canvas = document.getElementById("game"), ctx = canvas.getContext("2d");
+let scale = 1, viewW = 320;
+function resize() {
+  scale = Math.max(1, Math.floor(innerHeight / VIEW_H)) || 1;
+  if (innerHeight / VIEW_H < 1) scale = innerHeight / VIEW_H;
+  canvas.width = innerWidth; canvas.height = innerHeight;
+  viewW = Math.ceil(innerWidth / scale);
+  ctx.imageSmoothingEnabled = false;
+}
+addEventListener("resize", resize); resize();
+
+// ----- Level: # Boden · B Ziegel · ? Fragezeichen-Block · = Plattform (nur von oben) · o Münze · e Gegner · P Start · F Ziel -----
+const LEVELS = [
+  { name: "1-1 Grüne Hügel", sky: ["#5c94fc", "#9cc4ff"], map: [
+    "                                                                                                    ",
+    "                                                                                                    ",
+    "                                                                                                    ",
+    "                                                                                                    ",
+    "                                                                                      o o o         ",
+    "                     ?B?B?                                                         ======           ",
+    "                                                 o o o                                         F    ",
+    "                                               =======            BB?BB                         #   ",
+    "             o o                                                                                #   ",
+    "            =====           e                          e     e               ##                 #   ",
+    "  P     ?                 ####       e           ####                      ####       e         #   ",
+    "                         #####     #####        #####          ##         #####     #####       #   ",
+    "##############################  ##########   ###########  ##########   #############################",
+    "##############################  ##########   ###########  ##########   #############################",
+    "##############################  ##########   ###########  ##########   #############################",
+  ]},
+  { name: "1-2 Höhlen", sky: ["#1b1530", "#3a2a5c"], map: [
+    "####################################################################################################",
+    "#                                                                                                  #",
+    "#                o o o                                o o o o                                      #",
+    "#               =======          BBB?BBB             =========             ?   ?   ?                #",
+    "#                                                                                                F #",
+    "#      o o                 e                  e                    e                 =====       # #",
+    "#     =====          ===========        ===========          ===========                         # #",
+    "#                                                                               e                # #",
+    "#  P          ?                    o o o                o o                ###########           # #",
+    "#                   e              =====       e       =====        e     ############      e    # #",
+    "#              ##########     ##############  ###############   ##########################  ######  #",
+    "#####################  ##########################    ##############################################",
+    "#####################  ##########################    ##############################################",
+    "####################################################################################################",
+    "####################################################################################################",
+  ]},
+  { name: "1-3 Himmelsbrücken", sky: ["#ff9a5c", "#ffd29c"], map: [
+    "                                                                                                    ",
+    "                                                                                                    ",
+    "                                    o o o                          o o o o                          ",
+    "                                   =======                        =========                         ",
+    "                     o o                         e                                       o o        ",
+    "                    =====                    ==========       e                         =====    F  ",
+    "                                  e                         ========                            #  ",
+    "             ?                 ========            o o                       e                  #  ",
+    "                                                  =====                   ========              #  ",
+    "  P     e         e                                         ??             o o o                #  ",
+    "      #####     #####      ####          ####                            =======         ###### #  ",
+    "#########   #####   ########  ###      #########      ####                             ##########  ",
+    "#########   #####   ########  ###      #########      ####     ##########    ###################   ",
+    "#########   #####   ########  ###      #########      ####     ##########    ###################   ",
+    "#########   #####   ########  ###      #########      ####     ##########    ###################   ",
+  ]},
+];
+
+// ----- Pixel-Sprites: jede Ziffer ist eine Farbe der Palette (0 = durchsichtig) -----
+const PAL = { 1: "#1d1d1d", 2: "#7950f2", 3: "#ffcc99", 4: "#0ca678", 5: "#ffd43b", 6: "#8b4513", 7: "#ffffff", 8: "#2f9e44", 9: "#a0522d" };
+const SPR = {
+  hero: ["0002222000", "0022222220", "0011333000", "0133313330", "0133311333", "0011333310", "0002442000", "0024424200", "0244444420", "0334554330", "0034444300", "0044004400", "0110000110"],
+  heroRun: ["0002222000", "0022222220", "0011333000", "0133313330", "0133311333", "0011333310", "0002442000", "0024444200", "0344444430", "0034554300", "0044444400", "0440000440", "1100000011"],
+  slime: ["0008888000", "0088888800", "0887888780", "8881888188", "8888888888", "8888888888", "0888888880", "0880000880"],
+  coin: ["0055500", "0555550", "5557555", "5557555", "5557555", "0555550", "0055500"],
+};
+const sprites = {};
+for (const [name, rows] of Object.entries(SPR)) {
+  const c = document.createElement("canvas"); c.width = rows[0].length; c.height = rows.length;
+  const g = c.getContext("2d");
+  rows.forEach((row, y) => [...row].forEach((d, x) => { if (d !== "0") { g.fillStyle = PAL[d]; g.fillRect(x, y, 1, 1); } }));
+  sprites[name] = c;
+}
+
+// ----- Eingabe: gedrückte Tasten merken (keydown/keyup), Sprung vorpuffern -----
+const keys = new Set();
+let jumpBuffer = 0;
+addEventListener("keydown", (e) => {
+  if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", " "].includes(e.key)) e.preventDefault();
+  if (!keys.has(e.code) && (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyW")) jumpBuffer = 8;
+  keys.add(e.code);
+  if (state.mode === "title" || state.mode === "over" || state.mode === "won") startGame(state.mode === "title" ? 0 : 0);
+  if (e.code === "KeyP" || e.code === "Escape") state.paused = !state.paused;
+});
+addEventListener("keyup", (e) => keys.delete(e.code));
+addEventListener("blur", () => keys.clear());
+canvas.addEventListener("pointerdown", () => { if (state.mode !== "play") startGame(0); });
+const left = () => keys.has("ArrowLeft") || keys.has("KeyA");
+const right = () => keys.has("ArrowRight") || keys.has("KeyD");
+const jumpHeld = () => keys.has("Space") || keys.has("ArrowUp") || keys.has("KeyW");
+
+// ----- Kleine Töne (WebAudio, ohne Dateien) -----
+let audio = null;
+function beep(freq, dur = 0.08, type = "square", vol = 0.05) {
+  try {
+    audio = audio || new AudioContext();
+    const o = audio.createOscillator(), g = audio.createGain();
+    o.type = type; o.frequency.value = freq; g.gain.value = vol;
+    o.connect(g); g.connect(audio.destination);
+    o.start(); g.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + dur); o.stop(audio.currentTime + dur);
+  } catch (e) { /* ohne Ton weiter */ }
+}
+
+// ----- Spielzustand -----
+const state = { mode: "title", level: 0, lives: 3, coins: 0, score: 0, paused: false, time: 0 };
+let tiles = [], W = 0, H = 0, player, enemies, coins, particles, camX = 0, flag;
+function loadLevel(i) {
+  const L = LEVELS[i];
+  H = L.map.length; W = Math.max(...L.map.map((r) => r.length));
+  tiles = L.map.map((r) => [...r.padEnd(W, " ")]);
+  enemies = []; coins = []; particles = []; flag = null;
+  let start = { x: 2 * T, y: 0 };
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const c = tiles[y][x];
+    if (c === "P") { start = { x: x * T, y: y * T }; tiles[y][x] = " "; }
+    else if (c === "e") { enemies.push({ x: x * T, y: y * T + 6, w: 14, h: 10, vx: -0.6, vy: 0, alive: true, squish: 0 }); tiles[y][x] = " "; }
+    else if (c === "o") { coins.push({ x: x * T + 4, y: y * T + 4, w: 8, h: 8, got: false }); tiles[y][x] = " "; }
+    else if (c === "F") { flag = { x: x * T, y: y * T }; tiles[y][x] = " "; }
+  }
+  player = { x: start.x, y: start.y, w: 10, h: 13, vx: 0, vy: 0, onGround: false, coyote: 0, face: 1, inv: 0, anim: 0 };
+  camX = 0;
+}
+function startGame(level) {
+  if (state.mode !== "play") { state.lives = state.mode === "title" || state.mode === "over" || state.mode === "won" ? 3 : state.lives; state.coins = 0; state.score = 0; }
+  state.level = level; state.mode = "play"; state.paused = false; loadLevel(level);
+}
+const solid = (c) => c === "#" || c === "B" || c === "?" || c === "U";
+const tileAt = (tx, ty) => (ty < 0 || tx < 0 || tx >= W ? "#" : ty >= H ? " " : tiles[ty][tx]);
+
+// Achsenweise bewegen und an Kacheln auflösen (zuerst x, dann y) – so bleibt man nie in Wänden stecken.
+function moveAndCollide(o) {
+  o.x += o.vx;
+  let x0 = Math.floor(o.x / T), x1 = Math.floor((o.x + o.w - 1) / T), y0 = Math.floor(o.y / T), y1 = Math.floor((o.y + o.h - 1) / T);
+  for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) if (solid(tileAt(tx, ty))) {
+    if (o.vx > 0) o.x = tx * T - o.w; else if (o.vx < 0) o.x = (tx + 1) * T;
+    o.vx = 0; o.hitWall = true;
+  }
+  const prevBottom = o.y + o.h;
+  o.y += o.vy; o.onGround = false;
+  x0 = Math.floor(o.x / T); x1 = Math.floor((o.x + o.w - 1) / T); y0 = Math.floor(o.y / T); y1 = Math.floor((o.y + o.h - 1) / T);
+  for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) {
+    const c = tileAt(tx, ty);
+    const oneWay = c === "=" && o.vy > 0 && prevBottom <= ty * T + 1;
+    if (!solid(c) && !oneWay) continue;
+    if (o.vy > 0) { o.y = ty * T - o.h; o.vy = 0; o.onGround = true; }
+    else if (o.vy < 0 && !oneWay) { o.y = (ty + 1) * T; o.vy = 0; if (o === player) bump(tx, ty); }
+  }
+}
+function bump(tx, ty) {
+  const c = tiles[ty][tx];
+  if (c === "?") { tiles[ty][tx] = "U"; state.coins++; state.score += 200; beep(988, 0.1); burst(tx * T + 8, ty * T - 4, "#ffd43b", 8); }
+  else if (c === "B") { tiles[ty][tx] = " "; state.score += 50; beep(160, 0.06, "triangle"); burst(tx * T + 8, ty * T + 8, "#a0522d", 12); }
+}
+function burst(x, y, color, n) { for (let i = 0; i < n; i++) particles.push({ x, y, vx: (Math.random() - 0.5) * 3, vy: -Math.random() * 3 - 1, life: 30 + Math.random() * 20, color }); }
+const hit = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+
+function hurt() {
+  if (player.inv > 0) return;
+  state.lives--; beep(110, 0.3, "sawtooth", 0.06);
+  if (state.lives <= 0) { state.mode = "over"; return; }
+  loadLevel(state.level); player.inv = 90;
+}
+
+// ----- Logik-Schritt (immer 1/60 s) -----
+function update() {
+  if (state.mode !== "play" || state.paused) return;
+  state.time++;
+  const p = player;
+  const dir = (right() ? 1 : 0) - (left() ? 1 : 0);
+  if (dir) { p.vx += dir * ACC; p.face = dir; } else p.vx *= FRICTION;
+  p.vx = Math.max(-RUN, Math.min(RUN, p.vx)); if (Math.abs(p.vx) < 0.05) p.vx = 0;
+  p.coyote = p.onGround ? 6 : Math.max(0, p.coyote - 1);
+  if (jumpBuffer > 0) jumpBuffer--;
+  if (jumpBuffer > 0 && p.coyote > 0) { p.vy = -JUMP; p.coyote = 0; jumpBuffer = 0; beep(523, 0.08); }
+  if (!jumpHeld() && p.vy < -2.5) p.vy = -2.5;           // kurz drücken = kleiner Sprung
+  p.vy = Math.min(MAX_FALL, p.vy + GRAV);
+  moveAndCollide(p);
+  if (p.inv > 0) p.inv--;
+  p.anim = p.onGround && p.vx !== 0 ? p.anim + Math.abs(p.vx) : 0;
+  if (p.y > H * T + 40) hurt();
+
+  for (const e of enemies) {
+    if (!e.alive) { e.squish--; continue; }
+    e.hitWall = false; e.vy = Math.min(MAX_FALL, e.vy + GRAV);
+    // an Kanten umdrehen statt runterzufallen
+    const ahead = Math.floor((e.vx > 0 ? e.x + e.w + 1 : e.x - 1) / T), below = Math.floor((e.y + e.h + 2) / T);
+    if (e.onGround && !solid(tileAt(ahead, below)) && tileAt(ahead, below) !== "=") e.vx *= -1;
+    moveAndCollide(e); if (e.hitWall) e.vx = e.vx === 0 ? 0.6 * Math.sign(-e.vx || 1) : -e.vx;
+    if (e.vx === 0) e.vx = 0.6;
+    if (hit(p, e)) {
+      if (p.vy > 0 && p.y + p.h - e.y < 8) { e.alive = false; e.squish = 30; p.vy = -JUMP * 0.6; state.score += 100; beep(660, 0.06); burst(e.x + 7, e.y + 5, "#2f9e44", 10); }
+      else hurt();
+    }
+  }
+  enemies = enemies.filter((e) => e.alive || e.squish > 0);
+  for (const c of coins) if (!c.got && hit(p, c)) { c.got = true; state.coins++; state.score += 100; beep(1318, 0.07); }
+  for (const q of particles) { q.x += q.vx; q.y += q.vy; q.vy += 0.15; q.life--; }
+  particles = particles.filter((q) => q.life > 0);
+  if (flag && p.x + p.w > flag.x + 6) {
+    state.score += 1000; beep(784, 0.15); beep(1046, 0.3);
+    if (state.level + 1 < LEVELS.length) { state.level++; loadLevel(state.level); } else state.mode = "won";
+  }
+  // Kamera: Spieler etwas links von der Mitte, nie über den Levelrand hinaus
+  const target = p.x - viewW * 0.4;
+  camX += (target - camX) * 0.12;
+  camX = Math.max(0, Math.min(W * T - viewW, camX));
+}
+
+// ----- Zeichnen -----
+function drawTile(c, x, y) {
+  if (c === "#") { ctx.fillStyle = "#b8682e"; ctx.fillRect(x, y, T, T); ctx.fillStyle = "#8f4c1d"; ctx.fillRect(x, y + T - 3, T, 3); ctx.fillRect(x + T - 3, y, 3, T); ctx.fillStyle = "#4caf50"; if (y > 0 && !solid(tileAt(Math.round(x / T + camX / T), Math.round(y / T) - 1))) ctx.fillRect(x, y, T, 4); }
+  else if (c === "B") { ctx.fillStyle = "#c0612b"; ctx.fillRect(x, y, T, T); ctx.fillStyle = "#7a3a14"; ctx.fillRect(x, y + 7, T, 2); ctx.fillRect(x + 7, y, 2, 7); ctx.fillRect(x + 3, y + 9, 2, 7); ctx.fillRect(x + 12, y + 9, 2, 7); }
+  else if (c === "?") { ctx.fillStyle = "#f2b01e"; ctx.fillRect(x, y, T, T); ctx.fillStyle = "#8f5a00"; ctx.fillRect(x, y + T - 2, T, 2); ctx.fillStyle = "#fff"; ctx.font = "bold 12px monospace"; ctx.fillText("?", x + 4, y + 12 + Math.sin(state.time / 10)); }
+  else if (c === "U") { ctx.fillStyle = "#8f6a3a"; ctx.fillRect(x, y, T, T); ctx.fillStyle = "#5b4020"; ctx.fillRect(x + 2, y + 2, T - 4, T - 4); }
+  else if (c === "=") { ctx.fillStyle = "#e9c46a"; ctx.fillRect(x, y, T, 5); ctx.fillStyle = "#a07c2c"; ctx.fillRect(x, y + 5, T, 2); }
+}
+function drawBackground(L) {
+  const g = ctx.createLinearGradient(0, 0, 0, VIEW_H); g.addColorStop(0, L.sky[0]); g.addColorStop(1, L.sky[1]);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, viewW, VIEW_H);
+  // Parallaxe: Hügel und Wolken bewegen sich langsamer als die Welt
+  ctx.fillStyle = "rgba(255,255,255,.85)";
+  for (let i = 0; i < 12; i++) { const x = ((i * 170 - camX * 0.3) % (viewW + 200) + viewW + 200) % (viewW + 200) - 100, y = 20 + (i * 37) % 60; ctx.beginPath(); ctx.arc(x, y, 10, 0, 7); ctx.arc(x + 12, y - 4, 13, 0, 7); ctx.arc(x + 26, y, 10, 0, 7); ctx.fill(); }
+  ctx.fillStyle = "rgba(40,120,60,.55)";
+  for (let i = 0; i < 10; i++) { const x = ((i * 230 - camX * 0.55) % (viewW + 300) + viewW + 300) % (viewW + 300) - 150; ctx.beginPath(); ctx.arc(x, VIEW_H - 40, 70 + (i % 3) * 20, Math.PI, 0); ctx.fill(); }
+}
+function sprite(img, x, y, flip, w) {
+  const sc = (w || img.width) / img.width;
+  ctx.save(); ctx.translate(Math.round(x), Math.round(y)); if (flip) { ctx.translate(img.width * sc, 0); ctx.scale(-1, 1); }
+  ctx.drawImage(img, 0, 0, img.width * sc, img.height * sc); ctx.restore();
+}
+function hud() {
+  ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.fillRect(0, 0, viewW, 14);
+  ctx.fillStyle = "#fff"; ctx.font = "bold 9px monospace";
+  ctx.fillText("PUNKTE " + String(state.score).padStart(6, "0"), 6, 10);
+  ctx.fillText("MÜNZEN " + state.coins, viewW / 2 - 30, 10);
+  ctx.fillText("LEBEN " + state.lives + "   WELT " + LEVELS[state.level].name.split(" ")[0], viewW - 120, 10);
+}
+function centerText(lines) {
+  ctx.fillStyle = "rgba(0,0,0,.55)"; ctx.fillRect(0, 0, viewW, VIEW_H);
+  ctx.textAlign = "center"; ctx.fillStyle = "#fff";
+  lines.forEach(([txt, size], i) => { ctx.font = "bold " + size + "px monospace"; ctx.fillText(txt, viewW / 2, VIEW_H / 2 - 20 + i * 18); });
+  ctx.textAlign = "left";
+}
+function render() {
+  ctx.setTransform(scale, 0, 0, scale, 0, (canvas.height - VIEW_H * scale) / 2);
+  const L = LEVELS[state.level];
+  drawBackground(L);
+  ctx.save(); ctx.translate(-Math.round(camX), 0);
+  const tx0 = Math.max(0, Math.floor(camX / T)), tx1 = Math.min(W - 1, Math.ceil((camX + viewW) / T));
+  for (let y = 0; y < H; y++) for (let x = tx0; x <= tx1; x++) drawTile(tiles[y][x], x * T, y * T);
+  if (flag) { ctx.fillStyle = "#ddd"; ctx.fillRect(flag.x + 7, flag.y - 4 * T, 2, 5 * T); ctx.fillStyle = "#2f9e44"; ctx.beginPath(); ctx.moveTo(flag.x + 9, flag.y - 4 * T); ctx.lineTo(flag.x + 24, flag.y - 4 * T + 6); ctx.lineTo(flag.x + 9, flag.y - 4 * T + 12); ctx.fill(); }
+  for (const c of coins) if (!c.got) sprite(sprites.coin, c.x, c.y + Math.sin((state.time + c.x) / 8) * 1.5);
+  for (const e of enemies) { if (e.alive) sprite(sprites.slime, e.x - 1, e.y - 1 + Math.sin(state.time / 6) * 0.6, e.vx > 0, 16); else { ctx.fillStyle = "#2f9e44"; ctx.fillRect(e.x, e.y + e.h - 4, e.w, 4); } }
+  const p = player;
+  if (!(p.inv > 0 && Math.floor(p.inv / 4) % 2)) sprite(Math.floor(p.anim / 6) % 2 ? sprites.heroRun : sprites.hero, p.x - 1, p.y - 1, p.face < 0, 12);
+  for (const q of particles) { ctx.fillStyle = q.color; ctx.fillRect(q.x, q.y, 2, 2); }
+  ctx.restore();
+  hud();
+  if (state.mode === "title") centerText([["PIXEL QUEST", 20], ["← → laufen · Leertaste springen", 9], ["Taste drücken oder klicken zum Starten", 9]]);
+  else if (state.mode === "over") centerText([["GAME OVER", 20], ["Punkte: " + state.score, 10], ["Taste drücken für neues Spiel", 9]]);
+  else if (state.mode === "won") centerText([["GESCHAFFT!", 20], ["Alle " + LEVELS.length + " Welten · " + state.score + " Punkte", 10], ["Taste drücken für neues Spiel", 9]]);
+  else if (state.paused) centerText([["PAUSE", 18], ["P drücken zum Weiterspielen", 9]]);
+}
+
+// ----- Schleife: feste Logik-Rate, Zeichnen so oft der Bildschirm kann -----
+let last = performance.now(), acc = 0;
+function frame(now) {
+  acc += Math.min(100, now - last); last = now;
+  while (acc >= 1000 / 60) { update(); acc -= 1000 / 60; }
+  render();
+  requestAnimationFrame(frame);
+}
+loadLevel(0);
+window.game = { state, get player() { return player; }, startGame };   // zum Testen in der Konsole
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
+\`\`\``;
+
 const GRAPHICS = `## Grafiken zeichnen (statt Bild-KI)
 - Ein SVG pro Grafik, vollständig und eigenständig: passende viewBox (Logo/Icon 0 0 512 512, Poster 0 0 1080 1350, Szene/Thumbnail 0 0 1920 1080).
 - Qualität wie ein Illustrator: klare Komposition, begrenzte harmonische Palette (3–6 Farben + Abstufungen), Verläufe (linearGradient/radialGradient), weiche Schatten (filter + feGaussianBlur), Lichtkanten, Tiefe durch Vorder-/Mittel-/Hintergrund.
@@ -480,11 +801,46 @@ const PACKS_MC = `## Resource Packs, Datapacks & Shader
 - Immer die komplette Ordnerstruktur als einzelne datei:-Blöcke mit Pfad liefern (der Chat packt alles als ZIP).`;
 
 /** Kategorie-Präfix der KI-Wissens-Artikel in knowledge_articles (Admin → „KI-Wissen einspielen“). */
+
+const ENGINEERING = `## Profi-Coding (gilt für JEDES Projekt)
+Arbeitsweise wie ein Senior-Engineer:
+1. Erst verstehen: vorhandene Dateien lesen (ls/glob/read), Stack + Stil übernehmen. Nie blind neu schreiben, sondern gezielt edit.
+2. Plan in 3–6 Punkten (Dateien, Datenmodell, Schnittstellen) – dann umsetzen, Datei für Datei, jede vollständig lauffähig.
+3. Kein Platzhalter-Code: keine "TODO", "...", "// hier Logik einfügen", keine erfundenen APIs/Pakete/URLs. Wenn etwas fehlt (API-Key), sauberer Fallback + klare Meldung.
+4. Robust: Eingaben prüfen, Fehler abfangen und verständlich anzeigen, Lade- und Leer-Zustände, keine stillen catch-Blöcke.
+5. Struktur: kleine Funktionen mit klaren Namen, Konstanten statt Magic Numbers, Logik getrennt von UI, keine globale Zustands-Suppe.
+6. Prüfen statt raten: nach Änderungen verify/check/run ausführen, Fehlerausgabe LESEN, Ursache beheben (nicht Symptome, nicht Zahlen raten). Nach 2 erfolglosen Versuchen: Ansatz wechseln.
+7. Ehrlich melden: nur behaupten, was ein Werkzeug bestätigt hat. „lädt ohne Fehler“ ≠ „funktioniert“. Am Ende EIN kurzer Bericht: was gebaut, wie starten, was getestet, was offen.
+Qualitäts-Checkliste vor dem Abschluss: startet ohne Konsolenfehler · Hauptfunktion einmal echt durchgespielt · Fehlerfälle getestet · responsive (Web) · README/Startbefehl genannt.`;
+
+const FULLSTACK = `## Web-Apps, Backends & APIs
+- Frontend ohne Build: eine index.html mit modernem CSS (Variablen, Grid/Flex, dunkles + helles Theme), Vanilla-JS-Module. Mit Build: Vite + React/TS (npm create vite@latest app -- --template react-ts), dann npm i und npm run build zum Prüfen.
+- Daten lokal: localStorage mit Versionsfeld + try/catch; Export/Import als JSON anbieten.
+- Backend Node: express oder node:http, Routen REST-artig (GET /api/items, POST /api/items), JSON-Validierung, Status-Codes (400/404/500) mit {error}. CORS nur wenn nötig. Port aus process.env.PORT || 3000.
+- Python-Backend: FastAPI + uvicorn, Pydantic-Modelle, /docs zum Testen. Datenbank: SQLite (sqlite3/better-sqlite3) mit Migration beim Start; Queries IMMER parametrisiert.
+- Sicherheit: nie Secrets im Frontend, Passwörter nur gehasht (bcrypt/argon2), Nutzereingaben escapen (kein innerHTML mit fremdem Text).
+- Testen: Server per start starten, mit fetch/curl jede Route einmal aufrufen, Antwort prüfen; Frontend mit check ansehen.`;
+
+const PYDATA = `## Python, Skripte, Daten & Automatisierung
+- Struktur: main() + if __name__ == "__main__":, argparse für Optionen, pathlib für Pfade, logging statt print für Diagnose.
+- Abhängigkeiten in requirements.txt; nur installieren, was wirklich gebraucht wird. Standardbibliothek bevorzugen (csv, json, sqlite3, urllib, datetime).
+- Daten: pandas für Tabellen, matplotlib für Diagramme (als PNG speichern), Encoding explizit (utf-8), Zahlen-/Datumsformate prüfen.
+- Automatisierung: idempotent (zweimal laufen = gleiches Ergebnis), Trockenlauf-Option (--dry-run) bei Datei-Änderungen, nie ohne Nachfrage löschen.
+- Tests: pytest mit 3–5 aussagekräftigen Tests für Kernfunktionen; mit verify ausführen.
+- Kleine GUI: tkinter (eingebaut) oder eine lokale Web-Oberfläche; exe per pyinstaller --onefile.`;
+
+const CLITOOL = `## CLI-Tools, Bots & Integrationen
+- CLI (Node): #!/usr/bin/env node, Argumente selbst parsen oder commander, --help mit Beispielen, Exit-Codes (0 ok, 1 Fehler), farbige aber knappe Ausgabe.
+- Discord-Bot: discord.js v14, Token aus .env (nie hardcoden), Slash-Commands registrieren, Fehler pro Befehl abfangen. Telegram: grammy/telegraf.
+- Fremde APIs: echte, dokumentierte Endpunkte (vorher websearch/fetch der Doku), Timeouts + Retry mit Backoff, Rate-Limits respektieren, Antworten validieren.
+- Konfiguration: .env + .env.example, Werte beim Start prüfen und klar melden, was fehlt.`;
+
 export const CRAFT_CATEGORY_PREFIX = "ki-";
-export const CRAFT_KNOWLEDGE_VERSION = "KI-Wissen 2026-11-11";
+export const CRAFT_KNOWLEDGE_VERSION = "KI-Wissen 2026-11-11c";
 
 type Pack = { id: string; title: string; test: RegExp; text: string };
 const PACKS: Pack[] = [
+  { id: "game2d", title: "2D-Spiele (Jump'n'Run, Plattformer)", test: /jump.?n.?run|jump.?and.?run|platformer|plattformer|plattform-?spiel|mario|side.?scroller|2d[- ]?(spiel|game|klon|clone)|retro.?spiel|arcade|level.{0,40}gegner|gegner.{0,40}level|sonic|metroidvania/i, text: GAME2D },
   { id: "3d", title: "3D-Szenen & 3D-Objekte (Three.js)", test: /\b3d\b|3-d|three\.?js|webgl|dreidimensional|szene|raumschiff|planet|auto\b|rennwagen|sportwagen|haus\b|stadt|landschaft|welt\b|modell(?!.*minecraft)/i, text: THREE_D },
   { id: "bbmodel", title: "Blockbench-Modelle (.bbmodel)", test: /bbmodel|blockbench|block ?bench|3d[- ]?modell|modell f(ü|ue)r minecraft|hut|helm|chestplate|r(ü|ue)stung|item[- ]?modell|möbel|moebel/i, text: BBMODEL },
   { id: "skin", title: "Minecraft-Skins & 3D-Animationen", test: /skin|minepro641|lauf(-|en|animation)|animation|animier|winken|three\.?js|3d[- ]?figur|charakter/i, text: SKIN },
@@ -493,6 +849,9 @@ const PACKS: Pack[] = [
   { id: "packs", title: "Resource Packs, Datapacks & Shader", test: /resource ?pack|ressourcenpaket|texturepack|texture pack|datapack|datenpaket|mcfunction|shader|iris|optifine|pack\.mcmeta/i, text: PACKS_MC },
   { id: "app", title: "Apps bauen", test: /\bapp\b|anwendung|tool\b|rechner|planer|tracker|dashboard|to-?do|verwaltung|notiz|quiz|formular|generator|web-?app/i, text: APP },
   { id: "plugin", title: "Minecraft-Plugins & Mods", test: /plugin|spigot|paper|bukkit|forge|fabric|mod\b|datapack|java/i, text: PLUGIN },
+  { id: "fullstack", title: "Web-Apps, Backends & APIs", test: /backend|server|api\b|rest|endpoint|datenbank|database|sqlite|postgres|login|registrier|express|fastapi|flask|django|next\.?js|react|vue|svelte|vite|full.?stack|web-?app|dashboard|shop|crud/i, text: FULLSTACK },
+  { id: "pydata", title: "Python, Daten & Automatisierung", test: /python|\.py\b|pandas|csv|excel|daten(analyse|auswertung)?|diagramm|automatisier|scrap|skript|script|tkinter|pyinstaller|pytest/i, text: PYDATA },
+  { id: "clitool", title: "CLI-Tools, Bots & Integrationen", test: /\bcli\b|kommandozeile|terminal-?tool|discord|telegram|bot\b|webhook|integration|\.env|npm paket|command.?line/i, text: CLITOOL },
   { id: "code", title: "Programmieren (alle Sprachen)", test: /code|programm|skript|script|funktion|klasse|bug|fehler|exception|traceback|python|javascript|typescript|java\b|c#|c\+\+|rust|golang|sql|regex|api\b|algorithm|\.(py|js|ts|java|cs|cpp|rs|go|sql)\b/i, text: CODE },
 ];
 
@@ -517,7 +876,10 @@ export const learnedRules = (o?: CraftOverrides) => pick(o, "gelernt", "");
 /** Themen-Pakete, die zur Frage passen (höchstens 3, Reihenfolge wie in PACKS). */
 export function relevantCraftKnowledge(text: string, max = 3, overrides?: CraftOverrides): string {
   const t = String(text || "").slice(-4000);
-  return PACKS.filter((p) => p.test.test(t)).slice(0, max).map((p) => pick(overrides, p.id, p.text)).join("\n\n");
+  const hits = PACKS.filter((p) => p.test.test(t)).slice(0, max).map((p) => pick(overrides, p.id, p.text));
+  // Bei jeder Coding-/Bau-Anfrage zusätzlich die allgemeinen Profi-Regeln (nicht nur bei Spielen).
+  if (hits.length || wantsLongOutput(t)) hits.push(pick(overrides, "engineering", ENGINEERING));
+  return hits.join("\n\n");
 }
 
 /** Sieht die Anfrage nach Code/Dateien aus? Dann darf die Antwort deutlich länger werden. */

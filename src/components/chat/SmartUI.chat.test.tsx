@@ -96,4 +96,19 @@ describe("Bedienelemente im echten Chat", () => {
     expect(sent).toEqual(["Erzähl mehr"]);
     window.removeEventListener(SMART_UI_SEND, on);
   });
+  it("Auswahl (choice) lässt sich abschicken – wie die Projekt-Frage in der App", () => {
+    const sent: string[] = [];
+    const on = (e: Event) => sent.push((e as CustomEvent<string>).detail);
+    window.addEventListener(SMART_UI_SEND, on);
+    const { container } = render(<Chat first={block({ type: "choice", title: "Was wollen wir bauen?", label: "Wähle ein Projekt aus:", options: [{ label: "LunoMotionStudio", text: "UI für Film-Verwaltung" }, { label: "MeinSpiel", text: "3D-Mechaniken und Scoring" }] })} />);
+    act(() => (container.querySelectorAll(".msui-opt")[1] as HTMLButtonElement).click());
+    act(() => redraw());
+    const go = container.querySelector(".msui-q-send") as HTMLButtonElement;
+    expect(go.textContent).toBe("Weiter mit „MeinSpiel“");
+    act(() => go.click());
+    expect(sent).toEqual(["Antwort auf „Wähle ein Projekt aus:“: MeinSpiel – 3D-Mechaniken und Scoring"]);
+    act(() => redraw());
+    expect(container.textContent).toContain("Gewählt: MeinSpiel");
+    window.removeEventListener(SMART_UI_SEND, on);
+  });
 });

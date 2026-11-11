@@ -12,21 +12,62 @@ const ROWS: { key: "hour" | "week" | "month"; label: string; hint: string }[] = 
 ];
 
 const fmt = (n: number) => (n >= 1e6 ? (n / 1e6).toFixed(1).replace(".", ",") + " Mio." : n >= 1e3 ? Math.round(n / 1e3) + " Tsd." : String(Math.round(n)));
-const TIER: Record<string, string> = { free: "Free", plus: "Plus", pro: "Pro", ultra: "Ultra", admin: "Admin" };
+const TIER: Record<string, string> = { free: "Free", light: "Light", pro: "Pro", admin: "Admin" };
+
+/** Ersatzweg ohne Server-Funktion: Stufe, Limits und eigener Verbrauch direkt aus der Datenbank. */
+async function usageFromDb(): Promise<Summary> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Nicht angemeldet");
+  const since = new Date(Date.now() - 30 * 864e5).toISOString();
+  const db = supabase as unknown as { from: (t: string) => any };
+  const [roles, sub, rows] = await Promise.all([
+    db.from("user_roles").select("role").eq("user_id", user.id),
+    db.from("subscriptions").select("tier,expires_at").eq("user_id", user.id).maybeSingle(),
+    db.from("mythos_token_usage").select("total_tokens,measured,created_at").eq("user_id", user.id).gte("created_at", since).limit(20000),
+  ]);
+  if (rows.error) throw new Error(rows.error.message);
+  const tier = roles.data?.some((r: { role: string }) => r.role === "admin") ? "admin"
+    : sub.data?.tier && (!sub.data.expires_at || new Date(sub.data.expires_at) > new Date()) ? String(sub.data.tier) : "free";
+  const now = Date.now(), usage = { hour: 0, week: 0, month: 0, unmeasured: 0 };
+  for (const r of (rows.data || []) as { total_tokens: number | null; measured: boolean; created_at: string }[]) {
+    const age = now - new Date(r.created_at).getTime(), n = Number(r.total_tokens) || 0;
+    usage.month += n; if (age < 7 * 864e5) usage.week += n; if (age < 3600e3) usage.hour += n; if (!r.measured) usage.unmeasured++;
+  }
+  const { data: lim } = await db.from("app_settings").select("key,value").like("key", `token_limit_${tier}_%`);
+  const limits: Record<string, number | null> = { hour: null, week: null, month: null };
+  for (const r of (lim || []) as { key: string; value: string | null }[]) { const k = r.key.split("_").pop()!; const n = Number(r.value); if (k in limits && r.value && Number.isFinite(n)) limits[k] = n; }
+  return { tier, usage, limits };
+}
 
 /** Verbrauch wie bei Claude: Balken pro Zeitfenster, Prozent und Limit. */
 export default function UsageDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const [data, setData] = useState<Summary | null>(null);
   const [error, setError] = useState("");
+  const [nonce, setNonce] = useState(0);
   useEffect(() => {
     if (!open) return;
+    let dead = false;
     setData(null); setError("");
-    supabase.functions.invoke("cli-auth", { body: { action: "usage_me" } })
-      .then(({ data: d, error: e }) => {
-        if (e || !d?.tokens) setError("Verbrauch gerade nicht abrufbar.");
-        else setData(d.tokens as Summary);
-      });
-  }, [open]);
+    (async () => {
+      // 1. Weg: Server (rechnet alles zusammen). 2. Weg, falls der nicht antwortet: eigene Zeilen direkt lesen (erlaubt per RLS).
+      let why = "";
+      try {
+        const { data: d, error: e } = await supabase.functions.invoke("cli-auth", { body: { action: "usage_me" } });
+        if (!e && d?.tokens) { if (!dead) setData(d.tokens as Summary); return; }
+        const ctx = (e as { context?: Response } | null)?.context;
+        why = (d?.error as string) || (ctx && typeof ctx.json === "function" ? (await ctx.json().catch(() => null))?.error : "") || e?.message || "";
+      } catch (e) { why = e instanceof Error ? e.message : String(e); }
+      try {
+        const s = await usageFromDb();
+        if (!dead) setData(s);
+      } catch (e) {
+        if (dead) return;
+        const msg = /Unbekannte Aktion/i.test(why) ? "Die Server-Funktion „cli-auth“ ist noch eine alte Fassung – bitte in Lovable neu bereitstellen." : why || (e instanceof Error ? e.message : "");
+        setError("Verbrauch gerade nicht abrufbar." + (msg ? " (" + msg + ")" : ""));
+      }
+    })();
+    return () => { dead = true; };
+  }, [open, nonce]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -38,7 +79,12 @@ export default function UsageDialog({ open, onOpenChange }: { open: boolean; onO
           </DialogDescription>
         </DialogHeader>
         {!data && !error && <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>}
-        {error && <p className="py-6 text-center text-sm text-muted-foreground">{error}</p>}
+        {error && (
+          <div className="py-6 text-center">
+            <p className="text-sm text-muted-foreground">{error}</p>
+            <button onClick={() => setNonce((n) => n + 1)} className="mt-3 rounded-full border border-border px-3.5 py-1.5 text-sm hover:bg-muted">Nochmal versuchen</button>
+          </div>
+        )}
         {data && (
           <div className="space-y-6 py-2">
             {ROWS.map(r => {

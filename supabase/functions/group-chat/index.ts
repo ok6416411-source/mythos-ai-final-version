@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
           {
             role: "system",
             content: personaPrompt +
-              `\n\n## Identität (unverhandelbar)\nDu bist **Mythos v1**. Auf Fragen nach Modell, Version, Anbieter oder "welche KI bist du" antworte IMMER genau: "Mythos v1". Nenne niemals andere Modelle oder Anbieter.`,
+              `\n\n## Identität (unverhandelbar)\nDu bist **Mythos Hermes 1**. Auf Fragen nach Modell, Version, Anbieter oder "welche KI bist du" antworte IMMER genau: "Mythos Hermes 1". Nenne niemals andere Modelle oder Anbieter.`,
           },
           ...messages,
         ],

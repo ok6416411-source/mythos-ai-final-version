@@ -127,6 +127,12 @@ function draw(it, i) {
     if (it.url) { const o = el("button", "chip", "🌐 Im Browser öffnen"); o.onclick = () => window.mythos.open(it.url); b.appendChild(o); }
     d.appendChild(b);
   }
+  else if (it.cls === "interim") {
+    // Zwischenstand: klein und einklappbar, damit nur die echte Schlussantwort groß im Chat steht.
+    d = el("details", "interim"); const first = (it.text.split("\n").find((l) => l.trim()) || "").replace(/[#*_`>]/g, "").trim();
+    d.append(el("summary", "", "Zwischenstand · " + (first.length > 110 ? first.slice(0, 110) + "…" : first)));
+    const b = el("div", "body"); md(b, it.text); d.appendChild(b);
+  }
   else if (it.cls === "out") { d = el("details", "out"); d.append(el("summary", "", "▸ Ausgabe von " + (it.cmd || "Befehl")), el("pre", "", it.text)); }
   else if (it.cls === "done") {
     d = el("div", "t done", it.text);
@@ -233,7 +239,7 @@ function paintRun(run) {
   const vis = visibleText(run.stream).trim();
   if (!e.activity || !e.activity.isConnected) { e.activity = el("details", "activity"); e.activity.open = true; e.actSum = el("summary"); e.actSpin = el("span", "dots"); for (let k = 0; k < 4; k++) e.actSpin.appendChild(el("i")); e.actTitle = el("span", "", "Mythos arbeitet"); e.actTime = el("span", "elapsed"); e.actChev = el("span", "chev", "›"); e.actSteps = el("div", "steps"); e.actSafe = el("div", "safe", "Live-Aktivitäten zeigen sichere Arbeitsschritte, keine privaten internen Gedanken."); e.actSum.append(e.actSpin, e.actTitle, e.actTime, e.actChev); e.activity.append(e.actSum, e.actSteps, e.actSafe); }
   e.actTime.textContent = fmtLong(Date.now() - run.t0); const lastAct = (run.activity || [])[(run.activity || []).length - 1]; e.actTitle.textContent = run.phase || (lastAct ? lastAct.text : "Arbeitet …");
-  const acts = run.activity || []; if (e.activityCount !== acts.length) { e.actSteps.textContent = ""; acts.forEach((a, k) => { const row = el("div", "step" + (k === acts.length - 1 ? " now" : "")); row.append(el("span", "txt", a.text)); e.actSteps.appendChild(row); }); e.actSteps.scrollTop = 1e9; e.activityCount = acts.length; }
+  const acts = run.activity || []; if (e.activityCount !== acts.length) { e.actSteps.textContent = ""; acts.forEach((a, k) => { const row = el("div", "step" + (k === acts.length - 1 ? " now" : "")); const ic = el("span", "ic", a.icon || "•"); const tx = el("span", "txt", a.text); tx.title = a.text; const tm = el("time", "", a.at ? new Date(a.at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : ""); row.append(ic, tx, tm); e.actSteps.appendChild(row); }); e.actSteps.scrollTop = 1e9; e.activityCount = acts.length; }
   col.appendChild(e.activity);
   if (vis) {
     if (!e.stream || !e.stream.isConnected) { e.stream = el("div", "m a streaming"); const img = el("img"); img.src = "icon.png"; e.body = el("div", "body"); e.stream.append(img, e.body); e.drawn = null; }
@@ -305,7 +311,7 @@ async function once(run, messages, system, onText, onThink) {
   const tok = run.chat.tokens = run.chat.tokens || { in: 0, out: 0 };
   try {
     const r = await fetch(CFG.fn + "/v1-messages", { method: "POST", signal: c.signal,
-      headers: { "content-type": "application/json", "x-api-key": cfg.key, "anthropic-version": "2023-06-01" },
+      headers: { "content-type": "application/json", "x-api-key": cfg.key, "anthropic-version": "2023-06-01", "x-mythos-client": "app" },
       body: JSON.stringify({ model: run.model, route: run.route || undefined, effort: cfg.effort || "normal", task_id: run.taskId, max_tokens: EFFORT_TOKENS[cfg.effort] || 8000, system: system, messages: messages, stream: true }) });
     if (!r.ok) { const j = await r.json().catch(() => ({})); const e = new Error((j.error && j.error.message) || ("HTTP " + r.status)); e.status = r.status; throw e; }
     const rd = r.body.getReader(), dec = new TextDecoder(); let buf = "", out = "", think = "", measured = null;
@@ -332,6 +338,7 @@ async function call(run, h, system, onText, onThink) {
     catch (e) {
       if (run.stopped) throw e;
       if (e.status === 401) throw new Error("Anmeldung abgelaufen – bitte abmelden und neu anmelden.");
+      if (e.status === 403 || /mit Mythos Pro/i.test(e.message)) { const pe = new Error(e.message || "Mythos Code gibt es mit Mythos Pro."); pe.limit = true; throw pe; }
       if (/Daily limit/i.test(e.message)) throw new Error("Tageslimit erreicht – mit Pro unbegrenzt.");
       // Token-Limit (Stunde/Woche/Monat): neue Aufgabe abgelehnt – nicht wiederholen, klar melden.
       if (/Limit ist erreicht/i.test(e.message)) { const le = new Error("Limit erreicht – " + e.message); le.limit = true; throw le; }
@@ -457,7 +464,7 @@ function setBusyUI() {
   s.textContent = b ? "■" : "↑"; s.title = b ? "Stoppen (Esc)" : "Senden"; s.classList.toggle("stop", b); s.disabled = !!(r && r.stopped);
   $("timer").classList.toggle("busy", b); document.body.classList.toggle("busy", b);
   if (!b) $("timer").textContent = "⏱ " + ((chat && chat.lastTook) || "0s");
-  $("inp").placeholder = b ? "Nächste Aufgabe? Enter reiht sie in die Warteschlange ein" : "Was soll Mythos bauen?  ( / = Befehle )";
+  $("inp").placeholder = b ? "Nachricht an Mythos – wartet oben und wird beim nächsten Schritt gelesen" : "Was soll Mythos bauen?  ( / = Befehle )";
   grow(); renderResume();
 }
 function stop(c) {
@@ -484,11 +491,9 @@ async function send() { follow = true;
   if (!q.startsWith("/")) attach = attach.concat(await resolveMentions(q));
   const item = { q: q || "Schau dir die angehängten Dateien an.", att: attach };
   attach = []; renderFiles();
-  if (isBusy(chat)) {
-    const r = runOf(chat);
-    if (r && !r.stopped && !q.startsWith("/")) { (r.inject = r.inject || []).push(item); addTo(chat, "u", "💬 " + item.q + "  (wird bei nächster Gelegenheit berücksichtigt)"); return; }
-    (chat.queue = chat.queue || []).push(item); renderQueue(); return;
-  }
+  // Mythos arbeitet noch: Nachricht wartet sichtbar über dem Eingabefeld. Beim nächsten Arbeitsschritt
+  // liest Mythos sie (wie bei Claude); ist er vorher fertig, wird sie danach ganz normal abgeschickt.
+  if (isBusy(chat)) { item.at = Date.now(); (chat.queue = chat.queue || []).push(item); renderQueue(); return; }
   submit(chat, item.q, item.att);
 }
 function submit(c, q, att, opts) {
@@ -505,12 +510,17 @@ function submit(c, q, att, opts) {
 function renderQueue() {
   const bar = $("queuebar"), q = (chat && chat.queue) || [];
   bar.textContent = ""; bar.style.display = q.length ? "flex" : "none"; if (!q.length) return;
-  bar.appendChild(el("span", "", "⏳ Warteschlange (" + q.length + "):"));
+  const busy = isBusy(chat);
+  bar.appendChild(el("div", "qhead", busy ? "Wartet – Mythos liest " + (q.length === 1 ? "sie" : "sie alle") + " beim nächsten Schritt" : q.length + " wartende Nachricht" + (q.length === 1 ? "" : "en")));
   q.forEach((it, i) => {
-    const c = el("button", "chip", (it.q.length > 40 ? it.q.slice(0, 40) + "…" : it.q) + "  ✕"); c.title = "Aus der Warteschlange entfernen";
-    c.onclick = () => { q.splice(i, 1); renderQueue(); }; bar.appendChild(c);
+    const row = el("div", "qitem"); const t = el("div", "qtext", it.q); t.title = it.q;
+    const edit = el("button", "x", "✎"); edit.title = "Zurück ins Eingabefeld holen";
+    edit.onclick = () => { q.splice(i, 1); $("inp").value = it.q; attach = attach.concat(it.att || []); renderFiles(); grow(); $("inp").focus(); renderQueue(); };
+    const del = el("button", "x", "✕"); del.title = "Entfernen";
+    del.onclick = () => { q.splice(i, 1); renderQueue(); };
+    row.append(el("span", "qdot"), t, edit, del); bar.appendChild(row);
   });
-  if (!isBusy(chat)) { const go = el("button", "chip", "▶ Abarbeiten"); go.onclick = () => processQueue(chat); bar.appendChild(go); }
+  if (!busy) { const go = el("button", "chip", "▶ Jetzt abschicken"); go.onclick = () => processQueue(chat); bar.appendChild(go); }
 }
 function processQueue(c) { if (isBusy(c) || !c.queue || !c.queue.length) return; const it = c.queue.shift(); if (c === chat) renderQueue(); submit(c, it.q, it.att); }
 
@@ -548,6 +558,16 @@ function showCheck(c, r) {
 }
 // Mythos Cloud: Backend + KI-Gateway für die gebaute App verbinden, dann mythos-cloud.js ins Projekt schreiben.
 async function runTool(t, folder, id) {
+  if (t.name === "publish") {
+    if (!cfg.key) return { result: "FEHLER: Nicht angemeldet – Veröffentlichen braucht ein Mythos-Pro-Konto. NICHT behaupten, es sei veröffentlicht." };
+    const b = await window.mythos.tool(t, folder, id);
+    if (!b.bundle) return b;
+    const slug = String(t.slug || base(t.path && t.path !== "." ? t.path : folder || "") || "meine-app");
+    const r = await post("cli-auth", { action: "publish_app", api_key: cfg.key, slug, title: t.title || slug, html: b.bundle.html });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.url) return { result: "FEHLER beim Veröffentlichen: " + (j.error || "HTTP " + r.status) + " – sag dem Nutzer ehrlich, dass es NICHT online ist." };
+    return { result: "✓ Veröffentlicht (" + Math.round(b.bundle.size / 1024) + " KB): " + j.url + (b.bundle.notes && b.bundle.notes.length ? "\nHinweise: " + b.bundle.notes.join("; ") : ""), link: j.url };
+  }
   if (t.name !== "cloud") return window.mythos.tool(t, folder, id);
   if (!cfg.key) return { result: "FEHLER: Nicht angemeldet – Mythos Cloud braucht ein Mythos-Konto." };
   const r = await post("app-cloud", { action: "connect", api_key: cfg.key, name: String(t.app || base(folder || "") || "Meine App") });
@@ -558,6 +578,9 @@ async function runTool(t, folder, id) {
 }
 const autoTestOn = (folder) => !!(folder && cfg.autoTest && cfg.autoTest[folder]);
 
+/** Zusatz zur Selbstprüfung: welcher Ordner, und was ein ✓ wirklich bedeutet. */
+const PRUEF_HINWEIS = (tracker) => (tracker.projectDir() ? "\nDein Projektordner ist „" + tracker.projectDir() + "“ – verify mit {\"path\":\"" + tracker.projectDir() + "\"}." : "") +
+  "\nWICHTIG: check ✓ heißt nur „lädt ohne Fehler“. Ob es GUT aussieht und funktioniert, siehst du am Screenshot und am Tastatur-Test – beschreibe ehrlich, was du siehst. Schreib danach KEINEN neuen langen Abschlussbericht, sondern nur, was sich geändert hat (1–3 Sätze).";
 async function runAgent(c, opts) {
   if (runs.has(c.id)) return;
   const run = { id: "run-" + c.id + "-" + Date.now(), chat: c, stopped: false, ctl: null, t0: Date.now(), stream: "", out: null, els: {}, phase: "", activity: [],
@@ -574,7 +597,17 @@ async function runAgent(c, opts) {
   const tracker = verifyTracker();
   const question = String((c.history.filter((m) => m.role === "user").pop() || {}).content || "");
   const openTodos = () => { const it = run.todoItem; return it && it.items ? it.items.filter((x) => !x.done) : []; };
-  const takeInject = () => { const inj = run.inject || []; run.inject = [];
+  const takeInject = () => {
+    // Wartende Nachrichten aus der Warteschlange (keine /Befehle) jetzt einbringen – sichtbar als normale Nachricht.
+    const waiting = (c.queue || []).filter((it) => !String(it.q || "").startsWith("/"));
+    if (waiting.length) {
+      c.queue = (c.queue || []).filter((it) => String(it.q || "").startsWith("/"));
+      waiting.forEach((it) => addTo(c, "u", it.q + ((it.att || []).filter((f) => !f.image).length ? "\n📎 " + it.att.filter((f) => !f.image).map((f) => f.name).join(", ") : "")));
+      run.inject = (run.inject || []).concat(waiting);
+      if (c === chat) renderQueue();
+      activityPush(run, "💬", waiting.length === 1 ? "Deine Nachricht gelesen" : waiting.length + " Nachrichten gelesen");
+    }
+    const inj = run.inject || []; run.inject = [];
     inj.forEach((it) => { const files = (it.att || []).filter((f) => !f.image);
       c.history.push({ role: "user", content: "ZWISCHENNACHRICHT DES NUTZERS (hat Vorrang, passe deinen Plan sofort an):\n" + it.q + (files.length ? "\n\n" + files.map((f) => "### " + f.name + "\n" + f.content).join("\n\n") : "") }); });
     return inj.length; };
@@ -595,7 +628,7 @@ async function runAgent(c, opts) {
       try { res = await ask(); }
       catch (e) {
         if (run.stopped) break;
-        if (/Anmeldung|Tageslimit|Limit erreicht/.test(e.message)) throw e;
+        if (/Anmeldung|Tageslimit|Limit erreicht|mit Mythos Pro/.test(e.message) || e.limit) throw e;
         // Nicht aufgeben und keine Fehlermeldung in den Chat: still warten und neu ansetzen.
         activityPush(run, "⏸", "Gerade nicht erreichbar – geht gleich weiter");
         for (let w = 0; w < 20000 && !run.stopped; w += 250) { run.phase = "Gerade nicht erreichbar – neuer Versuch in " + Math.ceil((20000 - w) / 1000) + " s"; if (w % 1000 === 0) schedulePaint(run); await new Promise((r) => setTimeout(r, 250)); }
@@ -607,28 +640,40 @@ async function runAgent(c, opts) {
       const out = res.text, think = res.think;
       c.history.push({ role: "assistant", content: out });
       const pb = parseToolBlock(out), text = pb.text;
-      if (text) addTo(c, "a", text);
+      // Text mit Werkzeug = Zwischenstand (normal zeigen). Text OHNE Werkzeug ist eine mögliche Schlussantwort:
+      // erst zeigen, wenn klar ist, dass Mythos wirklich fertig ist – sonst als kleiner Zwischenstand,
+      // damit nicht drei „Abschlussberichte“ hintereinander im Chat stehen.
+      const interim = () => { if (text) addTo(c, "interim", text); };
+      if (text && (pb.tool || pb.error)) addTo(c, "a", text);
       if (!pb.tool && !pb.error) {
-        if (takeInject()) continue;
+        if (takeInject()) { interim(); continue; }
         // Offene Punkte in der Aufgabenliste -> nicht mittendrin aufhören.
         const open = openTodos();
-        if (open.length && nudges < 8) { nudges++; c.history.push({ role: "user", content: "Es sind noch " + open.length + " Punkte offen: " + open.map((x) => x.text).join("; ") + ". Mach direkt weiter mit dem nächsten Werkzeug. Wenn etwas unmöglich ist, markiere es erledigt und erkläre warum." }); saveChat(c); continue; }
+        if (open.length && nudges >= 2) { open.forEach((x) => { x.done = true; }); const td = todoEls.get(run.todoItem); if (td && td.isConnected) renderTodo(td, run.todoItem); }
+        else if (open.length && nudges < 2) { interim(); nudges++; c.history.push({ role: "user", content: "Es sind noch " + open.length + " Punkte offen: " + open.map((x) => x.text).join("; ") + ". Mach direkt weiter mit dem nächsten Werkzeug. Wenn etwas unmöglich ist, markiere es erledigt und erkläre warum." }); saveChat(c); continue; }
         // Selbstprüfung nach Änderungen (gegen oberflächliche Arbeit): verify, bei Webseiten zusätzlich check.
         const vn = tracker.nudge(text, question);
-        if (vn) { activityPush(run, "🔎", "Arbeit selbst prüfen"); c.history.push({ role: "user", content: vn }); saveChat(c); continue; }
+        if (vn) { interim(); activityPush(run, "🔎", "Arbeit selbst prüfen"); c.history.push({ role: "user", content: vn + PRUEF_HINWEIS(tracker) }); saveChat(c); continue; }
         // /goal: Mythos hat aufgehört, ohne das Ziel als erreicht zu melden -> weiter antreiben.
         if (goal && !/ZIEL ERREICHT/.test(out)) {
+          if (text) addTo(c, "a", text);
           if (++nudges % 40 === 0) noteTo(c, "🎯 Mythos hängt beim Ziel – versucht es weiter mit einem anderen Ansatz (Stopp mit Esc).");
           c.history.push({ role: "user", content: prompts.nudge }); saveChat(c); continue;
         }
         // Automatisch testen: nach Änderungen Tests laufen lassen, Fehler von Mythos reparieren lassen.
+        const testDir = tracker.projectDir() ? run.folder.replace(/[\\/]+$/, "") + "/" + tracker.projectDir() : run.folder;
         if (autoTest && changed && testRounds < 3) {
-          testCmd = testCmd || (cfg.testCmd && cfg.testCmd[run.folder]) || await window.mythos.tests.detect(run.folder);
-          if (!testCmd) { testRounds = 3; noteTo(c, "🧪 Kein Testbefehl gefunden – mit /tests <befehl> festlegen."); }
+          testCmd = testCmd || (cfg.testCmd && (cfg.testCmd[testDir] || cfg.testCmd[run.folder])) || await window.mythos.tests.detect(testDir);
+          if (!testCmd) {
+            testRounds = 3;
+            // Nur einmal pro Projekt sagen – nicht nach jeder Aufgabe.
+            cfg.noTestsSaid = cfg.noTestsSaid || {};
+            if (!cfg.noTestsSaid[testDir]) { cfg.noTestsSaid[testDir] = 1; window.mythos.setCfg(cfg); noteTo(c, "🧪 Kein Testbefehl gefunden – mit /tests <befehl> festlegen."); }
+          }
           else {
             testRounds++; changed = false;
             addTo(c, "tool", "🧪 Tests: " + testCmd); run.out = ""; run.phase = "Tests";
-            const tr = await window.mythos.tests.run(run.folder, testCmd, run.id);
+            const tr = await window.mythos.tests.run(testDir, testCmd, run.id);
             run.out = null; run.phase = "";
             if (run.stopped) break;
             addTo(c, "out", tr.text.slice(-4000), { cmd: testCmd });
@@ -641,12 +686,15 @@ async function runAgent(c, opts) {
             noteTo(c, "🧪 Tests grün ✓");
           }
         }
+        if (text) addTo(c, "a", text);
         finished = true; reached = !!goal; break;
       }
       nudges = 0;
       // Kaputte oder erfundene Aufrufe nie anzeigen, sondern dem Modell erklären, was es gibt.
       if (pb.error) { c.history.push({ role: "user", content: pb.error + " Sende den Block vollständig als gültiges JSON in <tool>…</tool>; Zeilenumbrüche in Strings als \\n escapen." }); continue; }
       let t = pb.tool; const bad = toolProblem(t, toolExtra());
+      // verify ohne Ordner im großen Arbeitsordner (z. B. C:\) → automatisch das Projekt nehmen, an dem Mythos gerade arbeitet.
+      if (t && t.name === "verify" && !t.path && tracker.projectDir()) t = Object.assign({}, t, { path: tracker.projectDir() });
       if (bad) { c.history.push({ role: "user", content: "Werkzeug-Ergebnis:\n" + bad }); saveChat(c); continue; }
       // Server & Watcher enden nie → im Hintergrund starten, damit Mythos fertig wird.
       if (t.name === "run" && looksLikeServer(t.cmd)) t = { name: "start", cmd: t.cmd };
@@ -669,6 +717,14 @@ async function runAgent(c, opts) {
         if (r.diff && r.diff.lines.length) { addTo(c, "diff", "", { path: t.path, d: r.diff }); changed = true; }
       }
       let loopHint = tracker.note(t, r.result) || "";
+      // Dreht sich Mythos im Kreis (z. B. Kamera 20-mal verstellt)? Dann ehrlich anhalten und dich fragen.
+      const stuckWhy = goal ? "" : tracker.stuck();
+      if (stuckWhy) {
+        pushResult(c.history, r, "");
+        addTo(c, "a", "⏸ " + stuckWhy + " Bevor ich weiter rate: Schau es dir bitte kurz an und sag mir, was genau nicht passt (am besten mit Screenshot) – oder sag „mach weiter“, dann versuche ich einen ganz anderen Ansatz.");
+        c.history.push({ role: "assistant", content: "(Angehalten: " + stuckWhy + " Ich habe den Nutzer gefragt, was genau nicht passt.)" });
+        finished = true; break;
+      }
       if (/Fehlschläge in Folge/.test(loopHint) && !run.stopped) loopHint += await secondOpinion(run, c.history.concat([{ role: "user", content: String(r.result || "").slice(-3000) }]));
       const failed = /^(FEHLER|Exit: [1-9])|\nExit: [1-9]|ERGEBNIS: ✗/.test(String(r.result || ""));
       pushResult(c.history, r, (failed ? "\n\n(Das ist fehlgeschlagen. Lies die Fehlermeldung genau, finde die Ursache und behebe sie gezielt – nicht raten, nicht aufgeben.)" : "") + loopHint);
@@ -1769,7 +1825,7 @@ async function login() {
   if (!s || !s.code) { setStatus("Anmeldung gerade nicht möglich – bitte nochmal versuchen."); $("btnLogin").disabled = false; return; }
   // Anmeldung direkt in der App, in derselben Sitzung wie Räume, Cloud-PC und Filmstudio:
   // so ist man dort danach schon angemeldet und muss es nicht nochmal tun.
-  const authUrl = CFG.site + "/cli-auth?code=" + s.code;
+  const authUrl = s.url || (CFG.site + "/cli-auth?code=" + s.code);
   const lw = $("lweb"); lw.textContent = "";
   const wv = document.createElement("webview");
   wv.setAttribute("partition", "persist:mythos-cloudpc"); wv.setAttribute("src", authUrl);
@@ -1842,6 +1898,7 @@ async function installUpdate() {
 // Neue Version: hier oben einen Eintrag ergänzen (neueste zuerst), Schlüssel "2.16" gilt für alle 2.16.x.
 // Wird einmal nach jedem Update gezeigt.
 const WHATS_NEW = {
+  "2.18": ["Auswahl-Fragen haben jetzt einen „Weiter mit …“-Knopf", "Warteschlange: Nachrichten warten sichtbar über dem Eingabefeld (bearbeiten/löschen) und werden zuverlässig gelesen", "Kein Dauer-Gefrickel mehr: Mythos erkennt Schleifen, hört auf und sagt ehrlich, was hakt", "Prüfungen laufen nur im Projektordner – nie mehr über C:\\ oder Steam", "Neues Werkzeug publish: Projekte wirklich unter /build/<name> veröffentlichen", "Neue Modellnamen: Hermes, Forge, Zeus, Prometheus"],
   "2.17": ["Deutlich besser beim Programmieren: Mythos liest Dateien mit Zeilennummern und in Ausschnitten, ändert mehrere Stellen auf einmal und trifft die Stelle auch bei anderer Einrückung", "Syntaxfehler werden direkt nach dem Schreiben erkannt (JavaScript, JSON, Python, HTML, CSS) und sofort behoben", "Kennt dein Projekt von Anfang an (Stack, Skripte, Ordner) und merkt, wenn er sich im Kreis dreht", "Neues Werkzeug zum Finden von Dateien, Suche mit Zeilen drumherum, lange Ausgaben behalten Anfang und Ende", "Schutz davor, große Dateien versehentlich mit gekürztem Inhalt zu überschreiben"],
   "2.16": [
     "Eingabefeld bleibt immer anklickbar – auch nach Rückfragen wie „Mythos möchte ausführen …“",
@@ -2184,7 +2241,8 @@ function renderAgents(d, it) {
   });
 }
 const PLAN_PROMPT = "Zerlege die folgende Aufgabe in 2 bis 4 Teilaufgaben, die GLEICHZEITIG von verschiedenen Agenten erledigt werden können, ohne sich gegenseitig zu stören – also möglichst getrennte Dateien pro Teilaufgabe. " +
-  "Wenn die Aufgabe klein ist oder sich nicht sinnvoll aufteilen lässt (z. B. eine Frage oder eine einzige Datei), gib genau EINE Teilaufgabe zurück. " +
+  "Wenn die Aufgabe klein ist oder sich nicht sinnvoll aufteilen lässt (z. B. eine Frage, eine einzige Datei, ein kleines Spiel oder eine Webseite in einer HTML-Datei), gib genau EINE Teilaufgabe zurück. " +
+  "Jede Datei gehört GENAU EINER Teilaufgabe (files dürfen sich nicht überschneiden). Gemeinsame Dateien wie index.html, package.json oder die Hauptdatei gehören immer Teilaufgabe 1. Alle Teilaufgaben nutzen DIESELBE Technik (nicht eine 2D und eine 3D). " +
   "Antworte NUR mit JSON, ohne Werkzeuge: {\"subtasks\":[{\"title\":\"kurzer Titel\",\"task\":\"was genau zu tun ist\",\"files\":[\"pfad/datei\"]}]}";
 function parsePlan(text) {
   const m = String(text).match(/\{[\s\S]*\}/);
@@ -2203,6 +2261,11 @@ async function multiAgentPhase(run, c) {
     status: "wartet", phase: "", id: run.id + "-a" + i, ctl: null, chat: c, model: run.model, result: "", changed: false,
     get stopped() { return run.stopped; },
   }));
+  // Jede Datei gehört genau EINEM Agenten (der erste gewinnt) – sonst überschreiben sie sich gegenseitig.
+  const norm = (f) => String(f || "").replace(/\\/g, "/").replace(/^\.\//, "").toLowerCase();
+  const owner = new Map();
+  subs.forEach((s) => { s.files = s.files.filter((f) => { const k = norm(f); if (!k || owner.has(k)) return false; owner.set(k, s.i); return true; }); });
+  subs.forEach((s) => { s.owner = owner; s.norm = norm; });
   run.subs = subs;
   addTo(c, "agents", "", { agents: [] });
   const item = c.view[c.view.length - 1];
@@ -2238,6 +2301,12 @@ async function runSubAgent(run, c, s, n, task, sys, update) {
       let t = pb.tool; const bad = toolProblem(t, toolExtra());
       if (bad) { hist.push({ role: "user", content: "Werkzeug-Ergebnis:\n" + bad }); continue; }
       if (t.name === "run" && looksLikeServer(t.cmd)) t = { name: "start", cmd: t.cmd };
+      // Dateien eines anderen Agenten sind gesperrt.
+      if ((t.name === "write" || t.name === "edit") && s.owner) {
+        const k = s.norm(t.path), o = s.owner.get(k);
+        if (o != null && o !== s.i) { hist.push({ role: "user", content: "Werkzeug-Ergebnis:\nBLOCKIERT: " + t.path + " gehört Agent " + (o + 1) + ". Ändere nur deine eigenen Dateien (" + (s.files.join(", ") || "neue Dateien") + "). Brauchst du dort etwas, schreib es in deine Zusammenfassung – der Koordinator fügt es zusammen." }); continue; }
+        if (o == null) s.owner.set(k, s.i);
+      }
       s.phase = toolLabel(t); update();
       if (t.name !== "todo") addTo(c, "tool", tag + toolLabel(t));
       let r;

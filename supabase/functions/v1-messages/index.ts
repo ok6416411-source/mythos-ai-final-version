@@ -1,3 +1,4 @@
+import { relevantCraftKnowledge } from "../_shared/craftKnowledge.ts";
 import { aiChat } from "../_shared/ai.ts";
 import { buildSystemMessages } from "../_shared/identity.ts";
 import { MYTHOS_CATALOG } from "../_shared/catalog.ts";
@@ -10,7 +11,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.103.3";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-api-key, anthropic-version, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-api-key, anthropic-version, content-type, x-mythos-client",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -41,11 +42,11 @@ function mapModel(m: string): string {
 /** Nach außen sichtbarer Mythos-Modellname (nie der echte Anbieter). */
 function mythosLabelFor(m: string): string {
   const lc = (m || "").toLowerCase();
-  if (lc.includes("mythos-v2") || lc.includes("opus")) return "Mythos v2";
-  if (lc.includes("code")) return "MythosCode v1.5";
-  if (lc.includes("sonnet")) return "Mythos v1";
-  if (lc.includes("haiku") || lc.includes("lite")) return "Mythos v1 Lite";
-  return "Mythos v1";
+  if (lc.includes("mythos-v2") || lc.includes("opus")) return "Mythos Zeus 2";
+  if (lc.includes("code")) return "Mythos Prometheus 1.5";
+  if (lc.includes("sonnet")) return "Mythos Hermes 1";
+  if (lc.includes("haiku") || lc.includes("lite")) return "Mythos Echo 1";
+  return "Mythos Hermes 1";
 }
 
 function blockText(b: any): string {
@@ -125,6 +126,10 @@ Deno.serve(async (req) => {
   const isPro = !!roleRows?.some((r: any) => r.role === "admin") ||
     (subRow?.tier === "pro" && (!subRow.expires_at || new Date(subRow.expires_at) > new Date()));
 
+  // Mythos Code (App/CLI) nur mit Pro: Schlüssel aus der Geräte-Anmeldung heißen „Mythos Code“.
+  // Auch alte, vor der Sperre angelegte Anmeldungen von Free-Konten funktionieren damit nicht mehr.
+  if ((keyRow.name === "Mythos Code" || /^(?:app|cli)$/i.test(req.headers.get("x-mythos-client") || "")) && !isPro) return err("permission_error", "Mythos Code und die CLI gibt es mit Mythos Pro. Dein Konto hat kein Pro – hol es dir auf der Website unter /dashboard.", 403);
+
   let body: any;
   try { body = await req.json(); } catch { return err("invalid_request_error", "Invalid JSON", 400); }
 
@@ -154,6 +159,21 @@ Deno.serve(async (req) => {
     }),
   ];
   const conv = toOpenAI(messages);
+  // Fachwissen (Spiele, 3D, Apps, Code …) auch für Code-App und CLI – passend zur echten Bitte des Nutzers.
+  // Automatische Zwischennachrichten (Werkzeug-Ergebnisse, Erinnerungen) zählen nicht als Bitte.
+  // Die langen Vorlagen nur in den ersten Schritten nach der Bitte mitschicken (spart Tokens), danach nur die Regeln.
+  try {
+    const AUTO = /^(?:Werkzeug-Ergebnis|ARBEITSWEISE|Es sind noch|Bevor du fertig|ZWISCHENNACHRICHT|Du hast eine Anleitung|Die Tests|Das war viel zu wenig|Ein Coding-Agent steckt fest|\()/;
+    const textOf = (m: any) => typeof m?.content === "string" ? m.content : Array.isArray(m?.content) ? m.content.map((p: any) => p?.text || "").join(" ") : "";
+    let askAt = -1;
+    for (let i = conv.length - 1; i >= 0; i--) { const m = conv[i]; if (m?.role === "user" && textOf(m).trim() && !AUTO.test(textOf(m).trim())) { askAt = i; break; } }
+    if (askAt >= 0) {
+      const ask = textOf(conv[askAt]).slice(0, 4000);
+      let craft = relevantCraftKnowledge(ask, 2);
+      if (craft && conv.length - askAt > 8) craft = craft.replace(/```[a-z]*\n[\s\S]*?```/g, "(Vorlage hier gekürzt – baue auf dem bisherigen Code im Projekt auf.)");
+      if (craft) systemMsgs.push({ role: "system", content: "FACHWISSEN ZUR AKTUELLEN AUFGABE (verbindlicher Qualitätsmaßstab – nutze es):\n\n" + craft });
+    }
+  } catch { /* ohne Zusatzwissen weiter */ }
   const primary = mapModel(model);
 
   // Erst voller Verlauf, dann gekürzt, dann schnelles Ausweichmodell mit stark gekürztem Verlauf.

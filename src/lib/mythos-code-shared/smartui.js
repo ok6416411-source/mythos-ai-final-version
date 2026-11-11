@@ -437,7 +437,33 @@ body.light .msui-num{background:#fff}
     opts.forEach((o, i) => { const b = mk("button", "msui-opt"); b.type = "button"; b.append(mk("span", "msui-radio"), mk("span", "", typeof o === "object" ? o.label || o.title || o.text || "" : String(o))); b.onclick = () => { cur = i; mem.set(ckey, i); draw(); }; list.appendChild(b); });
     box.append(list, pane); draw();
   }
-  B.choice = (s, ctx) => { const box = mk("div", "msui-box"); box._ctx = ctx; head(box, s, ctx); choiceInto(box, s); note(box, s); return box; };
+  B.choice = (s, ctx) => {
+    const box = mk("div", "msui-box"); box._ctx = ctx; head(box, s, ctx); choiceInto(box, s); note(box, s);
+    // Auswahl ist fast immer eine Frage an den Nutzer („Was wollen wir bauen?“) – also muss sie sich auch abschicken lassen.
+    const opts = arr(s.options || s.criteria || s.tabs);
+    if (ctx && typeof ctx.send === "function" && s.send !== false && s.noSend !== true && opts.length > 1) {
+      const q = s.question || s.label || s.title || "Auswahl";
+      const key = "msui-c-" + hash(JSON.stringify([q, opts]));
+      const done = (txt) => { const d = mk("div", "msui-q-done"); d.style.marginTop = "10px"; d.append(mk("span", "", "✓"), mk("span", "", "Gewählt: " + txt)); return d; };
+      const answered = store.get(key);
+      if (answered) { box.querySelectorAll(".msui-opt").forEach((b) => { b.disabled = true; }); box.appendChild(done(answered)); return box; }
+      const btn = mk("button", "msui-q-send", ""); btn.type = "button"; btn.style.marginTop = "10px";
+      const labelOf = (o) => (o && typeof o === "object" ? String(o.label || o.title || o.text || "") : String(o));
+      const cur = () => { const on = [...box.querySelectorAll(".msui-opt")].findIndex((b) => b.classList.contains("on")); return on < 0 ? 0 : on; };
+      const upd = () => { btn.textContent = (s.submit || "Weiter mit") + " „" + labelOf(opts[cur()]) + "“"; };
+      box.querySelectorAll(".msui-opt").forEach((b) => b.addEventListener("click", upd));
+      btn.onclick = () => {
+        const o = opts[cur()], label = labelOf(o);
+        const extra = o && typeof o === "object" && (o.text || o.description) ? " – " + String(o.text || o.description).replace(/\s+/g, " ").slice(0, 160) : "";
+        store.set(key, label);
+        ctx.send("Antwort auf „" + q + "“: " + label + extra);
+        box.querySelectorAll(".msui-opt").forEach((x) => { x.disabled = true; });
+        btn.replaceWith(done(label));
+      };
+      upd(); box.appendChild(btn);
+    }
+    return box;
+  };
   B.tabs = B.choice;
   B.compare = (s, ctx) => {
     const box = mk("div", "msui-box"); box._ctx = ctx; head(box, s, ctx);
@@ -792,7 +818,7 @@ body.light .msui-num{background:#fff}
     "Bausteine:\n" +
     "- cards: {\"type\":\"cards\",\"title\":\"…\",\"items\":[{\"title\":\"…\",\"subtitle\":\"…\",\"text\":\"…\",\"image\":\"Wikipedia-Titel oder https-Bild-URL\",\"icon\":\"🎯\",\"badges\":[\"…\"],\"prompt\":\"Folgefrage bei Klick\"}]} – image als Stichwort (z. B. \"Kylian Mbappé\", \"Eiffelturm\") lädt automatisch ein passendes Foto.\n" +
     "- compare: {\"type\":\"compare\",\"title\":\"Spielervergleich\",\"items\":[{\"title\":\"A\",\"subtitle\":\"…\",\"image\":\"…\"},{…}],\"label\":\"Vergleichskriterium auswählen\",\"criteria\":[{\"label\":\"Tempo\",\"text\":\"Bewertung …\"}],\"note\":\"…\"}\n" +
-    "- choice: {\"type\":\"choice\",\"title\":\"…\",\"label\":\"…\",\"options\":[{\"label\":\"…\",\"text\":\"…\"}]} – Auswahl, Inhalt wechselt beim Klicken.\n" +
+    "- choice: {\"type\":\"choice\",\"title\":\"…\",\"label\":\"…\",\"options\":[{\"label\":\"…\",\"text\":\"…\"}]} – Optionen ansehen und vergleichen; hat einen Knopf „Weiter mit …“, der die Wahl an dich zurückschickt. Willst du nur etwas FRAGEN, nimm question.\n" +
     "- calculator: {\"type\":\"calculator\",\"title\":\"Sparrechner\",\"description\":\"Probiere die Regler aus.\",\"formula\":\"TeX optional\",\"inputs\":[{\"id\":\"rate\",\"label\":\"Monatlicher Sparbetrag\",\"min\":0,\"max\":200,\"step\":5,\"value\":50,\"format\":\"eur\"}]," +
     "\"outputs\":[{\"id\":\"total\",\"label\":\"Guthaben\",\"expr\":\"start + rate*n\",\"format\":\"eur\"},{\"label\":\"Einzahlungen\",\"expr\":\"rate*n\",\"format\":\"eur\"}],\"chart\":{\"x\":\"m\",\"from\":0,\"to\":\"n\",\"y\":[{\"label\":\"Guthaben\",\"expr\":\"start+rate*m\"}]},\"svg\":\"<svg viewBox='0 0 200 120'>…{{a*10}}…</svg>\",\"note\":\"Vereinfachte Rechnung …\"} " +
     "– Regler rechnen live. expr: + - * / ^ %, Klammern, sqrt, round(x,2), min, max, pow, abs, log, ln, exp, sin, cos, pi, if(bed,a,b), Vergleiche; Variablen = Input-ids und vorherige Output-ids. " +

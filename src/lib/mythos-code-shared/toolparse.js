@@ -4,7 +4,7 @@
 // {"name":…,"arguments":{…}} statt flacher Felder, echte Zeilenumbrüche in Strings oder abgeschnittenes JSON.
 // Nichts davon darf als Rohtext im Chat landen.
 
-const TOOL_NAMES = ["run", "start", "logs", "stop", "serve", "check", "verify", "read", "edit", "write", "search", "glob", "ls", "websearch", "fetch", "cloud", "todo"];
+const TOOL_NAMES = ["run", "start", "logs", "stop", "serve", "check", "verify", "publish", "read", "edit", "write", "search", "glob", "ls", "websearch", "fetch", "cloud", "todo"];
 const TOOL_OPEN_RE = /<(tool_call|tool_use|tool)(?:\s[^>]*)?>/i;
 // Ein ganzer Block – auch nicht geschlossen (dann bis zum Textende).
 const TOOL_BLOCK_RE = /<(tool_call|tool_use|tool)(?:\s[^>]*)?>[\s\S]*?(?:<\/\1\s*>|$)/gi;
@@ -123,8 +123,19 @@ function looksLikeTutorial(text) {
 // Gegen oberflächliche Arbeit: Hat Mythos nach seinen Änderungen wirklich geprüft?
 const WEB_FILE_RE = /\.(?:html?|css|s[ac]ss|jsx?|tsx?|mjs|vue|svelte)$/i;
 function verifyTracker() {
-  const st = { changed: false, web: false, verified: false, checked: false, nudges: 0, acted: false, tutorNudged: false };
+  const st = { changed: false, web: false, verified: false, checked: false, nudges: 0, acted: false, tutorNudged: false, edits: new Map(), tweaks: new Map(), lastPath: "" };
+  // Nur Zahlen geändert? (z. B. Kamera 8 → 12 → 6 …) – Zeichen für Raten statt Rechnen.
+  const numbersOnly = (a, b) => { const strip = (x) => String(x || "").replace(/-?\d+(?:\.\d+)?/g, "#").replace(/\s+/g, " ").trim(); return !!a && !!b && a !== b && strip(a) === strip(b); };
+  const editPairs = (t) => (Array.isArray(t.edits) ? t.edits : [{ old: t.old, new: t.new }]).filter((e) => e && typeof e.old === "string");
   return {
+    /** Oberster Projektordner der zuletzt geänderten Datei, relativ zum Arbeitsordner (z. B. "MeinSpiel") – oder "". */
+    projectDir() { const p = String(st.lastPath || "").replace(/\\/g, "/").replace(/^\.\//, ""); return /^[^/:]+\/./.test(p) && !/^\.\.?\//.test(p) ? p.split("/")[0] : ""; },
+    /** Dreht Mythos an derselben Datei im Kreis? → "" oder Grund zum Anhalten. */
+    stuck() {
+      for (const [p, n] of st.tweaks) if (n >= 8) return "Ich habe " + n + "-mal nur Zahlen in " + p + " verstellt, ohne dass es sicher besser wurde.";
+      for (const [p, n] of st.edits) if (n >= 16) return "Ich habe " + p + " jetzt " + n + "-mal geändert.";
+      return "";
+    },
     /** Merkt sich den Schritt. Gibt einen Hinweis zurück, wenn Mythos sich im Kreis dreht (sonst ""). */
     note(t, result) {
       if (t.name !== "todo") st.acted = true;
@@ -139,7 +150,17 @@ function verifyTracker() {
       } catch { /* nie stören */ }
       st.lastHint = hint;
       const ok = !/^(?:FEHLER|BLOCKIERT|Vom Nutzer)/.test(String(result || ""));
-      if ((t.name === "write" || t.name === "edit") && ok) { st.changed = true; st.verified = false; if (WEB_FILE_RE.test(String(t.path || ""))) { st.web = true; st.checked = false; } }
+      if ((t.name === "write" || t.name === "edit") && ok) {
+        st.changed = true; st.verified = false; if (WEB_FILE_RE.test(String(t.path || ""))) { st.web = true; st.checked = false; }
+        const p = String(t.path || ""); st.lastPath = p;
+        st.edits.set(p, (st.edits.get(p) || 0) + 1);
+        const pairs = t.name === "edit" ? editPairs(t) : [];
+        if (pairs.length && pairs.every((e) => numbersOnly(e.old, e.new))) {
+          const n = (st.tweaks.get(p) || 0) + 1; st.tweaks.set(p, n);
+          if (n === 3) hint += "\n\n(Hinweis: Du verstellst in " + p + " jetzt zum 3. Mal nur Zahlen. Raten führt hier selten zum Ziel. Lies die Datei komplett, RECHNE die Werte aus (Größe der Welt, Bildschirm-Seitenverhältnis, Mittelpunkt, Abstände) und setze sie dann EINMAL richtig – oder baue den Teil sauber neu auf.)";
+          if (n === 6) hint += "\n\n(STOPP mit dem Zahlen-Raten: 6 Versuche. Ändere jetzt den Ansatz grundlegend – z. B. Werte aus den echten Daten berechnen (Bounding-Box, Kartengröße) statt fester Zahlen – oder frag den Nutzer mit einem Screenshot, was genau nicht stimmt.)";
+        }
+      }
       if (t.name === "verify") st.verified = true;
       if (t.name === "run" && /\b(?:build|test|tsc|lint|pytest|cargo|go\s+(?:build|test)|mvn)\b/i.test(String(t.cmd || ""))) st.verified = true;
       if (t.name === "check" && /ERGEBNIS: ✓/.test(String(result || ""))) st.checked = true;
@@ -154,7 +175,7 @@ function verifyTracker() {
         st.tutorNudged = true;
         return "Du hast eine Anleitung geschrieben, statt es selbst zu tun. Der Nutzer will das ERGEBNIS, keine Anleitung – du hast vollen Zugriff auf seinen PC. Führe die Schritte jetzt selbst mit deinen Werkzeugen aus (Dateien anlegen, Pakete installieren, bauen, z. B. die .exe erzeugen), prüfe das Ergebnis (Datei existiert, startet) und antworte dann im Antwortformat mit dem Pfad zum fertigen Ergebnis.";
       }
-      if (st.nudges >= 3) return "";
+      if (st.nudges >= 2) return "";
       if (st.changed && !st.verified) { st.nudges++; st.verified = true; return "Bevor du fertig bist: Du hast Dateien geändert, aber noch nicht geprüft. Führe jetzt verify aus (oder passende Build-/Test-Befehle), behebe jedes ✗ und antworte erst danach."; }
       if (st.web && !st.checked) { st.nudges++; st.checked = true; return "Bevor du fertig bist: Du hast an einer Webseite gearbeitet, sie aber nicht im Browser geprüft. Starte sie (serve für statische Seiten, start für Dev-Server/Backends) und prüfe sie mit check. Behebe alles, was check als ✗ meldet (weiße Seite, Konsolenfehler, fehlende Dateien, „Cannot GET /“), prüfe erneut und antworte dann im Antwortformat mit der Adresse."; }
       return "";

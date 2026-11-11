@@ -164,7 +164,15 @@ body.light details.think{background:#fbfbfb}
 .plus{color:#86efac}.minus{color:#fca5a5}
 .ln{display:block;padding:0 12px;white-space:pre;color:#a3a3a3}.ln.add{background:rgba(34,197,94,.12);color:#bbf7d0}.ln.del{background:rgba(239,68,68,.12);color:#fecaca}.ln.gap{color:#666}
 .liveout{align-self:stretch;margin:0;max-height:260px;overflow:auto;white-space:pre-wrap;font-family:"JetBrains Mono",Consolas,monospace;font-size:12px;color:#bdbdbd;background:#0d0d0d;border:1px solid var(--line);border-radius:12px;padding:10px 12px}
-#queuebar .chip{max-width:260px;overflow:hidden;text-overflow:ellipsis}
+#queuebar{flex-direction:column;align-items:stretch;gap:4px;padding:8px 10px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.03)}
+#queuebar .qhead{font-size:11px;color:var(--muted);padding:0 2px 2px}
+#queuebar .qitem{display:flex;align-items:center;gap:8px;min-height:30px;padding:2px 2px 2px 4px;border-radius:9px}
+#queuebar .qitem:hover{background:rgba(255,255,255,.04)}
+#queuebar .qdot{width:6px;height:6px;border-radius:50%;background:var(--muted);flex-shrink:0;animation:pulse 1.6s infinite}
+#queuebar .qtext{flex:1;min-width:0;color:var(--fg);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#queuebar .x{width:24px;height:24px;border-radius:6px;display:grid;place-items:center;color:var(--muted);flex-shrink:0}
+#queuebar .x:hover{background:rgba(255,255,255,.08);color:var(--fg)}
+#queuebar>.chip{align-self:flex-start;margin-top:4px}
 /* Drag & Drop */
 #drop{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;background:rgba(10,10,10,.6);border:2px dashed #737373;pointer-events:none}
 #drop .glass{padding:22px 34px;border-radius:18px;font-size:17px}
@@ -362,6 +370,12 @@ body.light .todo{background:rgba(0,0,0,.015)!important}
 .fb.on{color:var(--fg)}.fb.on svg{fill:currentColor}.fbar.sent .fb:not(.on){opacity:.35;pointer-events:none}
 .fbform{display:flex;gap:6px;margin-left:6px}.fbform input{height:28px;width:220px;border-radius:99px;border:1px solid var(--line2);background:transparent;color:inherit;padding:0 12px;font:inherit;font-size:12.5px;outline:none}
 
+.activity .step .txt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.activity .step.now .txt{white-space:normal}.activity .step .ic{flex-shrink:0;line-height:1}
+details.interim{align-self:stretch;margin:2px 0 2px 44px;color:var(--muted);font-size:13px}
+details.interim>summary{cursor:pointer;list-style:none;padding:3px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+details.interim>summary::-webkit-details-marker{display:none}
+details.interim>summary:hover{color:var(--fg)}
+details.interim[open]>.body{padding:6px 0 4px 12px;border-left:2px solid var(--line2);color:#cfcfcf}
 /* ============ Feinschliff: kleine Bedienelemente ============ */
 :root{--hover:rgba(255,255,255,.07);--press:rgba(255,255,255,.12);--ring:rgba(255,255,255,.34);--ease:cubic-bezier(.2,.8,.2,1);--pop:0 12px 36px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.06)}
 body.light{--hover:rgba(0,0,0,.05);--press:rgba(0,0,0,.09);--ring:rgba(0,0,0,.32);--pop:0 12px 32px rgba(0,0,0,.14),0 0 0 1px rgba(0,0,0,.06)}
