@@ -1,6 +1,7 @@
 // App-Builder im Stil von Lovable und Base44: links der Chat, rechts die Live-Vorschau und der Code.
 // Die KI baut eine komplette, eigenständige index.html; spätere Wünsche ändern nur die betroffenen Stellen (SUCHEN/ERSETZEN).
 // Projekte liegen im Browser (localStorage) des jeweiligen Kontos.
+import { authHeader } from "@/lib/authHeader";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -126,7 +127,7 @@ export default function Build() {
     const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`, {
       method: "POST",
       signal: ctrl.signal,
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
+      headers: { "Content-Type": "application/json", ...(await authHeader()) },
       body: JSON.stringify({ userId: user?.id, taskId: taskRef.current, mythos: model, mode: "general", build: true, messages }),
     });
     if (resp.status === 429) throw new Error(resp.headers.get("x-mythos-limit") ? ((await resp.json().catch(() => null))?.error || "Dein MythosAI-Token-Limit ist erreicht.") : "Zu viele Anfragen. Warte kurz.");

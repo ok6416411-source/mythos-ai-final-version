@@ -1,6 +1,7 @@
 // KI-Chatnamen: Nach der ersten Nachricht und Antwort bekommt ein Chat einen kurzen, passenden Titel
 // statt der abgeschnittenen ersten Nachricht. Erst die schlanke suggest-Funktion (kind "title"),
 // wenn die live noch alt ist die Chat-Funktion im Instant-Modus, ohne Backend ein lokaler Titel.
+import { authHeader } from "@/lib/authHeader";
 import { supabase } from "@/integrations/supabase/client";
 
 const TITLE_SYSTEM = "Du gibst Chats kurze, treffende Titel wie in ChatGPT: 2 bis 5 Wörter, Sprache des Nutzers, " +
@@ -24,7 +25,7 @@ export function fallbackTitle(text: string): string {
 async function viaChatFunction(convo: string): Promise<string> {
   const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
+    headers: { "Content-Type": "application/json", ...(await authHeader()) },
     // Gespräch im System-Teil, damit Bild- oder Befehlserkennung der Chat-Funktion nicht anspringt.
     body: JSON.stringify({ mythos: "v1:instant", messages: [{ role: "system", content: `${TITLE_SYSTEM}\n\n${convo}` }, { role: "user", content: "Gib nur den Titel aus." }] }),
   });

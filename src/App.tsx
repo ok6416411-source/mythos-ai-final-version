@@ -18,12 +18,15 @@ import { ThemeProvider } from "next-themes";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- lazy() erwartet beliebige Props
 function lazyPage<T extends { default: ComponentType<any> }>(load: () => Promise<T>) {
   return lazy(() => load().catch((e) => {
-    if (!sessionStorage.getItem("mythos.chunk-reload")) {
-      sessionStorage.setItem("mythos.chunk-reload", "1");
+    // Höchstens ein automatischer Neustart pro Minute – sonst könnte eine dauerhaft fehlende Datei
+    // die Seite in eine Neulade-Schleife schicken (der Zeitstempel wird bewusst nie zurückgesetzt).
+    const last = Number(sessionStorage.getItem("mythos.chunk-reload") || 0);
+    if (Date.now() - last > 60_000) {
+      sessionStorage.setItem("mythos.chunk-reload", String(Date.now()));
       window.location.reload();
     }
     throw e;
-  }).then((m) => { sessionStorage.removeItem("mythos.chunk-reload"); return m; }));
+  }));
 }
 const Auth = lazyPage(() => import("./pages/Auth"));
 const ResetPassword = lazyPage(() => import("./pages/ResetPassword"));

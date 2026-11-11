@@ -1,3 +1,4 @@
+import { authHeader } from "@/lib/authHeader";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -109,7 +110,7 @@ export default function Voice() {
     const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
     const resp = await fetch(url, {
       method: "POST", signal,
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}`, apikey: key },
+      headers: { "Content-Type": "application/json", apikey: key, ...(await authHeader()) },
       body: JSON.stringify({
         userId: user?.id,
         mode: modeRef.current,

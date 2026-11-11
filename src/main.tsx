@@ -58,7 +58,12 @@ if (isPreviewHost || isInIframe) {
         onNeedRefresh() {
           // Direkt beim Öffnen (noch nichts getippt/geklickt): sofort auf die neue Version wechseln,
           // sonst sieht man kurz die alte Seite aus dem Offline-Speicher.
-          if (!interacted && performance.now() < 15_000) { void updateSW(true); return; }
+          // Aber höchstens einmal alle 5 Minuten – niemals eine Neulade-Schleife.
+          const last = Number(sessionStorage.getItem("mythos.sw-reload") || 0);
+          if (!interacted && performance.now() < 15_000 && Date.now() - last > 5 * 60_000) {
+            sessionStorage.setItem("mythos.sw-reload", String(Date.now()));
+            void updateSW(true); return;
+          }
           if (shown) return;
           shown = true;
           import("sonner").then(({ toast }) => toast("Neue Version von Mythos AI ist da", {

@@ -1,5 +1,6 @@
 // Mythos Labs: gemeinsame Helfer für Live-Arena, Welt-Modus, Foto zu App, KI-Team,
 // Tagesrückblick und Mythos-Marktplatz. Der Server-Teil liegt in supabase/functions/labs.
+import { authHeader } from "@/lib/authHeader";
 import { supabase } from "@/integrations/supabase/client";
 
 export type ApiMsg = { role: "user" | "assistant"; content: string | { type: string; text?: string; image_url?: { url: string } }[] };
@@ -25,7 +26,7 @@ async function askViaChat(system: string, messages: ApiMsg[]): Promise<string> {
     : messages;
   const r = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
+    headers: { "Content-Type": "application/json", ...(await authHeader()) },
     body: JSON.stringify({ userId: session?.user.id, messages: withSystem, mode: "chat", mythos: "v1:normal" }),
   });
   if (!r.ok || !r.body) throw new Error(r.status === 429 ? "Gerade zu viele Anfragen, bitte kurz warten." : "KI nicht erreichbar");
