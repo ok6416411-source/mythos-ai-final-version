@@ -6,7 +6,7 @@ import { MYTHOS_CATALOG, MYTHOS_FILES } from "../_shared/catalog.ts";
 import { CRAFT_CATEGORY_PREFIX, abilities, learnedRules, relevantCraftKnowledge, wantsLongOutput, workRules, type CraftOverrides } from "../_shared/craftKnowledge.ts";
 import { PLUGIN_CATEGORY_PREFIX, formatServerArticles, isServerQuestion, relevantServerArticles, serverKnowledgeText } from "../_shared/serverKnowledge.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.103.3";
-import { admitTask, recordUsage, validTaskId, limitMessage } from "../_shared/tokens.ts";
+import { admitTask, recordUsage, validTaskId, limitInfo, LIMIT_HEADERS } from "../_shared/tokens.ts";
 import { forwardUsageStream } from "../_shared/usageStream.ts";
 import { prepareVideos } from "../_shared/video.ts";
 import type { TokenUsage } from "../_shared/usageParse.ts";
@@ -168,9 +168,9 @@ Deno.serve(async (req) => {
       const { data: own } = await supabase.from("conversations").select("user_id").eq("id", conversationId).maybeSingle();
       if (!own || own.user_id !== clientUserId) return new Response(JSON.stringify({ error: "Chat nicht gefunden." }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-    const taskId = validTaskId(requestedTaskId) ?? crypto.randomUUID();
-    const admission = await admitTask(supabase, clientUserId, taskId, "web");
-    if (!admission.allowed) return new Response(JSON.stringify({ error: limitMessage }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    const admission = await admitTask(supabase, clientUserId, validTaskId(requestedTaskId) ?? crypto.randomUUID(), "web");
+    const taskId = admission.taskId;
+    if (!admission.allowed) return new Response(JSON.stringify(limitInfo(admission)), { status: 429, headers: { ...corsHeaders, ...LIMIT_HEADERS, "Content-Type": "application/json" } });
 
     const lastUser = [...messages].reverse().find((m: any) => m.role === "user");
     const lastTextRaw = lastUser?.content;

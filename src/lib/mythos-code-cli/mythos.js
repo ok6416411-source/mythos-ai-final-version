@@ -308,6 +308,8 @@ async function call(history, onText, onThink) {
       if (stopped) throw e;
       if (e.status === 401) throw new Error("Anmeldung ungültig – bitte neu anmelden: mythos login");
       if (/Daily limit/i.test(e.message)) throw new Error("Tageslimit erreicht – mit Pro unbegrenzt.");
+      // Token-Limit (Stunde/Woche/Monat): neue Aufgabe abgelehnt – nicht wiederholen, klar melden.
+      if (/Limit ist erreicht/i.test(e.message)) { const le = new Error("Limit erreicht – " + e.message); le.limit = true; throw le; }
       // Konfigurationsproblem (Guthaben leer, kein Ausweich-Schlüssel) statt normaler Überlastung -> nicht sinnlos wiederholen.
       if (/nicht konfiguriert/i.test(e.message)) throw e;
       await new Promise((r) => setTimeout(r, Math.min(8000, 1500 * (a + 1))));

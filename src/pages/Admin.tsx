@@ -11,6 +11,7 @@ import { Plus, Edit, Trash2, Shield, Users, Phone, Gift } from "lucide-react";
 import { toast } from "sonner";
 import PhoneInbox from "@/components/PhoneInbox";
 import RewardsAdmin from "@/components/RewardsAdmin";
+import TokenLimitsAdmin from "@/components/TokenLimitsAdmin";
 import { SERVER_KNOWLEDGE, SERVER_KNOWLEDGE_VERSION } from "../../supabase/functions/_shared/serverKnowledge.ts";
 import { CRAFT_ARTICLES, CRAFT_KNOWLEDGE_VERSION } from "../../supabase/functions/_shared/craftKnowledge.ts";
 
@@ -113,6 +114,7 @@ const Admin = () => {
             <TabsTrigger value="inbox"><Phone className="h-3.5 w-3.5 mr-1.5" />Phone Inbox</TabsTrigger>
             <TabsTrigger value="kb">Knowledge Base</TabsTrigger>
             <TabsTrigger value="users">Users / Roles</TabsTrigger>
+            <TabsTrigger value="limits">Limits</TabsTrigger>
             <TabsTrigger value="rewards"><Gift className="h-3.5 w-3.5 mr-1.5" />Abos & Boost-Codes</TabsTrigger>
           </TabsList>
 
@@ -193,6 +195,9 @@ const Admin = () => {
             </div>
           </TabsContent>
 
+          <TabsContent value="limits" className="mt-6">
+            <TokenLimitsAdmin />
+          </TabsContent>
           <TabsContent value="rewards" className="mt-6">
             <RewardsAdmin />
           </TabsContent>

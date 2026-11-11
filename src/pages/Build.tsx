@@ -100,6 +100,7 @@ export default function Build() {
   const [device, setDevice] = useState<"desktop" | "phone">("desktop");
   const [reloadKey, setReloadKey] = useState(0);
   const [copied, setCopied] = useState(false);
+  const taskRef = useRef<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -126,9 +127,9 @@ export default function Build() {
       method: "POST",
       signal: ctrl.signal,
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
-      body: JSON.stringify({ userId: user?.id, mythos: model, mode: "general", build: true, messages }),
+      body: JSON.stringify({ userId: user?.id, taskId: taskRef.current, mythos: model, mode: "general", build: true, messages }),
     });
-    if (resp.status === 429) throw new Error("Zu viele Anfragen. Warte kurz.");
+    if (resp.status === 429) throw new Error(resp.headers.get("x-mythos-limit") ? ((await resp.json().catch(() => null))?.error || "Dein MythosAI-Token-Limit ist erreicht.") : "Zu viele Anfragen. Warte kurz.");
     if (!resp.ok || !resp.body) throw new Error(`Server-Fehler ${resp.status}`);
     const reader = resp.body.getReader();
     const dec = new TextDecoder();
@@ -161,6 +162,8 @@ export default function Build() {
       const next = [proj, ...projects]; setProjects(next); save(user?.id, next); setActiveId(proj.id);
     }
     const id = proj.id;
+    // Eine Kennung pro Auftrag: Fortsetzungen und Nachbesserungen zählen zur laufenden Aufgabe (werden trotz Limit fertig).
+    taskRef.current = crypto.randomUUID();
     const userMsg: BMsg = { role: "user", content: prompt, at: now() };
     update(id, (p) => ({ ...p, messages: [...p.messages, userMsg], updated: now() }));
     setInput(""); setBusy(true); setLive(""); setTab("chat");

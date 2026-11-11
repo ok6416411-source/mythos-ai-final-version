@@ -873,13 +873,20 @@ const Chat = () => {
       for (let attempt = 0; attempt < 4; attempt++) {
         try { resp = await doFetch(); }
         catch (e) { if ((e as Error)?.name === "AbortError") throw e; resp = null; }
-        if (resp && !transient(resp.status)) break;
+        // Token-Limit erreicht ist kein Aussetzer – nicht still wiederholen.
+        if (resp && (!transient(resp.status) || resp.headers.get("x-mythos-limit"))) break;
         if (attempt < 3) await new Promise(r => setTimeout(r, [800, 2000, 4000][attempt]));
       }
       if (!resp) throw new Error("Netzwerkfehler");
 
       if (!resp.ok || !resp.body) {
-        if (resp.status === 429) {
+        if (resp.status === 429 && resp.headers.get("x-mythos-limit")) {
+          const info = await resp.json().catch(() => null) as { error?: string } | null;
+          const text = info?.error || "Dein MythosAI-Token-Limit ist erreicht. Neue Aufgaben gehen wieder, sobald das Zeitfenster frei wird.";
+          setLast({ content: "⏳ " + text });
+          toast.error("Limit erreicht", { description: text, action: { label: "Nutzung ansehen", onClick: () => setUsageOpen(true) } });
+          return { full: "", thinking: "", aborted: true };
+        } else if (resp.status === 429) {
           toast.error("Zu viele Anfragen. Warte kurz und probier's nochmal.");
         } else if (resp.status === 402) {
           // Fallback to NVIDIA OSS model when credits are exhausted

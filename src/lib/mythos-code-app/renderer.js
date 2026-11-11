@@ -333,6 +333,8 @@ async function call(run, h, system, onText, onThink) {
       if (run.stopped) throw e;
       if (e.status === 401) throw new Error("Anmeldung abgelaufen – bitte abmelden und neu anmelden.");
       if (/Daily limit/i.test(e.message)) throw new Error("Tageslimit erreicht – mit Pro unbegrenzt.");
+      // Token-Limit (Stunde/Woche/Monat): neue Aufgabe abgelehnt – nicht wiederholen, klar melden.
+      if (/Limit ist erreicht/i.test(e.message)) { const le = new Error("Limit erreicht – " + e.message); le.limit = true; throw le; }
       // KI kurz nicht erreichbar (auch „nicht konfiguriert“/Guthaben – oft nur ein Aussetzer):
       // still 20 s warten, im Protokoll „Gerade nicht erreichbar“ zeigen, dann einfach weitermachen.
       const outage = /nicht konfiguriert|nicht erreichbar|Guthaben|überlastet|Überlastet|HTTP 5\d\d|Failed to fetch|NetworkError|aborted/i.test(e.message) || (e.status >= 500);
@@ -593,7 +595,7 @@ async function runAgent(c, opts) {
       try { res = await ask(); }
       catch (e) {
         if (run.stopped) break;
-        if (/Anmeldung|Tageslimit/.test(e.message)) throw e;
+        if (/Anmeldung|Tageslimit|Limit erreicht/.test(e.message)) throw e;
         // Nicht aufgeben und keine Fehlermeldung in den Chat: still warten und neu ansetzen.
         activityPush(run, "⏸", "Gerade nicht erreichbar – geht gleich weiter");
         for (let w = 0; w < 20000 && !run.stopped; w += 250) { run.phase = "Gerade nicht erreichbar – neuer Versuch in " + Math.ceil((20000 - w) / 1000) + " s"; if (w % 1000 === 0) schedulePaint(run); await new Promise((r) => setTimeout(r, 250)); }

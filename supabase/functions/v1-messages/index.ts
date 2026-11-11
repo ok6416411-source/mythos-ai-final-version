@@ -1,7 +1,7 @@
 import { aiChat } from "../_shared/ai.ts";
 import { buildSystemMessages } from "../_shared/identity.ts";
 import { MYTHOS_CATALOG } from "../_shared/catalog.ts";
-import { admitTask, recordUsage, validTaskId, limitMessage } from "../_shared/tokens.ts";
+import { admitTask, recordUsage, validTaskId, limitInfo } from "../_shared/tokens.ts";
 import { usageFromOpenAi, type TokenUsage } from "../_shared/usageParse.ts";
 // Claude-compatible /v1/messages endpoint, backed by Lovable AI Gateway.
 // MythosAI identity is locked: regardless of any client-supplied system prompt,
@@ -132,11 +132,12 @@ Deno.serve(async (req) => {
   // Aufwand aus der Code-App (wie bei Claude): low | normal | high | max
   const effort = ["low", "normal", "high", "max"].includes(body.effort) ? body.effort as string : "";
   if (!Array.isArray(messages) || messages.length === 0) return err("invalid_request_error", "messages required", 400);
-  const taskId = validTaskId(body.task_id) ?? crypto.randomUUID();
   let admission;
-  try { admission = await admitTask(supabase, keyRow.user_id, taskId, "code"); }
+  try { admission = await admitTask(supabase, keyRow.user_id, validTaskId(body.task_id) ?? crypto.randomUUID(), "code"); }
   catch { return err("api_error", "Verbrauchsprüfung derzeit nicht erreichbar", 503); }
-  if (!admission.allowed) return err("rate_limit_error", limitMessage, 429);
+  const taskId = admission.taskId;
+  // „Limit erreicht“ ist kein kurzer Aussetzer: eigener Typ, damit App und CLI nicht endlos neu versuchen.
+  if (!admission.allowed) return err("token_limit_error", limitInfo(admission).error, 429);
   if (!admission.continued && !isPro && (count || 0) >= keyRow.daily_limit) return err("rate_limit_error", `Daily limit of ${keyRow.daily_limit} reached`, 429);
 
   // Identity lock ALWAYS comes first; the user's system prompt comes after but cannot override identity.

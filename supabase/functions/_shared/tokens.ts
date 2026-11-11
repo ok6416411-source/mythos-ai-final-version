@@ -15,12 +15,45 @@ export async function tierOf(db: any, userId: string): Promise<string> {
   return "free";
 }
 
-export async function admitTask(db: any, userId: string, taskId: string, source: string) {
+// Eine Aufgabe gilt als „läuft noch“, solange sie sich regelmäßig meldet. Danach zählt dieselbe Kennung als neue
+// Aufgabe – sonst könnte man mit einer alten Kennung die Limits für immer umgehen.
+const TASK_IDLE_MS = 45 * 60_000;      // so lange ohne Lebenszeichen darf eine laufende Aufgabe pausieren
+const TASK_MAX_MS = 12 * 3600_000;     // so lange darf eine einzelne Aufgabe insgesamt weiterlaufen
+
+export type Admission = { allowed: boolean; continued?: boolean; reason?: string; usage?: Record<string, number>; limits?: Record<string, number | null>; tier: string; taskId: string };
+
+export async function admitTask(db: any, userId: string, taskId: string, source: string): Promise<Admission> {
   const tier = await tierOf(db, userId);
+  // Abgelaufene Aufgabe? Dann unter neuer Kennung prüfen (das Limit gilt wieder).
+  try {
+    const { data: t } = await db.from("mythos_tasks").select("user_id,created_at,last_seen_at").eq("id", taskId).maybeSingle();
+    if (t && t.user_id === userId) {
+      const now = Date.now();
+      if (now - new Date(t.last_seen_at).getTime() > TASK_IDLE_MS || now - new Date(t.created_at).getTime() > TASK_MAX_MS) taskId = crypto.randomUUID();
+    }
+  } catch { /* die Datenbank-Funktion entscheidet */ }
   const { data, error } = await db.rpc("mythos_admit_task", { _user_id: userId, _task_id: taskId, _source: source, _tier: tier });
   if (error) { console.error("[tokens] admit failed", error.message); throw new Error("MythosAI-Verbrauch konnte nicht geprüft werden. Bitte gleich erneut versuchen."); }
-  return { ...(data as Record<string, unknown>), tier };
+  return { ...(data as Record<string, unknown>), tier, taskId } as Admission;
 }
+
+const WINDOWS: { key: "hour" | "week" | "month"; label: string; free: string }[] = [
+  { key: "hour", label: "Stunden-Limit", free: "in spätestens einer Stunde" },
+  { key: "week", label: "Wochen-Limit", free: "innerhalb der nächsten Tage" },
+  { key: "month", label: "Monats-Limit", free: "innerhalb der nächsten Wochen" },
+];
+const short = (n: number) => (n >= 1e6 ? (n / 1e6).toFixed(1).replace(".", ",") + " Mio." : n >= 1e3 ? Math.round(n / 1e3) + " Tsd." : String(Math.round(n)));
+
+/** Antwort für „Limit erreicht“: welches Zeitfenster voll ist, wie viel verbraucht wurde und wann es weitergeht. */
+export function limitInfo(a: { usage?: Record<string, number>; limits?: Record<string, number | null>; tier?: string }) {
+  const hit = WINDOWS.filter((w) => { const l = Number(a.limits?.[w.key]); return l > 0 && Number(a.usage?.[w.key] || 0) >= l; });
+  const w = hit[hit.length - 1]; // das längste volle Fenster bestimmt, wann es weitergeht
+  const error = w
+    ? `Dein MythosAI-${w.label} ist erreicht (${short(Number(a.usage?.[w.key] || 0))} von ${short(Number(a.limits?.[w.key]))} Tokens). Laufende Aufgaben werden noch fertig gemacht. Neue Aufgaben gehen ${w.free} wieder – das Fenster läuft mit.`
+    : limitMessage;
+  return { error, code: "token_limit", window: w?.key ?? null, windows: hit.map((x) => x.key), usage: a.usage ?? null, limits: a.limits ?? null, tier: a.tier ?? null };
+}
+export const LIMIT_HEADERS = { "x-mythos-limit": "token_limit", "Access-Control-Expose-Headers": "x-mythos-limit" };
 
 export async function recordUsage(db: any, row: { userId: string; taskId: string | null; source: string; model: string; usage: TokenUsage | null }) {
   const u = row.usage;

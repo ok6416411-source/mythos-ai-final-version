@@ -1,4 +1,9 @@
 import { aiFetch, aiText } from "../_shared/ai.ts";
+import { admitTask, recordUsage, validTaskId, limitInfo } from "../_shared/tokens.ts";
+import { usageFromOpenAi, addUsage, type TokenUsage } from "../_shared/usageParse.ts";
+
+// Verbrauch dieser Anfrage (alle Schritte und Helfer zusammen).
+let usageAcc: TokenUsage | null = null;
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { PLUGIN_CATEGORY_PREFIX, searchServerKnowledge } from "../_shared/serverKnowledge.ts";
 import { MYTHOS_ABILITIES, MYTHOS_WORK_RULES, relevantCraftKnowledge, wantsLongOutput } from "../_shared/craftKnowledge.ts";
@@ -139,7 +144,9 @@ async function agentLoop(convo: any[], key: string, supabase: any, onTool: (labe
       body: JSON.stringify({ model, messages: convo, ...(last ? {} : { tools: TOOLS, tool_choice: "auto" }), max_tokens: 24000 }),
     });
     if (!r.ok) throw new Error(r.status === 429 ? "Rate limit erreicht" : r.status === 402 ? "AI-Credits aufgebraucht" : "Fehler beim AI Gateway");
-    const msg = (await r.json()).choices?.[0]?.message;
+    const j = await r.json();
+    usageAcc = addUsage(usageAcc, usageFromOpenAi(j));
+    const msg = j.choices?.[0]?.message;
     if (!msg) return "";
     if (msg.tool_calls?.length) {
       // Zwischenstand, den das Modell vor den Werkzeugen schreibt, sofort zeigen (wie bei Claude).
@@ -231,7 +238,8 @@ Deno.serve(async (req) => {
       };
 
       try {
-        const { messages } = await req.json();
+        const { messages, taskId: requestedTaskId } = await req.json();
+        usageAcc = null;
         const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
         const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
         // Wer fragt? (für recall_memory)
@@ -241,6 +249,22 @@ Deno.serve(async (req) => {
           currentUserId = u?.user?.id || null;
         } catch { currentUserId = null; }
         const step = (label: string) => sendEvent({ tool: label });
+        // Token-Limits wie im normalen Chat: neue Aufgaben nur, wenn noch Platz ist; laufende werden fertig.
+        let agentTaskId: string | null = null;
+        if (currentUserId) {
+          try {
+            const adm = await admitTask(supabase, currentUserId, validTaskId(requestedTaskId) ?? crypto.randomUUID(), "web");
+            agentTaskId = adm.taskId;
+            if (!adm.allowed) {
+              const info = limitInfo(adm);
+              sendEvent({ mythos_limit: info });
+              await streamText(info.error);
+              controller.enqueue(enc.encode("data: [DONE]\n\n")); controller.close();
+              return;
+            }
+          } catch { /* Prüfung nicht erreichbar: lieber antworten als blockieren */ }
+        }
+        const billUser = currentUserId;
 
         const system = `Du bist **Mythos AI Agent** mit Tools. Server: mythoscraft.online (SMP).
 Nutze Tools aktiv:
@@ -332,6 +356,7 @@ Du bist **Mythos v1** — wenn du nach deinem Modell, deiner Version oder deinem
           await streamText(final || results.filter(Boolean).join("\n\n") || "⚠️ Die Agenten konnten keine Antwort liefern.");
         }
 
+        if (billUser) await recordUsage(supabase, { userId: billUser, taskId: agentTaskId, source: "web", model: "agent", usage: usageAcc });
         controller.enqueue(enc.encode("data: [DONE]\n\n"));
         controller.close();
       } catch (e) {
