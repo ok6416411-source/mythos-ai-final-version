@@ -4,7 +4,7 @@
 // {"name":…,"arguments":{…}} statt flacher Felder, echte Zeilenumbrüche in Strings oder abgeschnittenes JSON.
 // Nichts davon darf als Rohtext im Chat landen.
 
-const TOOL_NAMES = ["run", "start", "logs", "stop", "serve", "check", "verify", "read", "edit", "write", "search", "ls", "websearch", "fetch", "cloud", "todo"];
+const TOOL_NAMES = ["run", "start", "logs", "stop", "serve", "check", "verify", "read", "edit", "write", "search", "glob", "ls", "websearch", "fetch", "cloud", "todo"];
 const TOOL_OPEN_RE = /<(tool_call|tool_use|tool)(?:\s[^>]*)?>/i;
 // Ein ganzer Block – auch nicht geschlossen (dann bis zum Textende).
 const TOOL_BLOCK_RE = /<(tool_call|tool_use|tool)(?:\s[^>]*)?>[\s\S]*?(?:<\/\1\s*>|$)/gi;
@@ -125,13 +125,25 @@ const WEB_FILE_RE = /\.(?:html?|css|s[ac]ss|jsx?|tsx?|mjs|vue|svelte)$/i;
 function verifyTracker() {
   const st = { changed: false, web: false, verified: false, checked: false, nudges: 0, acted: false, tutorNudged: false };
   return {
+    /** Merkt sich den Schritt. Gibt einen Hinweis zurück, wenn Mythos sich im Kreis dreht (sonst ""). */
     note(t, result) {
       if (t.name !== "todo") st.acted = true;
+      let hint = "";
+      try {
+        const key = JSON.stringify(t).slice(0, 2000), bad = /^(?:FEHLER|BLOCKIERT)|(?:^|\n)Exit: [1-9]|ERGEBNIS: ✗|⚠ SYNTAXFEHLER/.test(String(result || ""));
+        st.seen = st.seen || new Map(); st.fails = bad ? (st.fails || 0) + 1 : 0;
+        const n = (st.seen.get(key) || 0) + 1; st.seen.set(key, n);
+        if (t.name !== "todo" && t.name !== "logs" && n === 3) hint = "\n\n(Hinweis: Genau diesen Aufruf hast du jetzt 3-mal gemacht – das Ergebnis ändert sich nicht. Ändere deinen Ansatz: andere Datei/Stelle ansehen, anders suchen oder die Ursache neu überdenken.)";
+        else if (n > 4 && t.name !== "todo" && t.name !== "logs") hint = "\n\n(STOPP: Du wiederholst denselben Aufruf. Tu jetzt etwas ANDERES.)";
+        else if (st.fails === 4) hint = "\n\n(Hinweis: 4 Fehlschläge in Folge. Halte kurz an: Was genau sagt die Fehlermeldung? Welche Annahme ist falsch? Lies die betroffene Datei frisch mit read, such die Fehlermeldung ggf. per websearch und wähle einen grundlegend anderen Weg.)";
+      } catch { /* nie stören */ }
+      st.lastHint = hint;
       const ok = !/^(?:FEHLER|BLOCKIERT|Vom Nutzer)/.test(String(result || ""));
       if ((t.name === "write" || t.name === "edit") && ok) { st.changed = true; st.verified = false; if (WEB_FILE_RE.test(String(t.path || ""))) { st.web = true; st.checked = false; } }
       if (t.name === "verify") st.verified = true;
       if (t.name === "run" && /\b(?:build|test|tsc|lint|pytest|cargo|go\s+(?:build|test)|mvn)\b/i.test(String(t.cmd || ""))) st.verified = true;
       if (t.name === "check" && /ERGEBNIS: ✓/.test(String(result || ""))) st.checked = true;
+      return hint;
     },
     /** Hinweis fürs Modell, falls noch nicht geprüft – oder "". Höchstens 3-mal. */
     nudge(answer, question) {

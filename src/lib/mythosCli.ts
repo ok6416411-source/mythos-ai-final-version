@@ -36,7 +36,7 @@ const fill = (src: string, vars: Record<string, string> = {}) =>
 const SHARED_TOOLS = fill(SHARED_TOOLS_RAW, { "// @@TOOL_PARSE@@": TOOL_PARSE });
 
 export const CLI_PKG = "mythos-code";
-export const CLI_VERSION = "1.10.0"; // in GitHub Actions automatisch 1.10.<Build-Nummer>
+export const CLI_VERSION = "1.11.0"; // in GitHub Actions automatisch 1.11.<Build-Nummer>
 /** Version für die ZIP von der Website (zum selbst `npm publish`en): jede ZIP bekommt eine neue,
  *  höhere Nummer (Minuten seit 2026), damit npm nie „Version existiert schon“ meldet und alle Nutzer
  *  beim nächsten Start automatisch updaten. */
@@ -125,7 +125,7 @@ Voraussetzung: [Node.js](https://nodejs.org) ab Version 18.
 export const APP_PKG = "mythos-code-app";
 export const APP_DOWNLOAD_SETTING = "codeprogram_download_url";
 export const APP_UPDATE_SETTING = "codeprogram_update";
-export const APP_VERSION = "2.16.0"; // in GitHub Actions automatisch 2.16.<Build-Nummer>
+export const APP_VERSION = "2.17.0"; // in GitHub Actions automatisch 2.17.<Build-Nummer>
 
 /** Google-Drive-Freigabelink -> direkter Download-Link (andere https-Links bleiben unverändert). */
 export function toDirectDownloadUrl(input: string): string | null {

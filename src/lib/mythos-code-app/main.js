@@ -1,5 +1,5 @@
 const { app, BrowserWindow, ipcMain, dialog, shell, Tray, Menu, Notification, nativeImage, powerSaveBlocker, session, desktopCapturer, safeStorage } = require("electron");
-const fs = require("fs"); const path = require("path"); const http = require("http"); const crypto = require("crypto"); const { exec, execFile, spawn } = require("child_process");
+const fs = require("fs"); const path = require("path"); const http = require("http"); const crypto = require("crypto"); const { exec, execFile, spawn, execFileSync } = require("child_process");
 const { McpManager, probe: mcpProbe, REDIRECT_PORT: MCP_REDIRECT_PORT } = require("./mcp.js");
 // Sprachmodus: mehrere Threads für die lokale Spracherkennung, falls keine Grafikkarte (WebGPU) nutzbar ist.
 app.commandLine.appendSwitch("enable-features", "SharedArrayBuffer");
@@ -282,7 +282,7 @@ const FILES_PROMPT = "\n\nDateien schicken: Will der Nutzer eine Datei BEKOMMEN 
   "Dateien im Projekt änderst du weiterhin mit write/edit.";
 ipcMain.handle("bg:list", () => [...BG.values()].filter((j) => j.code == null).map((j) => ({ id: j.id, cmd: j.cmd, url: j.url, cwd: j.cwd })));
 ipcMain.handle("bg:stop", (_e, id) => bgStop(id));
-ipcMain.handle("prompt:system", (_e, folder, goal) => (browserBridge.paired ? "WICHTIG – LIVE-STATUS: Das Mythos-Browser-Plugin ist JETZT VERBUNDEN. Zusätzliches Werkzeug: browser. Auf „bist du mit dem Browser verbunden?“ antwortest du mit JA.\n\n" : "") + TOOL_PROMPT + FILES_PROMPT + mcpPrompt() + browserPrompt() + memoryPrompt(folder ? readMemory(folder) : "") + goalPrompt(goal));
+ipcMain.handle("prompt:system", (_e, folder, goal) => (browserBridge.paired ? "WICHTIG – LIVE-STATUS: Das Mythos-Browser-Plugin ist JETZT VERBUNDEN. Zusätzliches Werkzeug: browser. Auf „bist du mit dem Browser verbunden?“ antwortest du mit JA.\n\n" : "") + TOOL_PROMPT + FILES_PROMPT + projectOverview(folder) + mcpPrompt() + browserPrompt() + memoryPrompt(folder ? readMemory(folder) : "") + goalPrompt(goal));
 ipcMain.handle("prompts", () => ({ nudge: GOAL_NUDGE, summary: SUMMARY_PROMPT, review: REVIEW_PROMPT, memoryFile: MEMORY_FILE, models: MODELS }));
 
 // Laufende Prozesse je Kennung – mehrere Aufgaben (und das Terminal) laufen parallel.
@@ -350,7 +350,7 @@ ipcMain.handle("tool", async (_e, t, cwd, runId) => {
   if (isDevTool(t)) r = await appDevTool(t, root, runId);
   else if (t.name === "run") {
     const x = await runLive(t.cmd, root, runId, "tool-output");
-    r = { result: (x.text + (x.code ? "\nExit: " + x.code : "")).slice(-8000) || "(keine Ausgabe)", code: x.code };
+    r = { result: clipOutput(x.text + (x.code ? "\nExit: " + x.code : ""), 12000) || "(keine Ausgabe)", code: x.code };
   } else if (isWebTool(t)) r = await webTool(t);
   else if (t.name === "mcp") { const x = await mcp.call(t.server, t.tool, t.args || {}); r = { result: String(x.output).slice(0, 20000) }; }
   else if (t.name === "browser") { const st = bridgeState(); if (!st.paired) r = { result: "FEHLER: Browser-Plugin nicht gekoppelt – der Nutzer muss es unter Anpassungen → Plugins mit dem Code koppeln." }; else { const item = { id: crypto.randomUUID(), task: String(t.task || "").slice(0, 1500), at: Date.now() }; browserBridge.stopped = false; const done = new Promise((res) => { browserBridge.pending.set(item.id, res); setTimeout(() => { if (browserBridge.pending.delete(item.id)) res({ kind: "error", text: "Zeitüberschreitung (5 Min)" }); }, 300000); }); browserBridge.tasks.push(item); bridgeEvent({ kind: "task", text: item.task, taskId: item.id }); const ev = await done; r = { result: (ev.kind === "done" ? "Browser-Ergebnis: " : "FEHLER: ") + String(ev.text || "").slice(0, 8000) }; } }

@@ -282,7 +282,7 @@ const withImages = (m, content) => m.images && m.images.length
   ? { role: m.role, content: [{ type: "text", text: content }].concat(m.images.map((i) => ({ type: "image", source: { type: "base64", media_type: i.media_type, data: i.data } }))) }
   : { role: m.role, content: content };
 function compact(h, level) {
-  const keep = [6, 8, 4][level], recentMax = [20000, 3000, 1500][level], oldMax = [1500, 800, 400][level];
+  const keep = [12, 8, 4][level], recentMax = [26000, 3000, 1500][level], oldMax = [3000, 800, 400][level];
   const cut = Math.max(0, h.length - keep);
   const older = level === 0 ? h.slice(0, cut) : h.slice(0, Math.min(1, cut));
   return older.map((m) => ({ role: m.role, content: shorten(m.content, oldMax) }))
@@ -508,6 +508,8 @@ function toolLabel(t) {
   if (t.name === "verify") return "🧪 prüft Projekt (Build, Typecheck, Tests …)";
   if (t.name === "logs") return "📜 Logs " + (t.id || "");
   if (t.name === "stop") return "■ stoppt " + (t.id || "");
+  if (t.name === "glob") return "🔎 Dateien finden: " + (t.pattern || "*");
+  if (t.name === "read" && Array.isArray(t.paths)) return "📖 liest " + t.paths.length + " Dateien: " + t.paths.slice(0, 4).join(", ");
   if (t.name === "search") return "🔎 search /" + t.pattern + "/" + (t.glob ? " " + t.glob : "");
   if (t.name === "edit" || t.name === "write") return "✎ " + t.name + " " + t.path;
   if (t.name === "websearch") return "🌐 websearch " + t.query;
@@ -652,9 +654,9 @@ async function runAgent(c, opts) {
         if (r.bg && r.bg.url) noteTo(c, "▶ Läuft im Hintergrund: " + r.bg.url + " (" + t.cmd + ")");
         if (r.diff && r.diff.lines.length) { addTo(c, "diff", "", { path: t.path, d: r.diff }); changed = true; }
       }
-      tracker.note(t, r.result);
+      const loopHint = tracker.note(t, r.result) || "";
       const failed = /^(FEHLER|Exit: [1-9])|\nExit: [1-9]|ERGEBNIS: ✗/.test(String(r.result || ""));
-      pushResult(c.history, r, failed ? "\n\n(Das ist fehlgeschlagen. Analysiere die Ursache und versuche es anders – nicht aufgeben.)" : "");
+      pushResult(c.history, r, (failed ? "\n\n(Das ist fehlgeschlagen. Lies die Fehlermeldung genau, finde die Ursache und behebe sie gezielt – nicht raten, nicht aufgeben.)" : "") + loopHint);
       saveChat(c);
     }
     if (!finished && !run.stopped && steps >= max) noteTo(c, "Schrittlimit (" + max + ") erreicht – mit /weiter macht Mythos weiter.");
@@ -1825,6 +1827,7 @@ async function installUpdate() {
 // Neue Version: hier oben einen Eintrag ergänzen (neueste zuerst), Schlüssel "2.16" gilt für alle 2.16.x.
 // Wird einmal nach jedem Update gezeigt.
 const WHATS_NEW = {
+  "2.17": ["Deutlich besser beim Programmieren: Mythos liest Dateien mit Zeilennummern und in Ausschnitten, ändert mehrere Stellen auf einmal und trifft die Stelle auch bei anderer Einrückung", "Syntaxfehler werden direkt nach dem Schreiben erkannt (JavaScript, JSON, Python, HTML, CSS) und sofort behoben", "Kennt dein Projekt von Anfang an (Stack, Skripte, Ordner) und merkt, wenn er sich im Kreis dreht", "Neues Werkzeug zum Finden von Dateien, Suche mit Zeilen drumherum, lange Ausgaben behalten Anfang und Ende", "Schutz davor, große Dateien versehentlich mit gekürztem Inhalt zu überschreiben"],
   "2.16": [
     "Eingabefeld bleibt immer anklickbar – auch nach Rückfragen wie „Mythos möchte ausführen …“",
     "Freies Scrollen: Während Mythos schreibt, kannst du hochscrollen, ohne nach unten gezogen zu werden. ↓ springt ans Ende",

@@ -23,7 +23,7 @@ let autoYes = process.argv.includes("--yes");
 let goal = "";
 
 const SYSTEM = () => "Du bist Mythos Code, ein autonomer Coding-Agent im Terminal des Nutzers (OS: " + process.platform + ", Projektordner: " + ROOT + ").\n" +
-  TOOL_PROMPT + memoryPrompt(readMemory(ROOT)) + goalPrompt(goal);
+  TOOL_PROMPT + projectOverview(ROOT) + memoryPrompt(readMemory(ROOT)) + goalPrompt(goal);
 
 const SITE = process.env.MYTHOS_SITE_URL || "__SITE__";
 const VERSION = "__CLI_VERSION__";
@@ -249,7 +249,7 @@ const withImages = (m, content) => m.images && m.images.length
   ? { role: m.role, content: [{ type: "text", text: content }].concat(m.images.map((i) => ({ type: "image", source: { type: "base64", media_type: i.media_type, data: i.data } }))) }
   : { role: m.role, content };
 function compact(history, level) {
-  const keep = [6, 8, 4][level], recentMax = [20000, 3000, 1500][level], oldMax = [1500, 800, 400][level];
+  const keep = [12, 8, 4][level], recentMax = [26000, 3000, 1500][level], oldMax = [3000, 800, 400][level];
   const cut = Math.max(0, history.length - keep);
   const older = level === 0 ? history.slice(0, cut) : history.slice(0, Math.min(1, cut));
   return older.map((m) => ({ role: m.role, content: shorten(m.content, oldMax) }))
@@ -327,7 +327,7 @@ function runLive(cmd) {
       clearTimeout(to); child = null;
       if (out && !out.endsWith("\n")) process.stdout.write("\n");
       startTick();
-      res((out + (code ? "\nExit: " + code : "")).slice(-8000) || "(keine Ausgabe)");
+      res(clipOutput(out + (code ? "\nExit: " + code : ""), 12000) || "(keine Ausgabe)");
     });
   });
 }
@@ -380,6 +380,7 @@ async function runTool(t) {
     : t.name === "check" ? "check " + (t.url || t.path || "")
     : t.name === "verify" ? "verify (Build, Typecheck, Tests …)"
     : t.name === "logs" || t.name === "stop" ? t.name + " " + (t.id || "")
+    : t.name === "glob" ? "glob " + (t.pattern || "*")
     : t.name === "search" ? "search /" + t.pattern + "/" + (t.glob ? " " + t.glob : "")
     : t.name === "write" ? "write " + t.path + " (" + String(t.content || "").length + " Zeichen)"
     : t.name === "websearch" ? "websearch " + t.query
@@ -447,10 +448,10 @@ async function turnInner(history) {
     const t = pb.tool, bad = toolProblem(t);
     if (bad) { history.push({ role: "user", content: "Werkzeug-Ergebnis:\n" + bad }); continue; }
     const res = await runTool(t), resText = typeof res === "string" ? res : res.text;
-    tracker.note(t, resText);
+    const loopHint = tracker.note(t, resText) || "";
     // Screenshot nur in der neuesten Prüfung mitschicken (spart Tokens).
     if (res.image) history.forEach((m) => { if (m.shot) { delete m.images; delete m.shot; } });
-    history.push(res.image ? { role: "user", content: "Werkzeug-Ergebnis:\n" + resText + "\n\n(Screenshot der Seite anbei – sieh ihn dir an: Ist das Layout so, wie der Nutzer es will?)", images: [res.image], shot: true } : { role: "user", content: "Werkzeug-Ergebnis:\n" + resText });
+    history.push(res.image ? { role: "user", content: "Werkzeug-Ergebnis:\n" + resText + "\n\n(Screenshot der Seite anbei – sieh ihn dir an: Ist das Layout so, wie der Nutzer es will?)", images: [res.image], shot: true } : { role: "user", content: "Werkzeug-Ergebnis:\n" + resText + loopHint });
   }
   if (!stopped) say(C.y + "Schrittlimit (" + max + ") erreicht – mit /weiter macht Mythos weiter." + C.x);
   return stopped ? "stopped" : "limit";

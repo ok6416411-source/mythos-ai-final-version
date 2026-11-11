@@ -13,10 +13,11 @@ const TOOL_PROMPT = [
   '<tool>{"name":"serve","path":"."}</tool>  Eingebauter Webserver für statische Seiten (Ordner mit index.html, z. B. "." oder "dist"). Liefert die Adresse. Kein npx/http-server/Express nötig.',
   '<tool>{"name":"check","url":"http://localhost:5173"}</tool>  Webseite WIRKLICH prüfen: HTTP-Status, lädt jedes Skript/CSS, Browser-Test mit Konsolenfehlern, erkennt weiße Seiten und „Cannot GET /“, macht (in der App) einen Screenshot. url darf auch ein Pfad sein ("index.html").',
   '<tool>{"name":"verify"}</tool>  Projekt automatisch prüfen: installiert fehlende Pakete, führt Typecheck, Lint, Build und Tests aus (was es im Projekt gibt) und meldet ✓/✗ je Prüfung mit Fehlerausgabe.',
-  '<tool>{"name":"read","path":"..."}</tool>  Datei lesen',
-  '<tool>{"name":"edit","path":"...","old":"exakter alter Text","new":"neuer Text"}</tool>  Datei gezielt ändern (bevorzugt! "old" muss genau einmal vorkommen, sonst "all":true)',
+  '<tool>{"name":"read","path":"...","from":1,"to":200}</tool>  Datei lesen – mit Zeilennummern („ 12| “ gehört NICHT zum Inhalt). from/to optional für Ausschnitte großer Dateien. Mehrere Dateien auf einmal: "paths":["a.js","b.js"] (bis 8) – spart Schritte.',
+  '<tool>{"name":"edit","path":"...","old":"exakter alter Text","new":"neuer Text"}</tool>  Datei gezielt ändern (bevorzugt! "old" muss genau einmal vorkommen, sonst "all":true). Mehrere Stellen derselben Datei in EINEM Aufruf: "edits":[{"old":"…","new":"…"},{"old":"…","new":"…"}]. Nach jedem edit/write läuft automatisch ein Syntax-Check – meldet er ⚠, behebe das sofort.',
   '<tool>{"name":"write","path":"...","content":"..."}</tool>  Neue Datei anlegen oder komplett neu schreiben',
-  '<tool>{"name":"search","pattern":"regex","path":".","glob":"*.ts"}</tool>  Im Projekt suchen (path und glob optional)',
+  '<tool>{"name":"search","pattern":"regex","path":".","glob":"*.ts","context":2}</tool>  Im Projekt suchen (path, glob, context optional; context = Zeilen davor/danach zeigen – oft reicht das statt read)',
+  '<tool>{"name":"glob","pattern":"**/*.tsx"}</tool>  Dateien per Namensmuster finden (neueste zuerst)',
   '<tool>{"name":"ls","path":"."}</tool>  Ordner auflisten',
   '<tool>{"name":"websearch","query":"..."}</tool>  Im Internet suchen (z. B. Doku, Fehlermeldungen)',
   '<tool>{"name":"fetch","url":"https://..."}</tool>  Webseite als Text lesen',
@@ -32,6 +33,18 @@ const TOOL_PROMPT = [
   "3. Bauen: vollständig und lauffähig – keine Platzhalter, kein „TODO“, keine „…“ im Code, keine erfundenen Pakete oder Importe. Neue Pakete wirklich installieren. Jede Datei, auf die du verweist, auch anlegen.",
   "4. Prüfen (PFLICHT, bevor du „fertig“ sagst): verify ausführen und jedes ✗ beheben. Bei Webseiten/Web-Apps zusätzlich starten (serve für statische Seiten, start für Dev-Server/Backends) und mit check prüfen; Fehler beheben und erneut prüfen, bis check „ERGEBNIS: ✓“ meldet. Behaupte nie, dass etwas funktioniert, das du nicht geprüft hast.",
   "5. Erst dann die Abschlussantwort.",
+  "",
+  "CODING-REGELN (so arbeiten Profis – halte dich daran):",
+  "- Erst lesen, dann ändern: Ändere nie eine Datei, die du in diesem Gespräch nicht gelesen hast. Finde vor einer Änderung alle betroffenen Stellen (search nach Funktions-/Variablennamen, Aufrufern, Importen) und passe sie mit an.",
+  "- Bleib im Stil des Projekts: gleiche Sprache, Bibliotheken, Benennung, Einrückung, Ordnerstruktur wie der vorhandene Code. Nutze vorhandene Helfer statt neue zu erfinden. Prüfe in package.json/requirements, ob ein Paket schon da ist, bevor du es verwendest.",
+  "- Kleine, gezielte Änderungen (edit) statt Dateien neu zu schreiben. Lösche oder kürze nie funktionierenden Code, nach dem nicht gefragt wurde. Kein „// rest bleibt gleich“ in write – das zerstört die Datei.",
+  "- Fehler beheben = Ursache finden: Fehlermeldung und Stacktrace GENAU lesen (Datei + Zeile), die Stelle mit read ansehen, Hypothese bilden, gezielt beheben, mit demselben Befehl erneut prüfen. Kein Raten, kein try/catch zum Verstecken, keine Tests löschen oder abschwächen, damit sie grün werden.",
+  "- Derselbe Ansatz ist zweimal gescheitert? Dann ist die Annahme falsch: lies mehr Code, such die Fehlermeldung per websearch, wähle einen anderen Weg.",
+  "- Vollständig denken: Randfälle (leer, null, sehr groß, Umlaute, Windows-Pfade), Fehlerbehandlung an Systemgrenzen (Datei, Netz, Nutzereingabe), keine Geheimnisse/Keys im Code, keine SQL-/Shell-Injection.",
+  "- Neue Funktion oder Bugfix mit vorhandenen Tests im Projekt → passenden Test ergänzen und laufen lassen.",
+  "- Bibliotheks-API unsicher (Version, Parameter)? Nicht raten: im Projekt nachsehen (node_modules/<paket>/package.json, vorhandene Aufrufe) oder websearch/fetch der offiziellen Doku.",
+  "- Vor der Abschlussantwort bei Git-Projekten: run \"git diff --stat\" und eigene Änderungen kurz gegenlesen – nichts Unbeabsichtigtes, keine Debug-Reste (console.log, TODO, auskommentierter Code).",
+  "- Spare Schritte: mehrere Dateien mit paths in einem read; mehrere Änderungen einer Datei mit edits; unabhängige Shell-Befehle mit && verketten.",
   "",
   "GRAFIKEN: Du hast keinen Bildgenerator. Bilder, Logos, Icons, Hintergründe zeichnest du selbst als SVG (write oder ```datei:name.svg), Minecraft-Texturen als PNG (z. B. per Python/Pillow-Skript, das du schreibst und ausführst).",
   "ADRESSEN: Läuft etwas (Server, Webseite, Vorschau), nenne die Adresse in der Abschlussantwort ganz oben als klickbaren Link, z. B. **[http://localhost:3000](http://localhost:3000)**.",
@@ -171,21 +184,235 @@ function lineDiff(a, b, ctx = 3, maxLines = 400) {
   return { added, removed, lines };
 }
 
-/** Gezieltes Ändern: `old` muss genau einmal vorkommen (oder all=true). */
-function editFile(file, oldText, newText, all) {
-  const cur = readText(file);
-  if (cur == null) return { error: "Datei nicht gefunden: " + file };
+// ---------- Coding-Helfer: genaues Lesen, robustes Ändern, Syntax-Check, Projekt-Überblick ----------
+const READ_MAX = 24000;
+/** Ausgabe kürzen, aber Anfang UND Ende behalten (Fehler stehen oft oben, das Ergebnis unten). */
+function clipOutput(text, max = 12000) {
+  const s = String(text || "");
+  if (s.length <= max) return s;
+  const head = Math.floor(max * 0.3), tail = max - head;
+  return s.slice(0, head) + "\n…[" + (s.length - max) + " Zeichen in der Mitte gekürzt]…\n" + s.slice(-tail);
+}
+/** Datei mit Zeilennummern lesen. from/to (1-basiert) oder lines (Anzahl) grenzen ein. */
+function readNumbered(file, rel, from, to, lines) {
+  const c = readText(file);
+  if (c == null) return "FEHLER: Datei nicht gefunden: " + rel + " – prüfe den Pfad mit glob oder ls.";
+  if (c.includes("\u0000")) return "FEHLER: " + rel + " ist eine Binärdatei (" + c.length + " Bytes) und kann nicht als Text gelesen werden.";
+  const all = c.replace(/\r\n/g, "\n").split("\n");
+  if (all.length > 1 && all[all.length - 1] === "") all.pop();
+  let a = Math.max(1, parseInt(from, 10) || 1), b = parseInt(to, 10) || (parseInt(lines, 10) ? a + parseInt(lines, 10) - 1 : all.length);
+  b = Math.min(all.length, Math.max(a, b));
+  if (a > all.length) return "FEHLER: " + rel + " hat nur " + all.length + " Zeilen.";
+  const w = String(b).length, out = [];
+  let size = 0, last = a - 1;
+  for (let i = a; i <= b; i++) {
+    const line = String(i).padStart(w) + "| " + all[i - 1];
+    if (size + line.length > READ_MAX && out.length) break;
+    out.push(line); size += line.length + 1; last = i;
+  }
+  const head = "### " + rel + " (Zeilen " + a + "–" + last + " von " + all.length + ")\n";
+  return head + out.join("\n") + (last < all.length ? "\n…[weiter mit {\"name\":\"read\",\"path\":\"" + rel + "\",\"from\":" + (last + 1) + "}]" : "");
+}
+const indentOf = (l) => (/^[ \t]*/.exec(l) || [""])[0];
+/** Eine Ersetzung im Speicher: exakt → ohne Zeilennummern → einrückungs-tolerant. */
+function applyEdit(cur, oldText, newText, all) {
   if (!oldText) return { error: '"old" fehlt – gib den exakten Text an, der ersetzt werden soll.' };
   let o = String(oldText), n = String(newText ?? "");
-  // CRLF-Dateien mit LF-Suchtext trotzdem treffen.
-  if (!cur.includes(o) && cur.includes("\r\n")) { o = o.replace(/\r?\n/g, "\r\n"); n = n.replace(/\r?\n/g, "\r\n"); }
+  const crlf = cur.includes("\r\n");
+  if (crlf) { o = o.replace(/\r?\n/g, "\r\n"); n = n.replace(/\r?\n/g, "\r\n"); }
+  const numRe = /^\s*\d+\| ?/;
+  // Versehentlich mitkopierte Zeilennummern aus read entfernen.
+  if (!cur.includes(o) && o.split(/\r?\n/).every((l) => numRe.test(l) || !l.trim())) {
+    o = o.split(/\r?\n/).map((l) => l.replace(numRe, "")).join(crlf ? "\r\n" : "\n");
+    if (n.split(/\r?\n/).every((l) => numRe.test(l) || !l.trim())) n = n.split(/\r?\n/).map((l) => l.replace(numRe, "")).join(crlf ? "\r\n" : "\n");
+  }
   const count = cur.split(o).length - 1;
-  if (count === 0) return { error: "Text nicht gefunden in " + file + " – lies die Datei neu und nimm den exakten Text (inkl. Einrückung)." };
-  if (count > 1 && !all) return { error: "Text kommt " + count + "-mal vor in " + file + ' – nimm mehr umgebenden Kontext oder setze "all":true.' };
-  const at = cur.indexOf(o);
-  const next = all ? cur.split(o).join(n) : cur.slice(0, at) + n + cur.slice(at + o.length);
+  if (count > 1 && !all) return { error: "Text kommt " + count + '-mal vor – nimm mehr umgebenden Kontext (2–3 Zeilen davor/danach) oder setze "all":true.' };
+  if (count >= 1) {
+    const at = cur.indexOf(o);
+    // "old" begann mitten in der Einrückung der Zeile → Folgezeilen von "new" genauso tief einrücken.
+    if (!all && /\n/.test(n)) {
+      const ls = cur.lastIndexOf("\n", at - 1) + 1, pre = cur.slice(ls, at);
+      if (pre && /^[ \t]+$/.test(pre)) n = n.split("\n").map((l, i) => (i && l.trim() ? pre + l : l)).join("\n");
+    }
+    return { next: all ? cur.split(o).join(n) : cur.slice(0, at) + n + cur.slice(at + o.length), count: all ? count : 1 };
+  }
+  // Einrückungs-tolerant: gleiche Zeilen, nur Leerraum am Rand anders.
+  const nl = crlf ? "\r\n" : "\n";
+  const F = cur.split(nl), O = o.split(nl).map((l) => l.trim());
+  while (O.length && !O[0]) O.shift();
+  while (O.length && !O[O.length - 1]) O.pop();
+  if (O.length) {
+    const hits = [];
+    for (let i = 0; i + O.length <= F.length; i++) { let ok = true; for (let k = 0; k < O.length; k++) if (F[i + k].trim() !== O[k]) { ok = false; break; } if (ok) hits.push(i); }
+    if (hits.length === 1 || (hits.length > 1 && all)) {
+      const oLines = o.split(nl).filter((l, i, arr) => l.trim() || (i > 0 && i < arr.length - 1));
+      const oInd = indentOf(oLines.find((l) => l.trim()) || "");
+      let lines = F.slice(), shift = 0;
+      for (const h0 of hits) {
+        const h = h0 + shift, fInd = indentOf(lines[h]);
+        let N = n.split(nl);
+        while (N.length && !N[0].trim()) N.shift();
+        while (N.length && !N[N.length - 1].trim()) N.pop();
+        // Gleiche Zeilenzahl und gleiche Einrückung wie in "old" → Einrückung der echten Datei Zeile für Zeile übernehmen.
+        if (N.length === oLines.length && N.every((l, k) => !l.trim() || indentOf(l) === indentOf(oLines[k]))) N = N.map((l, k) => (l.trim() ? indentOf(lines[h + k]) + l.trimStart() : l));
+        else if (fInd !== oInd) N = N.map((l) => (!l.trim() ? l : l.startsWith(oInd) ? fInd + l.slice(oInd.length) : fInd + l.trimStart()));
+        lines.splice(h, O.length, ...N); shift += N.length - O.length;
+      }
+      return { next: lines.join(nl), count: hits.length, fuzzy: true };
+    }
+    if (hits.length > 1) return { error: "Text kommt " + hits.length + '-mal vor (Zeilen ' + hits.map((h) => h + 1).join(", ") + ') – nimm mehr Kontext oder setze "all":true.' };
+    // Hilfe: ähnlichste Stelle zeigen.
+    const key = O.reduce((a, l) => (l.length > a.length ? l : a), "");
+    let best = -1;
+    for (let i = 0; i < F.length; i++) if (F[i].trim() === key) { best = i; break; }
+    if (best < 0 && key.length >= 10) { const part = key.slice(0, Math.max(8, Math.min(40, Math.floor(key.length * 0.6)))); for (let i = 0; i < F.length; i++) if (F[i].includes(part)) { best = i; break; } }
+    if (best >= 0) {
+      const a = Math.max(0, best - 4), b = Math.min(F.length, best + Math.max(5, O.length + 2));
+      return { error: "Text nicht exakt gefunden. Ähnlichste Stelle (so steht es WIRKLICH in der Datei – nimm \"old\" genau von hier, ohne die Zeilennummern):\n" + F.slice(a, b).map((l, i) => String(a + i + 1).padStart(4) + "| " + l).join("\n") };
+    }
+  }
+  return { error: "Text nicht gefunden – die Datei sieht anders aus, als du denkst. Lies sie neu mit read (ggf. mit from/to) und nimm den exakten Text." };
+}
+/** Schneller Syntax-Check direkt nach dem Schreiben. Gibt "" oder eine Warnung zurück. */
+function syntaxCheck(file) {
+  try {
+    const ext = path.extname(file).toLowerCase(), base = path.basename(file).toLowerCase();
+    const text = readText(file); if (text == null || text.length > 800000) return "";
+    const warn = (m) => "\n⚠ SYNTAXFEHLER in dieser Datei – sofort beheben:\n" + String(m).trim().split("\n").slice(0, 8).join("\n").slice(0, 900);
+    const nodeCheck = (f) => {
+      try { execFileSync(process.execPath, ["--check", f], { env: Object.assign({}, process.env, { ELECTRON_RUN_AS_NODE: "1" }), timeout: 8000, stdio: ["ignore", "pipe", "pipe"], windowsHide: true }); return ""; }
+      catch (e) {
+        const msg = String((e.stderr && e.stderr.toString()) || e.message || "");
+        if (e.code === "ENOENT" || e.killed || !/SyntaxError/.test(msg)) return "";
+        // Kein echter Fehler: ES-Module in .js ohne "type":"module" oder JSX – das prüft verify/der Build.
+        if (/Cannot use import statement|Unexpected token 'export'|import\.meta|Unexpected token '<'|await is only valid/.test(msg)) return "";
+        return warn(msg.replace(/^.*node:internal.*$/gm, "").replace(/\n\s*at .*$/gm, "").replace(/Node\.js v.*$/m, ""));
+      }
+    };
+    if (ext === ".json" && !/^(tsconfig|jsconfig).*\.json$|\.jsonc$/.test(base) && !/[\\/]\.vscode[\\/]/.test(file)) {
+      try { JSON.parse(text.replace(/^﻿/, "")); } catch (e) { return warn("Ungültiges JSON: " + e.message); }
+      return "";
+    }
+    if (ext === ".js" || ext === ".cjs" || ext === ".mjs") return nodeCheck(file);
+    if (ext === ".py") {
+      for (const py of process.platform === "win32" ? ["python", "py"] : ["python3", "python"]) {
+        try { execFileSync(py, ["-c", "import ast,sys;ast.parse(open(sys.argv[1],encoding='utf-8').read(),sys.argv[1])", file], { timeout: 8000, stdio: ["ignore", "pipe", "pipe"], windowsHide: true }); return ""; }
+        catch (e) { if (e.code === "ENOENT") continue; const msg = String((e.stderr && e.stderr.toString()) || ""); return /SyntaxError|IndentationError|TabError/.test(msg) ? warn(msg.split("\n").slice(-6).join("\n")) : ""; }
+      }
+      return "";
+    }
+    if (ext === ".css") {
+      const s = text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'/g, "");
+      const open = (s.match(/\{/g) || []).length, close = (s.match(/\}/g) || []).length;
+      return open !== close ? warn("Geschweifte Klammern stimmen nicht: " + open + "× { aber " + close + "× }") : "";
+    }
+    if (ext === ".html" || ext === ".htm") {
+      const out = [], dir = path.dirname(file);
+      const re = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi; let m, k = 0;
+      while ((m = re.exec(text))) {
+        k++;
+        const attrs = m[1], code = m[2];
+        if (/\bsrc\s*=/.test(attrs) || !code.trim()) continue;
+        const type = (/\btype\s*=\s*["']?([^"'\s>]+)/i.exec(attrs) || [])[1] || "";
+        if (type && !/^(text\/javascript|application\/javascript|module)$/i.test(type)) continue;
+        if (/^module$/i.test(type)) {
+          const tmp = path.join((typeof os !== "undefined" ? os : require("os")).tmpdir(), "mythos-check-" + process.pid + "-" + k + ".mjs");
+          try { fs.writeFileSync(tmp, code); const r = nodeCheck(tmp); if (r) out.push("<script type=module> Nr. " + k + ":" + r.replace(/^\n⚠[^\n]*\n/, " ").split(tmp).join("script")); } finally { try { fs.unlinkSync(tmp); } catch { /* egal */ } }
+        } else { try { new Function(code); } catch (e) { if (e instanceof SyntaxError) out.push("<script> Nr. " + k + ": " + e.message); } }
+      }
+      const missing = [];
+      const refs = /<(?:script|img|link|source|audio|video)\b[^>]*?\b(?:src|href)\s*=\s*["']([^"'#?]+)[^"']*["']/gi;
+      while ((m = refs.exec(text))) {
+        const u = m[1].trim();
+        if (!u || /^(?:[a-z][a-z0-9+.-]*:|\/\/|\/|\{|<|\$)/i.test(u)) continue;
+        if (!fs.existsSync(path.resolve(dir, decodeURIComponent(u))) && !missing.includes(u)) missing.push(u);
+      }
+      const unclosed = (text.match(/<script\b/gi) || []).length !== (text.match(/<\/script>/gi) || []).length ? ["Ein <script> wird nicht geschlossen."] : [];
+      const msgs = out.concat(unclosed);
+      return (msgs.length ? warn(msgs.join("\n")) : "") + (missing.length ? "\n⚠ Diese Dateien werden eingebunden, existieren aber (noch) nicht: " + missing.slice(0, 8).join(", ") + " – anlegen oder Pfad korrigieren." : "");
+    }
+  } catch { /* Check darf nie stören */ }
+  return "";
+}
+/** Dateien per Muster finden (neueste zuerst). */
+function globFiles(root, pattern, max = 300) {
+  const gre = globToRe(pattern || "*"), found = [];
+  let seen = 0;
+  const walk = (dir) => {
+    let entries; try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      if (seen > 40000) return;
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) { if (!SKIP_DIRS.has(e.name)) walk(full); continue; }
+      seen++;
+      const rel = path.relative(root, full).split(path.sep).join("/");
+      if (gre.test(rel)) { let t = 0; try { t = fs.statSync(full).mtimeMs; } catch { /* egal */ } found.push([t, rel]); }
+    }
+  };
+  walk(root);
+  if (!found.length) return "Keine Dateien für " + pattern + ".";
+  found.sort((a, b) => b[0] - a[0]);
+  return found.slice(0, max).map((f) => f[1]).join("\n") + (found.length > max ? "\n… (" + (found.length - max) + " weitere)" : "");
+}
+/** Kurzer Projekt-Überblick für den Systemprompt: Stack, Skripte, Ordnerstruktur. 20 s zwischengespeichert. */
+const _overview = { root: "", at: 0, text: "" };
+function projectOverview(root) {
+  if (!root) return "";
+  if (_overview.root === root && Date.now() - _overview.at < 20000) return _overview.text;
+  let text = "";
+  try {
+    const has = (f) => fs.existsSync(path.join(root, f));
+    const facts = [];
+    const pkg = (() => { try { return JSON.parse(readText(path.join(root, "package.json")) || "null"); } catch { return null; } })();
+    if (pkg) {
+      const deps = Object.assign({}, pkg.dependencies, pkg.devDependencies);
+      const stack = ["react", "vue", "svelte", "next", "vite", "express", "electron", "typescript", "tailwindcss", "three", "discord.js", "jest", "vitest", "eslint"].filter((d) => deps[d]);
+      facts.push("Node-Projekt" + (pkg.name ? " „" + pkg.name + "“" : "") + (pkg.type === "module" ? " (ES-Module)" : " (CommonJS)") + (stack.length ? " · nutzt: " + stack.join(", ") : ""));
+      const scripts = Object.keys(pkg.scripts || {});
+      if (scripts.length) facts.push("npm-Skripte: " + scripts.slice(0, 14).map((s) => s + " → " + String(pkg.scripts[s]).slice(0, 60)).join(" | "));
+      facts.push("Paketmanager: " + (has("pnpm-lock.yaml") ? "pnpm" : has("yarn.lock") ? "yarn" : has("bun.lockb") || has("bun.lock") ? "bun" : "npm") + (has("node_modules") ? "" : " · node_modules fehlt (erst installieren)"));
+    }
+    if (has("requirements.txt") || has("pyproject.toml")) facts.push("Python-Projekt (" + (has("pyproject.toml") ? "pyproject.toml" : "requirements.txt") + ")");
+    if (has("pom.xml")) facts.push("Java/Maven (pom.xml)"); if (has("build.gradle") || has("build.gradle.kts")) facts.push("Java/Gradle");
+    if (has("plugin.yml") || has("src/main/resources/plugin.yml") || has("src/main/resources/paper-plugin.yml")) facts.push("Minecraft-Plugin (plugin.yml)");
+    if (has("Cargo.toml")) facts.push("Rust (Cargo.toml)"); if (has("go.mod")) facts.push("Go (go.mod)");
+    if (has(".git")) facts.push("Git-Repository");
+    const lines = []; let n = 0;
+    const walk = (dir, depth, prefix) => {
+      let entries; try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+      entries = entries.filter((e) => !(e.isDirectory() && SKIP_DIRS.has(e.name)) && e.name !== ".DS_Store").sort((a, b) => (b.isDirectory() - a.isDirectory()) || a.name.localeCompare(b.name));
+      const cap = depth === 0 ? 40 : 14;
+      for (const e of entries.slice(0, cap)) {
+        if (n++ > 140) return;
+        lines.push(prefix + e.name + (e.isDirectory() ? "/" : ""));
+        if (e.isDirectory() && depth < 2 && !e.name.startsWith(".")) walk(path.join(dir, e.name), depth + 1, prefix + "  ");
+      }
+      if (entries.length > cap) lines.push(prefix + "… (" + (entries.length - cap) + " weitere)");
+    };
+    walk(root, 0, "");
+    if (lines.length > 250 || !lines.length) text = facts.length ? "\n\nPROJEKT-ÜBERBLICK (automatisch):\n" + facts.join("\n") : "";
+    else text = "\n\nPROJEKT-ÜBERBLICK (automatisch, spart dir das erste ls):\n" + (facts.length ? facts.join("\n") + "\n" : "") + "Struktur:\n" + lines.join("\n").slice(0, 3500);
+  } catch { text = ""; }
+  _overview.root = root; _overview.at = Date.now(); _overview.text = text;
+  return text;
+}
+
+/** Gezieltes Ändern: eine Ersetzung (old/new) oder mehrere auf einmal (edits). Alles oder nichts. */
+function editFile(file, oldText, newText, all, edits) {
+  const cur = readText(file);
+  if (cur == null) return { error: "Datei nicht gefunden: " + file + " – neue Dateien legst du mit write an." };
+  const list = Array.isArray(edits) && edits.length ? edits : [{ old: oldText, new: newText, all: all }];
+  let next = cur, count = 0, fuzzy = false;
+  for (let i = 0; i < list.length; i++) {
+    const e = list[i] || {};
+    const r = applyEdit(next, e.old, e.new, e.all);
+    if (r.error) return { error: (list.length > 1 ? "Änderung " + (i + 1) + " von " + list.length + " in " + file + " (nichts wurde geschrieben): " : file + ": ") + r.error };
+    next = r.next; count += r.count; fuzzy = fuzzy || !!r.fuzzy;
+  }
+  if (next === cur) return { error: "Die Änderung ändert nichts – \"old\" und \"new\" sind gleich." };
   fs.writeFileSync(file, next);
-  return { diff: lineDiff(cur, next), count: all ? count : 1 };
+  return { diff: lineDiff(cur, next), count: count, fuzzy: fuzzy };
 }
 
 function globToRe(glob) {
@@ -195,7 +422,8 @@ function globToRe(glob) {
 }
 
 /** Projekt durchsuchen (Regex, Groß-/Kleinschreibung egal, ohne node_modules & Co.). */
-function searchFiles(root, pattern, glob, max = 200) {
+function searchFiles(root, pattern, glob, max = 200, context = 0) {
+  context = Math.max(0, Math.min(6, parseInt(context, 10) || 0)); if (context) max = 60;
   let re;
   try { re = new RegExp(pattern, "i"); } catch { re = new RegExp(String(pattern).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"); }
   const gre = glob ? globToRe(glob) : null;
@@ -217,13 +445,17 @@ function searchFiles(root, pattern, glob, max = 200) {
       if (text == null || text.includes("\u0000")) continue;
       const lines = text.split(/\r?\n/);
       for (let i = 0; i < lines.length && hits.length < max; i++) {
-        if (re.test(lines[i])) hits.push(rel + ":" + (i + 1) + ": " + lines[i].trim().slice(0, 200));
+        if (!re.test(lines[i])) continue;
+        if (!context) { hits.push(rel + ":" + (i + 1) + ": " + lines[i].trim().slice(0, 200)); continue; }
+        const a = Math.max(0, i - context), b = Math.min(lines.length, i + context + 1);
+        hits.push("── " + rel + ":" + (i + 1) + "\n" + lines.slice(a, b).map((l, k) => String(a + k + 1).padStart(5) + (a + k === i ? "> " : "| ") + l.slice(0, 220)).join("\n"));
+        i = b - 1;
       }
     }
   };
   walk(root);
   if (!hits.length) return "Keine Treffer für /" + pattern + "/" + (glob ? " in " + glob : "") + ".";
-  return hits.join("\n") + (hits.length >= max ? "\n… (mehr als " + max + " Treffer – Suche eingrenzen)" : "");
+  return hits.join(context ? "\n\n" : "\n") + (hits.length >= max ? "\n… (mehr als " + max + " Treffer – Suche eingrenzen)" : "");
 }
 
 // ---------- Sicherheitsnetz für Befehle ----------
@@ -268,22 +500,31 @@ function fileTool(t, root) {
   }
   try {
     if (t.name === "read") {
-      const c = readText(P(t.path));
-      return { result: c == null ? "FEHLER: Datei nicht gefunden: " + t.path : c.slice(0, 20000) + (c.length > 20000 ? "\n…[gekürzt – Datei ist länger]" : "") };
+      const list = (Array.isArray(t.paths) && t.paths.length ? t.paths : [t.path]).filter(Boolean).slice(0, 8);
+      if (!list.length) return { result: 'FEHLER: "path" fehlt.' };
+      if (list.length === 1) return { result: readNumbered(P(list[0]), list[0], t.from, t.to, t.lines) };
+      let out = "", left = READ_MAX * 2;
+      for (const p of list) { const r = readNumbered(P(p), p).slice(0, Math.max(2000, Math.floor(left / (list.length || 1)))); out += (out ? "\n\n" : "") + r; left -= r.length; }
+      return { result: out };
     }
     if (t.name === "write") {
-      const file = P(t.path), before = readText(file) ?? "", content = String(t.content ?? "");
+      const file = P(t.path), before = readText(file), content = String(t.content ?? "");
+      if (!t.path) return { result: 'FEHLER: "path" fehlt.' };
+      // Schutz vor versehentlichem Kahlschlag: große bestehende Datei durch einen Bruchteil ersetzt.
+      if (before != null && before.length > 4000 && content.length < before.length * 0.35 && !t.force && /\.\.\.|…|rest (?:bleibt|unverändert)|unchanged|existing code/i.test(content))
+        return { result: "FEHLER: Das sieht nach einer gekürzten Datei mit Platzhaltern aus (" + content.length + " statt " + before.length + " Zeichen). Schreibe die Datei VOLLSTÄNDIG oder ändere gezielt mit edit." };
       fs.mkdirSync(path.dirname(file), { recursive: true });
       fs.writeFileSync(file, content);
-      const d = lineDiff(before, content);
-      return { result: "OK geschrieben: " + t.path + " (+" + d.added + " −" + d.removed + ")", diff: d };
+      const d = lineDiff(before ?? "", content);
+      return { result: "OK " + (before == null ? "angelegt" : "überschrieben") + ": " + t.path + " (+" + d.added + " −" + d.removed + ", " + content.split("\n").length + " Zeilen)" + syntaxCheck(file), diff: d };
     }
     if (t.name === "edit") {
-      const r = editFile(P(t.path), t.old, t.new, t.all);
+      const r = editFile(P(t.path), t.old, t.new, t.all, t.edits);
       if (r.error) return { result: "FEHLER: " + r.error };
-      return { result: "OK geändert: " + t.path + " (" + r.count + "×, +" + r.diff.added + " −" + r.diff.removed + ")", diff: r.diff };
+      return { result: "OK geändert: " + t.path + " (" + r.count + "×, +" + r.diff.added + " −" + r.diff.removed + (r.fuzzy ? ", Einrückung automatisch angepasst" : "") + ")" + syntaxCheck(P(t.path)), diff: r.diff };
     }
-    if (t.name === "search") return { result: searchFiles(P(t.path), String(t.pattern || ""), t.glob) };
+    if (t.name === "glob") return { result: globFiles(P(t.path), String(t.pattern || t.glob || "*")) };
+    if (t.name === "search") return { result: searchFiles(P(t.path), String(t.pattern || ""), t.glob, 200, t.context) };
     if (t.name === "ls") return { result: fs.readdirSync(P(t.path), { withFileTypes: true }).map((e) => (e.isDirectory() ? "[D] " : "    ") + e.name).join("\n") || "(leer)" };
     return { result: "Unbekanntes Werkzeug: " + t.name };
   } catch (e) { return { result: "FEHLER: " + e.message }; }
