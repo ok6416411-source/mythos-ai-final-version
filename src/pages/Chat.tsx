@@ -837,7 +837,7 @@ const Chat = () => {
   };
 
   /** Ein Modell-Aufruf mit Streaming in die letzte (leere) Assistent-Nachricht. null = fehlgeschlagen. */
-  const streamOnce = async (apiMessages: ApiMsg[], convId: string, prefix = ""): Promise<StreamResult | null> => {
+  const streamOnce = async (apiMessages: ApiMsg[], convId: string, prefix = "", modelOverride?: string): Promise<StreamResult | null> => {
     const chosenModel = (profile as any)?.ai_model as string | undefined;
     const modelForCall = isPuterModel(chosenModel) ? chosenModel : undefined;
     // Bild-Wünsche laufen immer über die Chat-Funktion (dort sitzen Erkennung und Backup-Kette).
@@ -871,7 +871,7 @@ const Chat = () => {
         userId: user?.id,
         personaId: personaId !== "none" ? personaId : undefined,
         model: modelForCall,
-        mythos: mythosId,
+        mythos: modelOverride || mythosId,
         messages: apiMessages,
         mode,
       }),
@@ -1097,7 +1097,15 @@ const Chat = () => {
       const apiMessages = hints && !/^\//.test(userText)
         ? [...history.slice(0, -1), { role: "system", content: hints }, history[history.length - 1]]
         : history;
-      const res = await streamOnce(apiMessages, convId);
+      let res = await streamOnce(apiMessages, convId);
+      // Server meldet „Antwort fehlgeschlagen“ (Modell gerade überlastet o. Ä.): still nochmal versuchen –
+      // erst mit demselben Modell, dann mit einem robusten Ausweichmodell derselben Art.
+      const FAILED = /^\s*❌ (Antwort fehlgeschlagen|Verbindung zur KI unterbrochen)/;
+      const fallbacks = [mythosId, /^code/.test(mythosId) ? "code11:high" : "v1:high"];
+      for (let i = 0; res && !res.aborted && !stopRef.current && FAILED.test(res.full) && i < fallbacks.length; i++) {
+        await new Promise(r => setTimeout(r, 800 * (i + 1)));
+        res = await streamOnce(apiMessages, convId, "", fallbacks[i]);
+      }
       if (!res) { if (goalText) setGoal(g => g && { ...g, status: "gestoppt" }); break; }
       // Abgeschnittener Code (offener ```-Block, HTML ohne </html>): automatisch an derselben Stelle weiterschreiben lassen.
       // Auch nach Verbindungsabbruch/Zeitlimit (interrupted) unauffällig weiterschreiben lassen.
