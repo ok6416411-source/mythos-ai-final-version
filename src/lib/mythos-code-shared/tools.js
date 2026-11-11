@@ -81,8 +81,8 @@ const TOOL_PROMPT = [
 // Modelle, die v1-messages versteht (siehe mapModel dort).
 const MODELS = [
   { id: "mythos-code", label: "MythosCode", desc: "Standard fürs Programmieren" },
-  { id: "mythos-v2", label: "Mythos Zeus 2", desc: "am stärksten, etwas langsamer" },
-  { id: "mythos-sonnet", label: "Mythos Hermes 1", desc: "ausgewogen" },
+  { id: "mythos-v2", label: "Mythos Amber 2", desc: "am stärksten, etwas langsamer" },
+  { id: "mythos-sonnet", label: "Mythos Spark 1", desc: "ausgewogen" },
   { id: "mythos-lite", label: "Mythos Lite", desc: "am schnellsten" },
 ];
 /** Grobe Token-Schätzung (≈ 4 Zeichen pro Token, Bilder pauschal). */

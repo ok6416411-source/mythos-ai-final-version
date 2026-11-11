@@ -42,11 +42,11 @@ function mapModel(m: string): string {
 /** Nach außen sichtbarer Mythos-Modellname (nie der echte Anbieter). */
 function mythosLabelFor(m: string): string {
   const lc = (m || "").toLowerCase();
-  if (lc.includes("mythos-v2") || lc.includes("opus")) return "Mythos Zeus 2";
-  if (lc.includes("code")) return "Mythos Prometheus 1.5";
-  if (lc.includes("sonnet")) return "Mythos Hermes 1";
-  if (lc.includes("haiku") || lc.includes("lite")) return "Mythos Echo 1";
-  return "Mythos Hermes 1";
+  if (lc.includes("mythos-v2") || lc.includes("opus")) return "Mythos Amber 2";
+  if (lc.includes("code")) return "Mythos Atlas 1.5";
+  if (lc.includes("sonnet")) return "Mythos Spark 1";
+  if (lc.includes("haiku") || lc.includes("lite")) return "Mythos Pebble 1";
+  return "Mythos Spark 1";
 }
 
 function blockText(b: any): string {

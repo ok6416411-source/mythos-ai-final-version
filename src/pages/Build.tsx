@@ -466,7 +466,7 @@ export default function Build() {
             className={`inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-xs ${webOn ? "bg-white/15 text-foreground" : "text-muted-foreground hover:bg-white/5 hover:text-foreground"}`}>
             <Globe className="h-4 w-4" /> <span className="hidden sm:inline">Internet</span>
           </button>
-          <span className="truncate px-1 text-xs text-muted-foreground">{model === "code15:high" ? "Mythos Prometheus 1.5" : "Mythos Hermes 1"}</span>
+          <span className="truncate px-1 text-xs text-muted-foreground">{model === "code15:high" ? "Mythos Atlas 1.5" : "Mythos Spark 1"}</span>
         </div>
         {busy ? (
           <button type="button" onClick={() => abortRef.current?.abort()} aria-label="Stoppen" className="flex h-9 w-9 items-center justify-center rounded-full bg-foreground text-background">

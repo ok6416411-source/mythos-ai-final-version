@@ -55,14 +55,14 @@ type Tune = {
 type Resolved = Tune & { effortLabel: string; familyLabel: string; style: string };
 
 const MYTHOS_MAP: Record<string, Tune> = {
-  // --- Mythos Hermes 1: Allrounder ---
+  // --- Mythos Spark 1: Allrounder ---
   "v1:instant": { model: "google/gemini-3.1-flash-lite", maxOut: 220, web: false, temperature: 0.3, lean: true },
   "v1:low": { model: "google/gemini-3.1-flash-lite", maxOut: 550, web: false, temperature: 0.5, lean: true },
   "v1:normal": { model: "google/gemini-3.6-flash", maxOut: 3200, web: true, temperature: 0.7 },
   "v1:high": { model: "google/gemini-3.1-pro-preview", maxOut: 7000, web: true, temperature: 0.7, depth: true },
   "v1:ultra": { model: "openai/gpt-5.5", reasoning: "medium", maxOut: 10000, web: true, depth: true },
 
-  // --- Mythos Forge 1.1 ---
+  // --- Mythos Bolt 1.1 ---
   "code11:instant": { model: "openai/gpt-5.4-nano", reasoning: "none", maxOut: 300, web: false, lean: true },
   "code11:low": { model: "openai/gpt-5.4-mini", reasoning: "none", fast: true, maxOut: 700, web: false, lean: true },
   "code11:normal": { model: "openai/gpt-5.4", reasoning: "low", maxOut: 4400, web: true },
@@ -70,14 +70,14 @@ const MYTHOS_MAP: Record<string, Tune> = {
   "code11:ultra": { model: "openai/gpt-5.5", reasoning: "medium", maxOut: 12000, web: true, depth: true },
   "code11:ultracode": { model: "openai/gpt-5.5", reasoning: "high", maxOut: 18000, web: true, depth: true },
 
-  // --- Mythos Zeus 2 (Pro) — mehr Denk-Tiefe ---
+  // --- Mythos Amber 2 (Pro) — mehr Denk-Tiefe ---
   "v2:instant": { model: "openai/gpt-5.6-luna", reasoning: "none", maxOut: 300, web: false, lean: true },
   "v2:low": { model: "openai/gpt-5.6-luna", reasoning: "none", fast: true, maxOut: 750, web: false, lean: true },
   "v2:normal": { model: "openai/gpt-5.6-sol", reasoning: "medium", fast: true, maxOut: 7000, web: true, depth: true },
   "v2:high": { model: "openai/gpt-5.6-sol", reasoning: "high", fast: true, maxOut: 14000, web: true, depth: true },
   "v2:ultra": { model: "openai/gpt-5.6-sol", reasoning: "high", maxOut: 28000, web: true, depth: true },
 
-  // --- Mythos Prometheus 1.5 (Pro) ---
+  // --- Mythos Atlas 1.5 (Pro) ---
   "code15:instant": { model: "openai/gpt-5.6-luna", reasoning: "none", maxOut: 400, web: false, lean: true },
   "code15:low": { model: "openai/gpt-5.6-terra", reasoning: "none", fast: true, maxOut: 900, web: false, lean: true },
   "code15:normal": { model: "openai/gpt-5.6-sol", reasoning: "low", fast: true, maxOut: 6000, web: true },
@@ -88,7 +88,7 @@ const MYTHOS_MAP: Record<string, Tune> = {
 
 
 const FAMILY_LABEL: Record<string, string> = {
-  v1: "Mythos Hermes 1", code11: "Mythos Forge 1.1", v2: "Mythos Zeus 2", code15: "Mythos Prometheus 1.5",
+  v1: "Mythos Spark 1", code11: "Mythos Bolt 1.1", v2: "Mythos Amber 2", code15: "Mythos Atlas 1.5",
 };
 const EFFORT_MEMORY: Record<string, boolean> = {
   instant: false, low: false, normal: true, high: true, ultra: true, ultracode: true, giga: true,
