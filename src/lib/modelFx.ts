@@ -18,7 +18,9 @@ function set(next: Partial<FxState>, push = true) {
   state = { ...state, ...next, at: push ? Date.now() : (next.at ?? state.at) };
   try { localStorage.setItem("mythos.fx", JSON.stringify(state)); } catch { /* egal */ }
   emit();
-  if (push) save();
+  // Nur ins Konto schreiben, wenn die Effekte an sind (oder gerade umgeschaltet werden).
+  // Jede Konto-Änderung löst bei Supabase ein Auth-Ereignis aus – das soll nicht bei jedem Modellwechsel passieren.
+  if (push && (state.on || "on" in next)) save();
 }
 
 let saveT: ReturnType<typeof setTimeout> | undefined;
@@ -92,7 +94,7 @@ export function applyFx() {
 export function playModelSelect(theme: MythosTheme, origin?: { x: number; y: number }) {
   if (typeof document === "undefined" || reduced()) return;
   // Läuft die Partikel-Engine, zusätzlich eine echte Explosion im neuen Modell-Stil
-  setTimeout(() => (window as unknown as { MythosFx?: { burst: (x: number, y: number, s?: number) => void } }).MythosFx?.burst(origin?.x ?? innerWidth / 2, origin?.y ?? 60, 1.4), 60);
+  setTimeout(() => (window as unknown as { MythosFx?: { burst: (x: number, y: number, s?: number) => void } }).MythosFx?.burst(origin?.x ?? innerWidth / 2, origin?.y ?? 60, 0.45), 60);
   const el = document.createElement("div");
   el.className = "mfx-select mfx-select-" + theme.fx;
   el.style.setProperty("--sa", theme.a);
@@ -101,14 +103,14 @@ export function playModelSelect(theme: MythosTheme, origin?: { x: number; y: num
   el.style.setProperty("--sx", (origin?.x ?? innerWidth / 2) + "px");
   el.style.setProperty("--sy", (origin?.y ?? 60) + "px");
   // ein paar Partikel für den Funken-/Blitz-/Glut-Effekt
-  for (let i = 0; i < 18; i++) {
+  for (let i = 0; i < 8; i++) {
     const p = document.createElement("i");
-    const ang = (i / 18) * Math.PI * 2, dist = 120 + Math.random() * 260;
+    const ang = (i / 8) * Math.PI * 2 + Math.random() * .4, dist = 50 + Math.random() * 90;
     p.style.setProperty("--dx", Math.cos(ang) * dist + "px");
     p.style.setProperty("--dy", Math.sin(ang) * dist + "px");
     p.style.animationDelay = Math.random() * 120 + "ms";
     el.appendChild(p);
   }
   document.body.appendChild(el);
-  setTimeout(() => el.remove(), 1400);
+  setTimeout(() => el.remove(), 1800);
 }

@@ -63,7 +63,7 @@ export default function ModelPicker({ value, tier, onChange, onLocked }: Props) 
           <ChevronDown className="h-3.5 w-3.5 opacity-60 shrink-0" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="glass-strong w-[300px] max-h-[75vh] overflow-y-auto p-1.5">
+      <DropdownMenuContent align="start" className="glass-strong w-[min(320px,92vw)] max-h-[75vh] overflow-y-auto p-1.5">
         {MYTHOS_FAMILIES.map(f => {
           const ok = tierAllows(tier, f.minTier);
           const active = current.family.id === f.id;
@@ -81,7 +81,7 @@ export default function ModelPicker({ value, tier, onChange, onLocked }: Props) 
                   {f.label}
                   {!ok && <Crown className="h-3 w-3 text-fuchsia-400" />}
                 </div>
-                <div className="text-xs text-muted-foreground truncate">{f.desc}</div>
+                <div className="text-xs text-muted-foreground leading-snug">{f.desc}</div>
               </div>
               <span className="w-4 shrink-0 mt-0.5">
                 {active ? <Check className="h-4 w-4 text-violet-300" /> : !ok ? <Lock className="h-3.5 w-3.5" /> : null}
@@ -103,8 +103,8 @@ export default function ModelPicker({ value, tier, onChange, onLocked }: Props) 
               onSelect={(ev) => { ev.preventDefault(); pickEffort(e.id); }}
               className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm ${!ok ? "opacity-60" : ""}`}
             >
-              <span>{e.label}</span>
-              <span className="text-xs text-muted-foreground truncate">{e.hint}</span>
+              <span className="shrink-0">{e.label}</span>
+              <span className="text-xs text-muted-foreground leading-snug">{e.hint}</span>
               <span className="ml-auto w-4 shrink-0">
                 {active ? <Check className="h-4 w-4 text-violet-300" /> : !ok ? <Lock className="h-3.5 w-3.5" /> : null}
               </span>

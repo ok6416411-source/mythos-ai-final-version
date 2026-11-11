@@ -1542,9 +1542,9 @@ function playSelectFx(theme, origin) {
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   const o = origin || { x: 120, y: 30 }; const fx = el("div", "mfx-select mfx-select-" + theme.fx);
   fx.style.cssText = "--sa:" + theme.a + ";--sb:" + theme.b + ";--sg:" + theme.glow + ";--sx:" + o.x + "px;--sy:" + o.y + "px";
-  for (let k = 0; k < 18; k++) { const p = el("i"); const an = k / 18 * Math.PI * 2, ds = 120 + Math.random() * 240; p.style.setProperty("--dx", Math.cos(an) * ds + "px"); p.style.setProperty("--dy", Math.sin(an) * ds + "px"); fx.appendChild(p); }
-  document.body.appendChild(fx); setTimeout(() => fx.remove(), 1400);
-  if (window.MythosFx) setTimeout(() => window.MythosFx.burst(o.x, o.y, 1.4), 60);
+  for (let k = 0; k < 8; k++) { const p = el("i"); const an = k / 8 * Math.PI * 2, ds = 50 + Math.random() * 90; p.style.setProperty("--dx", Math.cos(an) * ds + "px"); p.style.setProperty("--dy", Math.sin(an) * ds + "px"); fx.appendChild(p); }
+  document.body.appendChild(fx); setTimeout(() => fx.remove(), 1800);
+  if (window.MythosFx) setTimeout(() => window.MythosFx.burst(o.x, o.y, 0.45), 60);
 }
 async function pushFx(change) {
   fxState = Object.assign({}, fxState, change, { at: Date.now() }); cfg.fx = fxState; window.mythos.setCfg(cfg); applyFx();

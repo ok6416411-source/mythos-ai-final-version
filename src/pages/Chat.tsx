@@ -7,7 +7,7 @@ import { isImageRequest } from "@/lib/imageIntent";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import MinecraftAvatar from "@/components/MinecraftAvatar";
-import Logo from "@/components/Logo";
+import Logo, { LogoMark } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -1344,7 +1344,7 @@ const Chat = () => {
   // Handy: die ganze Seitenleiste scrollt als ein Stück (Kopf, Menü und Chats zusammen).
   // Desktop: Kopf und Menü bleiben stehen, nur die Chat-Liste scrollt.
   const SidebarContentBlock = (
-    <div className="flex flex-col h-full min-h-0 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] md:overflow-hidden">
+    <div className="block md:flex md:flex-col h-full min-h-0 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch] md:overflow-hidden">
       {/* Kopfzeile wie bei Claude: einklappen, zurück/vor, Chat/Code */}
       <div className="flex items-center gap-0.5 pl-2 pr-10 md:pr-2 pt-2 pb-2">
         <Tooltip>
@@ -1355,7 +1355,7 @@ const Chat = () => {
           </TooltipTrigger>
           <TooltipContent side="bottom">Seitenleiste einklappen</TooltipContent>
         </Tooltip>
-        <Link to="/" className="md:hidden flex items-center px-1" aria-label="Startseite"><Logo size="sm" /></Link>
+        <Link to="/" className="md:hidden flex items-center px-1 whitespace-nowrap shrink-0" aria-label="Startseite"><LogoMark size="sm" /></Link>
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => nav(-1)} aria-label="Zurück"><ArrowLeft className="h-4 w-4" /></Button>
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => nav(1)} aria-label="Vor"><ArrowRight className="h-4 w-4 opacity-60" /></Button>
         <div className="ml-auto flex items-center rounded-xl bg-white/5 p-0.5">

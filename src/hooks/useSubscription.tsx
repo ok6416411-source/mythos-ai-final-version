@@ -19,7 +19,7 @@ export const TIER_LIMITS: Record<Tier, {
 };
 
 export function useSubscription() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [tier, setTier] = useState<Tier>("free");
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -28,6 +28,9 @@ export function useSubscription() {
   const syncedRef = useRef(false);
 
   const refresh = async () => {
+    // Solange die Anmeldung noch lädt, NICHT „free“ melden – sonst wird ein Pro-Modell
+    // beim Neuladen kurz als nicht erlaubt erkannt und auf Spark zurückgesetzt.
+    if (authLoading) return;
     if (!user) { setTier("free"); setIsAdmin(false); setLoading(false); return; }
     const [{ data: sub }, { data: roles }] = await Promise.all([
       supabase.from("subscriptions").select("tier,expires_at,note").eq("user_id", user.id).maybeSingle(),
@@ -57,7 +60,7 @@ export function useSubscription() {
     setLoading(false);
   };
 
-  useEffect(() => { refresh(); }, [user?.id]);
+  useEffect(() => { refresh(); }, [user?.id, authLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const limits = TIER_LIMITS[tier];
   const isPro = tier === "pro";
