@@ -11,7 +11,6 @@ import Logo from "@/components/Logo";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -1342,8 +1341,10 @@ const Chat = () => {
     </button>
   );
 
+  // Handy: die ganze Seitenleiste scrollt als ein Stück (Kopf, Menü und Chats zusammen).
+  // Desktop: Kopf und Menü bleiben stehen, nur die Chat-Liste scrollt.
   const SidebarContentBlock = (
-    <div className="flex flex-col h-full min-h-0">
+    <div className="flex flex-col h-full min-h-0 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] md:overflow-hidden">
       {/* Kopfzeile wie bei Claude: einklappen, zurück/vor, Chat/Code */}
       <div className="flex items-center gap-0.5 pl-2 pr-10 md:pr-2 pt-2 pb-2">
         <Tooltip>
@@ -1416,7 +1417,7 @@ const Chat = () => {
           </>
         ) : <span>Chats</span>}
       </div>
-      <ScrollArea className="flex-1 px-2">
+      <div className="flex-1 px-2 md:min-h-0 md:overflow-y-auto">
         <div className="space-y-0.5 pb-2">
           {!convsLoaded && Array.from({ length: 9 }).map((_, i) => <div key={i} className="mx-2.5 my-2 h-4 rounded-full bg-white/[0.06] animate-pulse" style={{ width: `${55 + ((i * 37) % 40)}%` }} />)}
           {convsLoaded && sidebarConvs.length === 0 && (
@@ -1475,10 +1476,10 @@ const Chat = () => {
             </div>
           ))}
         </div>
-      </ScrollArea>
+      </div>
 
-      {/* User footer */}
-      <div className="border-t border-white/5 p-2">
+      {/* User footer – auf dem Handy unten angeheftet */}
+      <div className="sticky bottom-0 z-10 bg-sidebar border-t border-white/5 p-2">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="w-full flex items-center gap-2 rounded-lg hover:bg-white/5 p-2 transition-colors">

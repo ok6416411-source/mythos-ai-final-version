@@ -26,20 +26,25 @@ function save() {
   clearTimeout(saveT);
   saveT = setTimeout(async () => {
     try {
-      const { data } = await supabase.auth.getUser();
-      if (!data.user) return;
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) return;
       await supabase.auth.updateUser({ data: { mythos_fx: { on: state.on, model: state.model, at: state.at } } });
     } catch { /* offline – später erneut */ }
   }, 600);
 }
 
 /** Vom Konto holen (andere Geräte haben evtl. geändert). Neuere Änderung gewinnt. */
+let pulling = false;
 export async function pullFx() {
+  if (pulling) return;
+  pulling = true;
   try {
+    const { data: ses } = await supabase.auth.getSession();
+    if (!ses.session) return;
     const { data } = await supabase.auth.getUser();
     const r = data.user?.user_metadata?.mythos_fx as FxState | undefined;
     if (r && typeof r.at === "number" && r.at > state.at) set({ on: !!r.on, model: String(r.model || ""), at: r.at }, false);
-  } catch { /* egal */ }
+  } catch { /* egal */ } finally { pulling = false; }
 }
 
 export const setFxEnabled = (on: boolean) => set({ on });
@@ -57,7 +62,11 @@ export function useFxSync() {
     const onVis = () => { if (document.visibilityState === "visible") pullFx(); };
     document.addEventListener("visibilitychange", onVis);
     const t = setInterval(() => { if (state.on && document.visibilityState === "visible") pullFx(); }, 20000);
-    const { data: sub } = supabase.auth.onAuthStateChange(() => pullFx());
+    // WICHTIG: In onAuthStateChange nie direkt Supabase aufrufen – das blockiert die Auth-Sperre
+    // und die ganze Seite lädt endlos. Deshalb erst nach dem Ereignis (setTimeout 0).
+    const { data: sub } = supabase.auth.onAuthStateChange((ev) => {
+      if (ev === "SIGNED_IN" || ev === "USER_UPDATED") setTimeout(() => { void pullFx(); }, 0);
+    });
     return () => { document.removeEventListener("visibilitychange", onVis); clearInterval(t); sub.subscription.unsubscribe(); };
   }, []);
 }

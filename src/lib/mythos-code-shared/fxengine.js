@@ -99,7 +99,7 @@
     document.body.appendChild(glc); t0 = performance.now(); glResize();
     return true;
   }
-  const FIRE_SCALE = 0.6; // halbe Auflösung reicht für Feuer und spart viel Leistung
+  const FIRE_SCALE = matchMedia("(pointer: coarse)").matches ? 0.4 : 0.6; // geringe Auflösung (Handy noch weniger) reicht für Feuer und spart viel Leistung
   function glResize() { if (!glc) return; glc.width = Math.round(innerWidth * FIRE_SCALE); glc.height = Math.round(innerHeight * FIRE_SCALE); gl.viewport(0, 0, glc.width, glc.height); }
   function glFrame(k) {
     if (!gl) return;
