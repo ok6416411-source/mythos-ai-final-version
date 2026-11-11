@@ -3,7 +3,9 @@ import {
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { Check, ChevronDown, Crown, Gauge, Lock } from "lucide-react";
+import { useState } from "react";
+import { BarChart3, Check, ChevronDown, Crown, Gauge, Lock } from "lucide-react";
+import ModelCompare from "@/components/ModelCompare";
 import {
   DEFAULT_MYTHOS_ID, MYTHOS_FAMILIES, isAllowed, parseMythosId, tierAllows, type Tier,
 } from "@/lib/mythosModels";
@@ -20,6 +22,7 @@ const needs = (t: Tier) => (t === "pro" ? "Pro" : "Light");
 /** Modell- und Aufwand-Auswahl wie bei Claude: oben das Modell, darunter der Aufwand. */
 export default function ModelPicker({ value, tier, onChange, onLocked }: Props) {
   const current = parseMythosId(value) ?? parseMythosId(DEFAULT_MYTHOS_ID)!;
+  const [compare, setCompare] = useState(false);
 
   const pickFamily = (famId: string) => {
     const fam = MYTHOS_FAMILIES.find(f => f.id === famId)!;
@@ -38,6 +41,8 @@ export default function ModelPicker({ value, tier, onChange, onLocked }: Props) 
   };
 
   return (
+    <>
+    <ModelCompare open={compare} onOpenChange={setCompare} />
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
@@ -64,7 +69,7 @@ export default function ModelPicker({ value, tier, onChange, onLocked }: Props) 
                   {f.label}
                   {!ok && <Crown className="h-3 w-3 text-fuchsia-400" />}
                 </div>
-                <div className="text-xs text-muted-foreground truncate">{f.desc}</div>
+                <div className="text-xs text-muted-foreground leading-snug">{f.desc}</div>
               </div>
               <span className="w-4 shrink-0 mt-0.5">
                 {active ? <Check className="h-4 w-4 text-violet-300" /> : !ok ? <Lock className="h-3.5 w-3.5" /> : null}
@@ -94,7 +99,12 @@ export default function ModelPicker({ value, tier, onChange, onLocked }: Props) 
             </DropdownMenuItem>
           );
         })}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => setTimeout(() => setCompare(true), 0)} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm">
+          <BarChart3 className="h-4 w-4" /> Modelle vergleichen
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+    </>
   );
 }

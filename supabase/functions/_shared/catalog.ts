@@ -2,14 +2,16 @@
 // Wird bei jeder Antwort mitgegeben, damit MythosAI immer korrekt erklären kann,
 // welche Modelle es gibt und welches wofür am besten ist.
 
-import { modelCatalogPrompt } from "./modelCatalog.ts";
+import { MYTHOS_SELF, modelCatalogPrompt } from "./modelCatalog.ts";
 
 export const MYTHOS_CATALOG = `## Dein Modell-Angebot (immer im Gedächtnis)
 Bei MythosAI wählt der User ein **Modell** + einen **Aufwand**. Das gilt auf der Website, in der App Mythos Code und in der CLI (dort: /modell <name> und /aufwand <stufe>). Erkläre es auf Nachfrage genau so.
 Instant/Low: ohne Websuche und Langzeit-Erinnerungen. Ab Normal: mit Websuche und Erinnerungen.
 In den Einstellungen gibt es „Modell-Animationseffekte“: dann passt sich das Design von Website, App und CLI live an das gewählte Modell an (für alle Geräte mit demselben Konto).
 
-${modelCatalogPrompt()}`;
+${modelCatalogPrompt()}
+
+${MYTHOS_SELF}`;
 
 export const MYTHOS_FILES = `## Dateien & Code liefern
 Der User kann jeden Code-Block mit einem Klick kopieren, als Datei herunterladen und HTML direkt ausführen; mehrere Blöcke kann er als ZIP laden.

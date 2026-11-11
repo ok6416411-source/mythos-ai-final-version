@@ -52,6 +52,7 @@ export type ModelFamily = {
   minTier: Tier;
   kind: "chat" | "code";
   rank: number;          // 1 = schwächstes … 5 = stärkstes (für Vergleiche)
+  scores: { speed: number; smart: number; code: number; creative: number }; // 1–5 für den Modell-Vergleich
   desc: string;
   strengths: string;     // für die KI: wofür dieses Modell ideal ist
   theme: { a: string; b: string; glow: string; fx: "ripple" | "sparks" | "lightning" | "ember" | "orbit" };
@@ -64,7 +65,7 @@ const E = (id: EffortId, minTier: Tier, tune: Tune): FamilyEffort => ({ id, minT
 
 export const MODEL_FAMILIES: ModelFamily[] = [
   {
-    id: "pebble", name: "Pebble", version: "1", minTier: "free", kind: "chat", rank: 1,
+    id: "pebble", name: "Pebble", version: "1", minTier: "free", kind: "chat", rank: 1, scores: { speed: 5, smart: 1, code: 1, creative: 2 },
     desc: "Winzig & blitzschnell für kurze Fragen",
     strengths: "kurze Fakten, Umformulieren, schnelle Ja/Nein-Antworten",
     theme: { a: "#a8a29e", b: "#e7e5e4", glow: "rgba(214,211,209,.55)", fx: "ripple" },
@@ -76,7 +77,7 @@ export const MODEL_FAMILIES: ModelFamily[] = [
     changelog: [{ version: "1", date: "2026-11-11", text: "Neu: kleinstes und schnellstes Mythos-Modell." }],
   },
   {
-    id: "v1", name: "Spark", version: "1", minTier: "free", kind: "chat", rank: 2,
+    id: "v1", name: "Spark", version: "1", minTier: "free", kind: "chat", rank: 2, scores: { speed: 4, smart: 3, code: 2, creative: 4 },
     desc: "Schneller Allrounder für Alltag & Support",
     strengths: "Alltag, Support, Texte, Erklärungen, Recherche",
     theme: { a: "#facc15", b: "#fb923c", glow: "rgba(250,204,21,.5)", fx: "sparks" },
@@ -90,7 +91,7 @@ export const MODEL_FAMILIES: ModelFamily[] = [
     changelog: [{ version: "1", date: "2026-11-11", text: "Neuer Name (vorher Mythos v1)." }],
   },
   {
-    id: "code11", name: "Bolt", version: "1.2", minTier: "free", kind: "code", rank: 3,
+    id: "code11", name: "Bolt", version: "1.2", minTier: "free", kind: "code", rank: 3, scores: { speed: 4, smart: 3, code: 4, creative: 3 },
     desc: "Code, Debugging & Technik",
     strengths: "Programmieren im Alltag, Bugs fixen, Skripte, kleine bis mittlere Apps",
     theme: { a: "#22d3ee", b: "#6366f1", glow: "rgba(34,211,238,.5)", fx: "lightning" },
@@ -108,7 +109,7 @@ export const MODEL_FAMILIES: ModelFamily[] = [
     ],
   },
   {
-    id: "v2", name: "Amber", version: "2", minTier: "pro", kind: "chat", rank: 4,
+    id: "v2", name: "Amber", version: "2", minTier: "pro", kind: "chat", rank: 4, scores: { speed: 2, smart: 5, code: 4, creative: 5 },
     desc: "Flaggschiff — stärkstes Reasoning",
     strengths: "schwierige Analysen, Strategie, Mathe, lange Texte, Planung",
     theme: { a: "#f59e0b", b: "#c2410c", glow: "rgba(245,158,11,.55)", fx: "ember" },
@@ -122,7 +123,7 @@ export const MODEL_FAMILIES: ModelFamily[] = [
     changelog: [{ version: "2", date: "2026-11-11", text: "Neuer Name (vorher Mythos v2)." }],
   },
   {
-    id: "code15", name: "Atlas", version: "1.6", minTier: "pro", kind: "code", rank: 5,
+    id: "code15", name: "Atlas", version: "1.6", minTier: "pro", kind: "code", rank: 5, scores: { speed: 2, smart: 5, code: 5, creative: 4 },
     desc: "Profi-Code für ganze Projekte",
     strengths: "große Features, Architektur, ganze Projekte, Refactorings, Agent-Arbeit in App & CLI",
     theme: { a: "#34d399", b: "#0ea5e9", glow: "rgba(52,211,153,.5)", fx: "orbit" },
@@ -189,3 +190,14 @@ export function modelCatalogPrompt(): string {
     "Versionsnummern steigen, wenn ein Modell verbessert wird. Nenne Modelle immer mit Namen + Version.",
   ].join("\n");
 }
+
+/** Allgemeines Wissen über Mythos AI (Website + Server). */
+export const MYTHOS_SELF = `## Wissen über Mythos AI (für Fragen, Vergleiche und Quizze über dich selbst)
+- Mythos AI ist eine deutsche KI-Plattform von Mythoscraft mit Chat, Coding, Grafik, Musik, Video, Sprache und Minecraft-Anbindung.
+- Pläne: Free (kostenlos, 20 Chats am Tag, Pebble/Spark/Bolt), Light (2,99 €/Monat, 150 Chats am Tag, Ultra-Aufwand bei Spark und Bolt, Bilder), Pro (6,99 €/Monat, unbegrenzt, Amber und Atlas, Musik, Video, Live-Anruf, Mythos Code App und CLI). Dazu gibt es Token-Limits pro Stunde, Woche und Monat – eine laufende Aufgabe wird trotzdem fertig.
+- Modellfamilie von klein nach groß: Pebble → Spark → Bolt → Amber → Atlas. Versionsnummern steigen, wenn ein Modell verbessert wird. Aufwände: Instant, Low, Normal, High, Ultra, dazu Ultra Code (Bolt) und Giga Code (Atlas).
+- Mythos Code: Coding-Agent als Windows-App und als CLI (npm), arbeitet mit Werkzeugen (Dateien lesen/schreiben, Befehle, Tests, Vorschau, Veröffentlichen unter /build/<name>), nur mit Pro.
+- App-Builder (/build): Apps aus einer Beschreibung bauen, Dateien gezielt ändern, Vorschau, speichern und unter eigener Adresse veröffentlichen.
+- Weitere Bereiche: Filmstudio (Kurzfilme), Cloud-PC (Agent mit eigenem PC), Räume (gemeinsam chatten), Personas, Gedächtnis, Arena (zwei Antworten im Vergleich), Spiele, Galerie, Mythos Browser-Erweiterung, Minecraft-Server-Anbindung (MythosCraft).
+- Chat-Extras: klickbare Bausteine (Auswahl, Fragen, Quiz), Live-Vorschau für HTML/SVG/3D-Modelle, Teilen-Links (/s/…), Dateien als ZIP, Vorlesen, Modell-Animationseffekte (Design passt sich dem Modell an).
+Ein Quiz über Mythos baust du nur aus diesen Fakten – erfinde nichts dazu.`;

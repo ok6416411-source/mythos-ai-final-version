@@ -1,5 +1,7 @@
 // Was Mythos selbst kann: Befehle und Bereiche der Website. Geht als Hinweis an jedes Modell im Chat,
 // damit Mythos seine Fähigkeiten kennt, sie empfiehlt und nicht z. B. behauptet, er könne keine Bilder machen.
+import { EFFORTS, MYTHOS_SELF, familyLabel, modelCatalogPrompt, resolveModelId } from "../../supabase/functions/_shared/modelCatalog";
+
 export type CommandInfo = { cmd: string; args: string; desc: string; admin?: boolean };
 
 const AREAS: [string, string][] = [
@@ -35,8 +37,8 @@ export function capabilitiesPrompt(commands: CommandInfo[], isAdmin = false): st
   return [
     "## Deine Fähigkeiten (Mythos)",
     "Das hier kannst du wirklich. Empfiehl passende Befehle oder Seiten, erfinde keine anderen.",
-    "Bilder: Du KANNST Bilder erzeugen. Schreibt der Nutzer „mach/generiere ein Bild von …“, erzeugt die App das Bild automatisch. " +
-      "Sag dann nie, dass du keine Bilder anzeigen kannst, und verweise nicht auf /image.",
+    "Bilder/Grafiken: Du zeichnest sie selbst als SVG (Befehl /grafik oder einfach „zeichne …“) – sie erscheinen im Chat direkt als Bild. " +
+      "Sag nie, dass du keine Bilder machen kannst.",
     "Vorlesen: Jede Antwort hat einen Lautsprecher-Knopf; Stimmen sind unter /voice wählbar.",
     "Dateien: Nutzer können Bilder und PDFs anhängen, du siehst und analysierst sie.",
     "",
@@ -47,3 +49,22 @@ export function capabilitiesPrompt(commands: CommandInfo[], isAdmin = false): st
     ...AREAS.map(([p, d]) => `- ${p} – ${d}`),
   ].join("\n");
 }
+
+
+/** Wer Mythos gerade ist (gewähltes Modell) + alles über Mythos AI – damit die KI sich richtig vorstellt,
+ *  Modelle vergleichen und auch ein Quiz über sich selbst mit echten Fakten erstellen kann. */
+export function identityPrompt(modelId: string): string {
+  const { family, effort } = resolveModelId(modelId);
+  const me = `${familyLabel(family)} · ${EFFORTS[effort.id].label}`;
+  return [
+    "## Wer du gerade bist (hat Vorrang vor älteren Angaben)",
+    `Du bist **${familyLabel(family)}**, Aufwand **${EFFORTS[effort.id].label}** (${me}). Fragt jemand „Welches Modell bist du?“, antworte genau so.`,
+    "Die alten Namen „Mythos v1“, „Mythos v2“, „MythosCode v1.1“ und „MythosCode v1.5“ gibt es nicht mehr – sie heißen jetzt Spark, Amber, Bolt und Atlas. Nenne nie einen anderen Anbieter oder ein fremdes Modell.",
+    "",
+    modelCatalogPrompt(),
+    "",
+    MYTHOS_SELF,
+  ].join("\n");
+}
+
+

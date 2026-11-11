@@ -66,7 +66,7 @@ import FileViewer, { type ViewFile } from "@/components/chat/FileViewer";
 import { filesOfChat, prepareFile } from "@/lib/chatFileParts";
 import { checkAnswer, repairPrompt } from "@/lib/selfCheck";
 import { checklistStatusPrompt, latestChecklist } from "@/lib/pinnedChecklist";
-import { capabilitiesPrompt } from "@/lib/mythosCapabilities";
+import { identityPrompt, capabilitiesPrompt } from "@/lib/mythosCapabilities";
 import { fallbackTitle, generateChatTitle } from "@/lib/chatTitle";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
@@ -229,6 +229,7 @@ const Chat = () => {
     if (typeof window === "undefined") return DEFAULT_MYTHOS_ID;
     return localStorage.getItem("mythos.model") || DEFAULT_MYTHOS_ID;
   });
+  const mythosRef = useRef(mythosId);
   const [mobileSidebar, setMobileSidebar] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
@@ -275,7 +276,7 @@ const Chat = () => {
   });
 
   useEffect(() => { localStorage.setItem(SIDEBAR_KEY, sidebarCollapsed ? "1" : "0"); }, [sidebarCollapsed]);
-  useEffect(() => { localStorage.setItem("mythos.model", mythosId); }, [mythosId]);
+  useEffect(() => { localStorage.setItem("mythos.model", mythosId); mythosRef.current = mythosId; }, [mythosId]);
   useEffect(() => {
     const sync = () => setProjectsState(getProjects());
     window.addEventListener("mythos-prefs", sync);
@@ -1064,6 +1065,7 @@ const Chat = () => {
     const status = checklistStatusPrompt(pinnedRef.current, convId);
     if (status) parts.push(status);
     parts.push(capabilitiesPrompt(SLASH_COMMANDS, isAdmin));
+    parts.push(identityPrompt(mythosRef.current));
     if (goalNow) {
       parts.push(
         `## /goal-Modus – Schritt ${goalNow.step} von höchstens ${GOAL_MAX_STEPS}\n` +

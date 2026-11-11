@@ -16,6 +16,9 @@ export type MythosFamily = {
   label: string;
   minTier: Tier;
   rank: number;
+  scores: ModelFamily["scores"];
+  strengths: string;
+  changelog: ModelFamily["changelog"];
   kind: "chat" | "code";
   desc: string;
   theme: MythosTheme;
@@ -24,7 +27,7 @@ export type MythosFamily = {
 
 export const MYTHOS_FAMILIES: MythosFamily[] = MODEL_FAMILIES.map((f) => ({
   id: f.id, name: f.name, version: f.version, label: familyLabel(f), minTier: f.minTier,
-  rank: f.rank, kind: f.kind, desc: f.desc, theme: f.theme,
+  rank: f.rank, scores: f.scores, strengths: f.strengths, changelog: f.changelog, kind: f.kind, desc: f.desc, theme: f.theme,
   efforts: f.efforts.map((e) => ({ id: e.id, label: EFFORTS[e.id].label, minTier: e.minTier, hint: EFFORTS[e.id].hint })),
 }));
 
