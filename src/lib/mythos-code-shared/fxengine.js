@@ -69,9 +69,9 @@
     "float sdBox(vec2 p,vec2 b){vec2 q=abs(p)-b;return length(max(q,0.))+min(max(q.x,q.y),0.);}",
     "void main(){",
     "  vec2 px=gl_FragCoord.xy/uScale; float v=0.;",
-    "  if(px.y<120.) v=max(v,fire(px.y,px.x,78.,1.4));",
-    "  if(px.x<70.) v=max(v,fire(px.x,px.y*.7+uT*40.,30.,1.1)*smoothstep(0.,uRes.y*.6,uRes.y-px.y));",
-    "  if(uRes.x-px.x<70.) v=max(v,fire(uRes.x-px.x,px.y*.7+uT*40.+300.,30.,1.1)*smoothstep(0.,uRes.y*.6,uRes.y-px.y));",
+    "  if(px.y<70.) v=max(v,fire(px.y,px.x,42.,1.1)*.8);",
+    "  if(px.x<30.) v=max(v,fire(px.x,px.y*.7+uT*40.,14.,.9)*.6*smoothstep(0.,uRes.y*.6,uRes.y-px.y));",
+    "  if(uRes.x-px.x<30.) v=max(v,fire(uRes.x-px.x,px.y*.7+uT*40.+300.,14.,.9)*.6*smoothstep(0.,uRes.y*.6,uRes.y-px.y));",
     "  if(uHot>0.){",
     "    vec2 c=uRect.xy+uRect.zw*.5; float d=sdBox(px-c,uRect.zw*.5-2.);",
     "    float up=clamp(px.y-(uRect.y+uRect.w),0.,120.);",   // nach oben länger
@@ -79,7 +79,7 @@
     "    float hd=max(d,0.)*1.25;",
     "    if(hd<120.) v=max(v,fire(hd,px.x*1.3+900.,42.+uRect.z*.1+up*.4,2.4)*uHot*smoothstep(-6.,1.,d)*below);",
     "  }",
-    "  vec3 col=ramp(v); float a=clamp(v*1.05,0.,.92);",
+    "  vec3 col=ramp(v); float a=clamp(v*.9,0.,.8);",
     "  gl_FragColor=vec4(col*a,a);}",
   ].join("\n");
   function glStart() {
@@ -146,23 +146,23 @@
         if (hotRect) for (let i = 0; i < 9 * k; i++) { const [x, y] = onPerimeter(hotRect, -2); flame(x, y, rnd(14, 26), 1.05); }
       }
       // Glutfunken, die aus dem Feuer aufsteigen
-      if (Math.random() < 0.18 * k) spark(rnd(0, W), H - rnd(10, 60), rnd(-0.5, 0.5), -rnd(2.2, 4.2));
-      if (hotRect && Math.random() < 0.25 * k) spark(rnd(hotRect.left, hotRect.right), hotRect.top - rnd(0, 30), rnd(-0.8, 0.8), -rnd(1.8, 3.6));
+      if (Math.random() < 0.06 * k) spark(rnd(0, W), H - rnd(5, 40), rnd(-0.5, 0.5), -rnd(2.2, 4.2));
+      if (hotRect && Math.random() < 0.15 * k) spark(rnd(hotRect.left, hotRect.right), hotRect.top - rnd(0, 30), rnd(-0.8, 0.8), -rnd(1.8, 3.6));
     } else if (fx === "sparks") {
-      for (let i = 0; i < 2.2 * k; i++) spark(rnd(0, W), -4, rnd(-0.4, 0.4), rnd(1.5, 3.5));
-      for (let i = 0; i < 1.2 * k; i++) { const side = Math.random() < 0.5; spark(side ? 0 : W, rnd(0, H), side ? rnd(1, 3) : -rnd(1, 3), rnd(-1.5, 0.5)); }
-      if (hotRect) for (let i = 0; i < 3 * k; i++) { const [x, y, nx, ny] = onPerimeter(hotRect, 1); spark(x, y, nx * rnd(1, 3) + rnd(-0.6, 0.6), ny * rnd(1, 3) - rnd(0, 1.2)); }
+      for (let i = 0; i < 0.5 * k; i++) spark(rnd(0, W), -4, rnd(-0.4, 0.4), rnd(1.5, 3.5));
+      for (let i = 0; i < 0.25 * k; i++) { const side = Math.random() < 0.5; spark(side ? 0 : W, rnd(0, H), side ? rnd(1, 3) : -rnd(1, 3), rnd(-1.5, 0.5)); }
+      if (hotRect) for (let i = 0; i < 1.2 * k; i++) { const [x, y, nx, ny] = onPerimeter(hotRect, 1); spark(x, y, nx * rnd(1, 3) + rnd(-0.6, 0.6), ny * rnd(1, 3) - rnd(0, 1.2)); }
     } else if (fx === "lightning") {
-      if (Math.random() < 0.12 * k) { const e = Math.floor(rnd(0, 4)); const p = rnd(0, 1); if (e === 0) arc(p * W, 0, p * W + rnd(-120, 120), rnd(40, 140)); else if (e === 1) arc(W, p * H, W - rnd(40, 160), p * H + rnd(-80, 80)); else if (e === 2) arc(p * W, H, p * W + rnd(-120, 120), H - rnd(40, 160)); else arc(0, p * H, rnd(40, 160), p * H + rnd(-80, 80)); }
-      for (let i = 0; i < 1.5 * k; i++) dot(rnd(0, W), Math.random() < 0.5 ? rnd(0, 20) : H - rnd(0, 20), rnd(-0.5, 0.5), rnd(-0.5, 0.5), rnd(1, 2));
-      if (hotRect && Math.random() < 0.6 * k) { const [x1, y1] = onPerimeter(hotRect, 0), [x2, y2, nx, ny] = onPerimeter(hotRect, 0); arc(x1, y1, x2 + nx * rnd(10, 40), y2 + ny * rnd(10, 40), 1); }
-      if (hotRect) for (let i = 0; i < 1.5 * k; i++) { const [x, y, nx, ny] = onPerimeter(hotRect, 1); spark(x, y, nx * rnd(0.5, 2), ny * rnd(0.5, 2)); }
+      if (Math.random() < 0.02 * k) { const e = Math.floor(rnd(0, 4)); const p = rnd(0, 1); if (e === 0) arc(p * W, 0, p * W + rnd(-120, 120), rnd(40, 140)); else if (e === 1) arc(W, p * H, W - rnd(40, 160), p * H + rnd(-80, 80)); else if (e === 2) arc(p * W, H, p * W + rnd(-120, 120), H - rnd(40, 160)); else arc(0, p * H, rnd(40, 160), p * H + rnd(-80, 80)); }
+      for (let i = 0; i < 0.4 * k; i++) dot(rnd(0, W), Math.random() < 0.5 ? rnd(0, 20) : H - rnd(0, 20), rnd(-0.5, 0.5), rnd(-0.5, 0.5), rnd(1, 2));
+      if (hotRect && Math.random() < 0.18 * k) { const [x1, y1] = onPerimeter(hotRect, 0), [x2, y2, nx, ny] = onPerimeter(hotRect, 0); arc(x1, y1, x2 + nx * rnd(10, 40), y2 + ny * rnd(10, 40), 1); }
+      if (hotRect) for (let i = 0; i < 0.5 * k; i++) { const [x, y, nx, ny] = onPerimeter(hotRect, 1); spark(x, y, nx * rnd(0.5, 2), ny * rnd(0.5, 2)); }
     } else if (fx === "orbit") {
-      for (let i = 0; i < 1.2 * k; i++) dot(Math.random() < 0.5 ? rnd(0, 40) : W - rnd(0, 40), rnd(0, H), rnd(-0.2, 0.2), -rnd(0.2, 0.7), rnd(1, 2.6));
-      if (hotRect && parts.filter((p) => p.k === "orb").length < 26) for (let i = 0; i < 2 * k; i++) orbiter();
+      for (let i = 0; i < 0.35 * k; i++) dot(Math.random() < 0.5 ? rnd(0, 40) : W - rnd(0, 40), rnd(0, H), rnd(-0.2, 0.2), -rnd(0.2, 0.7), rnd(1, 2.6));
+      if (hotRect && parts.filter((p) => p.k === "orb").length < 10) for (let i = 0; i < 1 * k; i++) orbiter();
     } else if (fx === "ripple") {
-      if (Math.random() < 0.02 * k) ring(rnd(0, W), Math.random() < 0.5 ? rnd(0, 60) : H - rnd(0, 60), rnd(40, 110));
-      if (hotRect && Math.random() < 0.08 * k) ring(hotRect.left + hotRect.width / 2, hotRect.top + hotRect.height / 2, Math.max(hotRect.width, hotRect.height) * 0.9);
+      if (Math.random() < 0.006 * k) ring(rnd(0, W), Math.random() < 0.5 ? rnd(0, 60) : H - rnd(0, 60), rnd(40, 110));
+      if (hotRect && Math.random() < 0.04 * k) ring(hotRect.left + hotRect.width / 2, hotRect.top + hotRect.height / 2, Math.max(hotRect.width, hotRect.height) * 0.9);
     }
   }
 
@@ -233,7 +233,7 @@
   function burst(x, y, scale) {
     if (!theme) return;
     const s = scale || 1, fx = theme.fx;
-    for (let i = 0; i < 40 * s; i++) {
+    for (let i = 0; i < 22 * s; i++) {
       const an = rnd(0, 6.283), v = rnd(1.5, 6) * s;
       if (fx === "ember") { if (i % 2) spark(x, y, Math.cos(an) * v, Math.sin(an) * v - 1.5); else if (!gl) flame(x + rnd(-8, 8), y + rnd(-8, 8), rnd(14, 30), rnd(0.8, 1.6)); }
       else if (fx === "ripple") { if (i < 3) ring(x, y, 60 + i * 50); }
