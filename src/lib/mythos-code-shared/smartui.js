@@ -426,14 +426,15 @@ body.light .msui-num{background:#fff}
     const opts = arr(s.options || s.criteria || s.tabs);
     if (s.label || s.question) box.appendChild(mk("div", "", s.label || s.question)).style.fontWeight = "600";
     const list = mk("div", "msui-opts"), pane = mk("div", "msui-pane");
-    let cur = Math.min(opts.length - 1, Math.max(0, s.selected | 0));
+    const ckey = "c-" + hash(JSON.stringify([s.title, s.label, s.question, opts.map((o) => (typeof o === "object" ? o.label || o.title : o))]));
+    let cur = Math.min(opts.length - 1, Math.max(0, mem.has(ckey) ? mem.get(ckey) : s.selected | 0));
     const draw = () => {
       [...list.children].forEach((b, i) => b.classList.toggle("on", i === cur));
       pane.textContent = ""; const o = opts[cur]; if (!o) return;
       if (typeof o === "object") { pane.appendChild(mk("div", "pt", o.title || o.label)); if (o.text) rich(pane.appendChild(mk("div")), o.text); if (o.image) { const im = imageBox(o, box._ctx); im.style.marginTop = "8px"; im.style.borderRadius = "12px"; pane.appendChild(im); } }
       else rich(pane, o);
     };
-    opts.forEach((o, i) => { const b = mk("button", "msui-opt"); b.type = "button"; b.append(mk("span", "msui-radio"), mk("span", "", typeof o === "object" ? o.label || o.title || o.text || "" : String(o))); b.onclick = () => { cur = i; draw(); }; list.appendChild(b); });
+    opts.forEach((o, i) => { const b = mk("button", "msui-opt"); b.type = "button"; b.append(mk("span", "msui-radio"), mk("span", "", typeof o === "object" ? o.label || o.title || o.text || "" : String(o))); b.onclick = () => { cur = i; mem.set(ckey, i); draw(); }; list.appendChild(b); });
     box.append(list, pane); draw();
   }
   B.choice = (s, ctx) => { const box = mk("div", "msui-box"); box._ctx = ctx; head(box, s, ctx); choiceInto(box, s); note(box, s); return box; };
@@ -536,6 +537,8 @@ body.light .msui-num{background:#fff}
   };
 
   const store = { get: (k) => { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* egal */ } } };
+  // Zwischenstand von Bedienelementen (gewählter Tab, angeklickte Optionen): überlebt jedes Neuzeichnen des Chats.
+  const mem = new Map();
   const hash = (t) => { let h = 0; for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0; return (h >>> 0).toString(36); };
   B.checklist = (s, ctx) => {
     if (ctx.pinChecklists) {
@@ -569,10 +572,11 @@ body.light .msui-num{background:#fff}
     if (answered) { const d = mk("div", "msui-q-done"); d.append(mk("span", "", "✓"), mk("span", "", "Beantwortet: " + answered)); box.appendChild(d); return box; }
     const opts = arr(s.options).map((o) => (o && typeof o === "object" ? { label: String(o.label || o.title || o.text || ""), text: o.label || o.title ? o.text || o.description || "" : o.description || "" } : { label: String(o), text: "" }));
     const multi = !!(s.multi || s.multiple);
-    const sel = new Set();
+    const draft = mem.get(key) || { sel: [], other: "" }; mem.set(key, draft);
+    const sel = new Set(draft.sel);
     const send = mk("button", "msui-q-send", s.submit || "Abschicken"); send.type = "button";
     let other = null;
-    const upd = () => { send.disabled = !sel.size && !(other && other.value.trim()); };
+    const upd = () => { send.disabled = !sel.size && !(other && other.value.trim()); draft.sel = [...sel]; draft.other = other ? other.value : ""; };
     opts.forEach((o, i) => {
       const b = mk("button", "msui-q-opt"); b.type = "button";
       const k = mk("span", "k", ""); const t = mk("span", ""); t.appendChild(mk("span", "", o.label)); if (o.text) t.appendChild(mk("span", "d", o.text));
@@ -583,10 +587,12 @@ body.light .msui-num{background:#fff}
         b.classList.toggle("on", sel.has(i)); k.textContent = sel.has(i) ? "✓" : "";
         upd();
       };
+      if (sel.has(i)) { b.classList.add("on"); k.textContent = "✓"; }
       box.appendChild(b);
     });
     if (s.other !== false) {
       other = mk("input", "msui-q-other"); other.placeholder = s.otherLabel || (opts.length ? "Oder eigene Antwort…" : "Deine Antwort…");
+      other.value = draft.other || "";
       other.oninput = upd; other.onkeydown = (e) => { if (e.key === "Enter" && !send.disabled) send.click(); };
       box.appendChild(other);
     }
@@ -596,7 +602,7 @@ body.light .msui-num{background:#fff}
       if (own) picked.push(own);
       if (!picked.length) return;
       const answer = picked.join(", ");
-      store.set(key, answer);
+      store.set(key, answer); mem.delete(key);
       ctx.send("Antwort auf „" + q + "“: " + answer);
       box.replaceChildren(mk("div", "msui-h", q));
       const d = mk("div", "msui-q-done"); d.append(mk("span", "", "✓"), mk("span", "", "Beantwortet: " + answer)); box.appendChild(d);
@@ -610,28 +616,53 @@ body.light .msui-num{background:#fff}
   B.quiz = (s, ctx) => {
     const box = mk("div", "msui-box"); head(box, Object.assign({}, s, { title: s.title || "Quiz" }), ctx);
     const qs = s.questions ? arr(s.questions) : [s];
-    let right = 0, answered = 0;
-    const score = mk("div", "msui-mut");
+    // Antworten bleiben gespeichert (auch nach Neuzeichnen, Chat-Wechsel und Neuladen).
+    const key = "msui-quiz-" + hash(JSON.stringify([s.title, s.id, qs.map((q) => [q.question || q.frage, q.options])]));
+    let picks = store.get(key); if (!picks || typeof picks !== "object") picks = {};
+    const ansOf = (q) => (typeof q.answer === "number" ? q.answer : arr(q.options).map(str).indexOf(str(q.answer)));
+    const score = mk("div", "msui-mut"), foot = mk("div", "msui-btns");
+    const marks = [];
+    const total = () => {
+      const done = qs.filter((_, i) => picks[i] != null).length, right = qs.filter((q, i) => picks[i] === ansOf(q)).length;
+      if (qs.length > 1) score.textContent = done ? right + " von " + done + " richtig" + (done === qs.length ? " – fertig!" : "") : "";
+      foot.textContent = "";
+      if (done) {
+        if (done === qs.length) {
+          const send = mk("button", "msui-btn", s.sendLabel || "Ergebnis an Mythos schicken"); send.type = "button";
+          send.onclick = () => {
+            const wrong = qs.map((q, i) => (picks[i] !== ansOf(q) ? "„" + str(q.question || q.frage || "") + "“ (meine Antwort: " + str(arr(q.options)[picks[i]]) + ")" : "")).filter(Boolean);
+            ctx.send("Quiz-Ergebnis" + (s.title ? " „" + s.title + "“" : "") + ": " + right + " von " + qs.length + " richtig." + (wrong.length ? " Falsch beantwortet: " + wrong.join("; ") + ". Erklär mir kurz, was ich da falsch verstanden habe, und stell mir dazu eine neue Frage." : " Alles richtig – gib mir schwierigere Fragen."));
+          };
+          foot.appendChild(send);
+        }
+        const again = mk("button", "msui-btn", "Nochmal"); again.type = "button";
+        again.onclick = () => { picks = {}; store.set(key, picks); marks.forEach((m) => m(true)); total(); };
+        foot.appendChild(again);
+      }
+    };
     qs.forEach((q, qi) => {
       const w = mk("div"); if (qi) w.style.marginTop = "14px";
       rich(w.appendChild(mk("div")), q.question || q.frage || "").parentNode.lastChild.style.fontWeight = "600";
       const bs = mk("div", "msui-btns"); bs.style.marginTop = "8px";
       const ex = mk("div", "msui-mut"); ex.style.marginTop = "6px";
-      const ans = typeof q.answer === "number" ? q.answer : arr(q.options).map(str).indexOf(str(q.answer));
+      const ans = ansOf(q);
+      const mark = (reset) => {
+        const i = picks[qi];
+        [...bs.children].forEach((x, j) => { x.classList.toggle("ok", !reset && i != null && j === ans); x.classList.toggle("bad", !reset && i != null && j === i && i !== ans); x.disabled = !reset && i != null; });
+        ex.textContent = "";
+        if (!reset && i != null) rich(ex, (i === ans ? "✓ Richtig. " : "✗ Leider falsch. ") + (q.explanation || q.erklaerung || (i === ans ? "" : "Richtig wäre: " + str(arr(q.options)[ans]))));
+      };
+      marks.push(mark);
       arr(q.options).forEach((o, i) => {
         const b = mk("button", "msui-btn", str(o)); b.type = "button";
-        b.onclick = () => {
-          if (w._done) return; w._done = true; answered++;
-          [...bs.children].forEach((x, j) => { if (j === ans) x.classList.add("ok"); });
-          if (i === ans) right++; else b.classList.add("bad");
-          if (q.explanation || q.erklaerung) rich(ex, (i === ans ? "✓ Richtig. " : "✗ Leider falsch. ") + (q.explanation || q.erklaerung));
-          if (qs.length > 1) score.textContent = right + " von " + answered + " richtig" + (answered === qs.length ? " – fertig!" : "");
-        };
+        b.onclick = () => { if (picks[qi] != null) return; picks[qi] = i; store.set(key, picks); mark(false); total(); };
         bs.appendChild(b);
       });
       w.append(bs, ex); box.appendChild(w);
+      mark(false);
     });
-    if (qs.length > 1) { score.style.marginTop = "10px"; box.appendChild(score); }
+    score.style.marginTop = "10px"; foot.style.marginTop = "8px";
+    box.append(score, foot); total();
     return box;
   };
 

@@ -1223,10 +1223,23 @@ const Chat = () => {
 
   // Buttons in der intelligenten Oberfläche (```mythos-ui) schicken ihren Text als neue Nachricht.
   useEffect(() => {
-    const onSmart = (e: Event) => { const t = (e as CustomEvent<string>).detail; if (t) sendRef.current?.(t); };
+    const onSmart = (e: Event) => {
+      const t = (e as CustomEvent<string>).detail; if (!t) return;
+      // Schreibt Mythos gerade noch, geht der Klick nicht verloren: Er wird direkt danach gesendet.
+      if (sendingRef.current || sendingStateRef.current) { smartQueueRef.current.push(t); toast("Wird gesendet, sobald Mythos fertig ist", { duration: 2500 }); }
+      else sendRef.current?.(t);
+    };
     window.addEventListener(SMART_UI_SEND, onSmart);
     return () => window.removeEventListener(SMART_UI_SEND, onSmart);
   }, []);
+  const smartQueueRef = useRef<string[]>([]);
+  const sendingStateRef = useRef(false);
+  sendingStateRef.current = sending;
+  useEffect(() => {
+    if (sending || !smartQueueRef.current.length) return;
+    const t = setTimeout(() => { if (sendingRef.current) return; const next = smartQueueRef.current.shift(); if (next) sendRef.current?.(next); }, 250);
+    return () => clearTimeout(t);
+  }, [sending, messages.length]);
 
   // /app?mode=support (Minecraft-Link) stellt den Modus für den neuen Chat ein.
   useEffect(() => {
