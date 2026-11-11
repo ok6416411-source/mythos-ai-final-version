@@ -360,6 +360,27 @@ renderer.setAnimationLoop(() => { const t = clock.getElapsedTime(); wheels.forEa
 \`\`\`
 Für andere Objekte gleiches Prinzip: Haus = Fundament, Wände (Extrude mit Fenster-Löchern über \`shape.holes\`), Dach (Extrude Dreieck), Fensterrahmen, Tür, Schornstein, Zaun (Instanced), Bäume (Instanced Stamm + Icosahedron-Kronen). Planet = Sphere mit Noise-verschobenen Vertices + Atmosphäre (BackSide, additive) + Ringe (RingGeometry) + Sternfeld (Points, 3000).`;
 
+const APP = `## Apps bauen (eine HTML-Datei, die sich wie ein echtes Produkt anfühlt)
+Vor dem Schreiben still festlegen: Wer nutzt es wofür? Welche 3–6 Kernfunktionen? Welche Daten gibt es (Felder, Typen)? Welche Ansichten?
+- **Aufbau im Code:** EIN zentrales \`state\`-Objekt, \`render()\` baut die Ansicht aus dem State, Ereignisse ändern nur den State und rufen \`render()\`/\`save()\` auf. Keine verstreuten DOM-Basteleien. Event-Delegation (\`data-action\`) statt hunderter Listener.
+- **Daten bleiben erhalten:** \`localStorage\` mit try/catch, Versionsnummer im gespeicherten Objekt, sinnvolle Beispiel-Daten beim ersten Start (nie eine leere, tote App zeigen).
+- **Jede Funktion ist fertig:** Anlegen, Bearbeiten, Löschen (mit Rückgängig oder Nachfrage), Suchen/Filtern/Sortieren, wo Listen vorkommen. Jeder sichtbare Knopf tut etwas – keine Attrappen, kein „kommt bald“.
+- **Zustände:** leer (freundlicher Hinweis + Knopf), lädt, Fehler (verständlicher Text), Erfolg (kurze Rückmeldung/Toast). Eingaben prüfen (leer, zu lang, falsches Format) und die Meldung direkt am Feld zeigen.
+- **Bedienung:** funktioniert am Handy (ab 360 px, Touch-Ziele ≥ 44 px) und am PC (Tastatur: Enter sendet, Esc schließt, Fokus sichtbar). Dialoge schließen per Esc und Klick daneben.
+- **Aussehen:** ein klares Layout (Kopf, Hauptbereich, ggf. Seitenleiste/Tab-Leiste), CSS-Variablen für Farben, hell UND dunkel über \`prefers-color-scheme\`, eine Akzentfarbe, 8-px-Raster, sanfte Übergänge (150–250 ms). Zahlen/Datum mit \`Intl\` formatieren.
+- **Sicherheit:** Nutzertexte nie per \`innerHTML\` ungefiltert einsetzen (\`textContent\` oder escapen).
+- **Selbsttest vor dem Senden:** Geh jede Kernfunktion im Kopf durch: Klick → welcher Handler → welcher State → was rendert? Gibt es jede ID/Funktion, die aufgerufen wird? Läuft es ohne Konsole-Fehler beim ersten Laden mit leerem Speicher?`;
+
+const CODE = `## Programmieren – Qualitätsmaßstab für jede Sprache
+- **Erst verstehen:** Was genau soll rein, was soll raus, welche Randfälle (leer, null, sehr groß, Umlaute/Unicode, doppelte Werte, Zeitzonen)? Bei unklarer Anforderung die naheliegendste Annahme treffen und in einem Satz nennen.
+- **Vollständig und lauffähig:** kompletter Code mit allen Importen, keine Platzhalter, keine erfundenen Funktionen oder Pakete. Nur APIs verwenden, bei denen du dir sicher bist – sonst die Standardbibliothek. Versionen/Befehle zum Installieren und Starten dazuschreiben.
+- **Im Kopf ausführen:** Geh den Code mit einem normalen und einem Rand-Beispiel Zeile für Zeile durch, bevor du ihn sendest. Typische Fehler gezielt prüfen: Off-by-one, vergessenes \`await\`, Mutieren während des Iterierens, falscher Vergleich (\`==\`/\`is\`), Integer-Division, nicht geschlossene Ressourcen, Fehlerfall ohne Behandlung.
+- **Fehler beheben:** Fehlermeldung wörtlich lesen (Datei, Zeile, Typ), Ursache benennen, gezielt beheben – nicht den Code drumherum umschreiben. Erklären, WARUM es kaputt war, in ein bis zwei Sätzen.
+- **Lesbar:** sprechende Namen, kleine Funktionen mit einer Aufgabe, früh zurückkehren statt tief schachteln, Konstanten statt magischer Zahlen. Kommentare nur für das Warum.
+- **Robust an den Grenzen:** Eingaben von außen prüfen, Datei-/Netzwerkfehler abfangen, Timeouts setzen, nie Geheimnisse im Code, SQL nur parametrisiert, keine Shell-Befehle aus Nutzereingaben zusammensetzen.
+- **Sprach-Spezifisches:** Python: Type Hints, \`pathlib\`, \`with\`, f-Strings, \`if __name__ == "__main__"\`. JavaScript/TypeScript: \`const\`/\`let\`, async/await mit try/catch, strikte Typen statt \`any\`, ES-Module. Java: aktuelle Sprachmittel (records, var, Streams), Ressourcen in try-with-resources. C#: async bis oben durchziehen, \`using\`, nullable beachten.
+- **Antwort:** erst ein Satz, was der Code tut, dann der Code, dann kurz „So startest du es“ und ggf. bekannte Grenzen. Keine langen Vorreden.`;
+
 const GRAPHICS = `## Grafiken zeichnen (statt Bild-KI)
 - Ein SVG pro Grafik, vollständig und eigenständig: passende viewBox (Logo/Icon 0 0 512 512, Poster 0 0 1080 1350, Szene/Thumbnail 0 0 1920 1080).
 - Qualität wie ein Illustrator: klare Komposition, begrenzte harmonische Palette (3–6 Farben + Abstufungen), Verläufe (linearGradient/radialGradient), weiche Schatten (filter + feGaussianBlur), Lichtkanten, Tiefe durch Vorder-/Mittel-/Hintergrund.
@@ -460,7 +481,7 @@ const PACKS_MC = `## Resource Packs, Datapacks & Shader
 
 /** Kategorie-Präfix der KI-Wissens-Artikel in knowledge_articles (Admin → „KI-Wissen einspielen“). */
 export const CRAFT_CATEGORY_PREFIX = "ki-";
-export const CRAFT_KNOWLEDGE_VERSION = "KI-Wissen 2026-11-06b";
+export const CRAFT_KNOWLEDGE_VERSION = "KI-Wissen 2026-11-11";
 
 type Pack = { id: string; title: string; test: RegExp; text: string };
 const PACKS: Pack[] = [
@@ -470,7 +491,9 @@ const PACKS: Pack[] = [
   { id: "graphics", title: "Grafiken & Texturen", test: /bild|grafik|logo|icon|poster|zeichne|illustration|thumbnail|banner|hintergrund|wallpaper|textur|texture|sprite|pixel ?art|\.svg|\.png|\/image/i, text: GRAPHICS },
   { id: "web", title: "Web, Spiele & Grafik", test: /html|webseite|website|landing|spiel|game|canvas|animation|three|app bauen|ui|design|css|javascript|react/i, text: WEB },
   { id: "packs", title: "Resource Packs, Datapacks & Shader", test: /resource ?pack|ressourcenpaket|texturepack|texture pack|datapack|datenpaket|mcfunction|shader|iris|optifine|pack\.mcmeta/i, text: PACKS_MC },
+  { id: "app", title: "Apps bauen", test: /\bapp\b|anwendung|tool\b|rechner|planer|tracker|dashboard|to-?do|verwaltung|notiz|quiz|formular|generator|web-?app/i, text: APP },
   { id: "plugin", title: "Minecraft-Plugins & Mods", test: /plugin|spigot|paper|bukkit|forge|fabric|mod\b|datapack|java/i, text: PLUGIN },
+  { id: "code", title: "Programmieren (alle Sprachen)", test: /code|programm|skript|script|funktion|klasse|bug|fehler|exception|traceback|python|javascript|typescript|java\b|c#|c\+\+|rust|golang|sql|regex|api\b|algorithm|\.(py|js|ts|java|cs|cpp|rs|go|sql)\b/i, text: CODE },
 ];
 
 /** Alle Wissens-Artikel zum Einspielen in die Knowledge Base (Admin-Button). */

@@ -258,14 +258,25 @@ function compact(history, level) {
 
 let tokens = { in: 0, out: 0 };
 let currentTaskId = null;
+let altRoute = null; // { system } solange eine zweite Meinung geholt wird
+async function secondOpinion(history, lastResult) {
+  try {
+    say(C.d + "🧠 Zweite Meinung von einem anderen Modell …" + C.x);
+    const tail = history.slice(-8).concat([{ role: "user", content: String(lastResult || "").slice(-3000) }]).map((m) => (m.role === "user" ? "WERKZEUG/NUTZER: " : "AGENT: ") + String(typeof m.content === "string" ? m.content : "").slice(0, 2500)).join("\n\n");
+    altRoute = { system: "Du bist ein erfahrener Senior-Entwickler und hilfst einem Kollegen, der feststeckt. Du nutzt keine Werkzeuge, du analysierst nur." };
+    const out = await once([{ role: "user", content: "Ein Coding-Agent steckt fest (mehrere Fehlschläge in Folge). Hier die letzten Schritte:\n\n" + tail + "\n\nAnalysiere: 1) Was ist die WAHRE Ursache (zitiere die entscheidende Fehlermeldung)? 2) Welche falsche Annahme macht der Agent? 3) Der konkrete nächste Schritt (Datei/Stelle, Änderung oder Befehl). Kurz, höchstens 12 Zeilen, keine Werkzeug-Blöcke." }], () => {}, () => {});
+    const t = String(out || "").replace(TOOL_BLOCK_RE, "").trim();
+    return t ? "\n\nZWEITE MEINUNG eines anderen Modells (prüfe sie kritisch am Code, dann handle danach):\n" + t.slice(0, 2500) : "";
+  } catch { return ""; } finally { altRoute = null; }
+}
 async function once(messages, onText, onThink) {
   const c = ctl = new AbortController(); const to = setTimeout(() => c.abort(), 170000);
-  const system = SYSTEM();
+  const system = altRoute ? altRoute.system : SYSTEM();
   try {
     const r = await fetch(API, {
       method: "POST", signal: c.signal,
       headers: { "content-type": "application/json", "x-api-key": cfg.key, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: cfg.model || "mythos-code", task_id: currentTaskId, max_tokens: 8000, system, messages, stream: true }),
+      body: JSON.stringify({ model: cfg.model || "mythos-code", route: altRoute ? "alt" : undefined, task_id: currentTaskId, max_tokens: 8000, system, messages, stream: true }),
     });
     if (!r.ok) { const j = await r.json().catch(() => ({})); const e = new Error(j?.error?.message || ("HTTP " + r.status)); e.status = r.status; throw e; }
     const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = "", out = "", think = "", measured = null;
@@ -448,7 +459,8 @@ async function turnInner(history) {
     const t = pb.tool, bad = toolProblem(t);
     if (bad) { history.push({ role: "user", content: "Werkzeug-Ergebnis:\n" + bad }); continue; }
     const res = await runTool(t), resText = typeof res === "string" ? res : res.text;
-    const loopHint = tracker.note(t, resText) || "";
+    let loopHint = tracker.note(t, resText) || "";
+    if (/Fehlschläge in Folge/.test(loopHint) && !stopped) loopHint += await secondOpinion(history, resText);
     // Screenshot nur in der neuesten Prüfung mitschicken (spart Tokens).
     if (res.image) history.forEach((m) => { if (m.shot) { delete m.images; delete m.shot; } });
     history.push(res.image ? { role: "user", content: "Werkzeug-Ergebnis:\n" + resText + "\n\n(Screenshot der Seite anbei – sieh ihn dir an: Ist das Layout so, wie der Nutzer es will?)", images: [res.image], shot: true } : { role: "user", content: "Werkzeug-Ergebnis:\n" + resText + loopHint });

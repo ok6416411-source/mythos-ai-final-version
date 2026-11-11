@@ -4,6 +4,7 @@
 // POST { kind, ... }
 import { createClient } from "npm:@supabase/supabase-js@2.103.3";
 import { aiChat } from "../_shared/ai.ts";
+import { relevantCraftKnowledge } from "../_shared/craftKnowledge.ts";
 import { generateImage } from "../_shared/image.ts";
 
 const corsHeaders = {
@@ -58,8 +59,14 @@ async function ask(body: any): Promise<string> {
   const model = ASK_MODELS.has(body.model) ? body.model : DEFAULT_MODEL;
   const messages = Array.isArray(body.messages) ? body.messages.slice(-12) : [];
   if (!messages.length) throw new Error("Keine Nachricht");
-  const out = [...(typeof body.system === "string" && body.system ? [{ role: "system", content: body.system.slice(0, 12000) }] : []), ...messages];
-  const r = await aiChat({ model, messages: out, stream: false, ...(body.json ? { response_format: { type: "json_object" } } : {}) });
+  // App-Bau (Foto zu App, KI-Team, Cloud-PC): Bau-Wissen dazugeben und das stärkste verfügbare Modell nehmen.
+  const sys = typeof body.system === "string" ? body.system.slice(0, 12000) : "";
+  const lastUser = [...messages].reverse().find((m: any) => m?.role === "user");
+  const lastText = typeof lastUser?.content === "string" ? lastUser.content : Array.isArray(lastUser?.content) ? lastUser.content.map((p: any) => p?.text || "").join(" ") : "";
+  const building = /<!DOCTYPE html>|HTML-Dokument|lauffähig|\bApp\b/i.test(sys);
+  const craft = building && !body.json ? relevantCraftKnowledge("app html " + lastText.slice(0, 2000), 3) : "";
+  const out = [...(sys ? [{ role: "system", content: sys + (craft ? "\n\n" + craft : "") }] : []), ...messages];
+  const r = await aiChat({ model, messages: out, stream: false, ...(building ? { mythos_tier: "strong", mythos_max_tokens: 16000 } : {}), ...(body.json ? { response_format: { type: "json_object" } } : {}) });
   if (!r.ok) {
     const t = await r.text().catch(() => "");
     throw new Error(r.status === 429 ? "Gerade zu viele Anfragen, bitte kurz warten." : r.status === 402 ? "KI-Guthaben ist leer." : "KI nicht erreichbar: " + t.slice(0, 160));

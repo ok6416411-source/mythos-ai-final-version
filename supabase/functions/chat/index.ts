@@ -526,6 +526,8 @@ Bilder & PDFs: Du kannst hochgeladene Bilder direkt sehen und analysieren.${memo
       stream: true,
     };
     if (resolved.reasoning) body.reasoning_effort = resolved.reasoning;
+    // Dateien/Code/gründliche Stufen: ohne Gateway an das stärkste verfügbare Modell (siehe _shared/ai.ts).
+    if (resolved.depth) body.mythos_tier = "strong";
     if (resolved.fast && isOpenAI) body.service_tier = "priority";
     if (resolved.maxOut) {
       if (isOpenAI) body.max_completion_tokens = resolved.maxOut;

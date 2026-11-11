@@ -288,13 +288,25 @@ function compact(h, level) {
   return older.map((m) => ({ role: m.role, content: shorten(m.content, oldMax) }))
     .concat(h.slice(cut).map((m) => withImages(m, shorten(m.content, recentMax))));
 }
+/** Steckt Mythos fest, schaut ein ANDERES Modell auf den Verlauf und gibt einen Rat (wie ein Kollege, der kurz drüberschaut). */
+async function secondOpinion(run, hist) {
+  try {
+    activityPush(run, "🧠", "Zweite Meinung von einem anderen Modell holen");
+    const tail = hist.slice(-8).map((m) => (m.role === "user" ? "WERKZEUG/NUTZER: " : "AGENT: ") + String(typeof m.content === "string" ? m.content : "").slice(0, 2500)).join("\n\n");
+    run.route = "alt";
+    const r = await once(run, [{ role: "user", content: "Ein Coding-Agent steckt fest (mehrere Fehlschläge in Folge). Hier die letzten Schritte:\n\n" + tail + "\n\nAnalysiere als erfahrener Entwickler: 1) Was ist die WAHRE Ursache (zitiere die entscheidende Fehlermeldung)? 2) Welche falsche Annahme macht der Agent? 3) Der konkrete nächste Schritt (welche Datei/Stelle, welche Änderung oder welcher Befehl). Kurz, höchstens 12 Zeilen, keine Werkzeug-Blöcke." }],
+      "Du bist ein erfahrener Senior-Entwickler und hilfst einem Kollegen, der feststeckt. Du nutzt keine Werkzeuge, du analysierst nur.", () => {}, () => {});
+    const t = String(r.text || "").replace(TOOL_BLOCK_RE, "").trim();
+    return t ? "\n\nZWEITE MEINUNG eines anderen Modells (prüfe sie kritisch am Code, dann handle danach):\n" + t.slice(0, 2500) : "";
+  } catch (e) { return ""; } finally { run.route = ""; }
+}
 async function once(run, messages, system, onText, onThink) {
   const c = run.ctl = new AbortController(); const to = setTimeout(() => c.abort(), 170000);
   const tok = run.chat.tokens = run.chat.tokens || { in: 0, out: 0 };
   try {
     const r = await fetch(CFG.fn + "/v1-messages", { method: "POST", signal: c.signal,
       headers: { "content-type": "application/json", "x-api-key": cfg.key, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: run.model, effort: cfg.effort || "normal", task_id: run.taskId, max_tokens: EFFORT_TOKENS[cfg.effort] || 8000, system: system, messages: messages, stream: true }) });
+      body: JSON.stringify({ model: run.model, route: run.route || undefined, effort: cfg.effort || "normal", task_id: run.taskId, max_tokens: EFFORT_TOKENS[cfg.effort] || 8000, system: system, messages: messages, stream: true }) });
     if (!r.ok) { const j = await r.json().catch(() => ({})); const e = new Error((j.error && j.error.message) || ("HTTP " + r.status)); e.status = r.status; throw e; }
     const rd = r.body.getReader(), dec = new TextDecoder(); let buf = "", out = "", think = "", measured = null;
     for (;;) { const x = await rd.read(); if (x.done) break; buf += dec.decode(x.value, { stream: true }); let i;
@@ -654,7 +666,8 @@ async function runAgent(c, opts) {
         if (r.bg && r.bg.url) noteTo(c, "▶ Läuft im Hintergrund: " + r.bg.url + " (" + t.cmd + ")");
         if (r.diff && r.diff.lines.length) { addTo(c, "diff", "", { path: t.path, d: r.diff }); changed = true; }
       }
-      const loopHint = tracker.note(t, r.result) || "";
+      let loopHint = tracker.note(t, r.result) || "";
+      if (/Fehlschläge in Folge/.test(loopHint) && !run.stopped) loopHint += await secondOpinion(run, c.history.concat([{ role: "user", content: String(r.result || "").slice(-3000) }]));
       const failed = /^(FEHLER|Exit: [1-9])|\nExit: [1-9]|ERGEBNIS: ✗/.test(String(r.result || ""));
       pushResult(c.history, r, (failed ? "\n\n(Das ist fehlgeschlagen. Lies die Fehlermeldung genau, finde die Ursache und behebe sie gezielt – nicht raten, nicht aufgeben.)" : "") + loopHint);
       saveChat(c);

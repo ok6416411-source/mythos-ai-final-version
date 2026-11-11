@@ -1,4 +1,4 @@
-import { aiFetch } from "../_shared/ai.ts";
+import { aiFetch, aiText } from "../_shared/ai.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { PLUGIN_CATEGORY_PREFIX, searchServerKnowledge } from "../_shared/serverKnowledge.ts";
 import { MYTHOS_ABILITIES, MYTHOS_WORK_RULES, relevantCraftKnowledge, wantsLongOutput } from "../_shared/craftKnowledge.ts";
@@ -157,6 +157,32 @@ async function agentLoop(convo: any[], key: string, supabase: any, onTool: (labe
   return "";
 }
 
+/** Gegenprüfung wie im Review: ein ANDERES Modell sucht echte Fehler; gibt es welche, wird einmal gezielt nachgebessert. */
+async function reviewAndRepair(question: string, answer: string, system: string, key: string, step: (label: string) => void): Promise<string> {
+  try {
+    const verdict = (await aiText({
+      model: STRONG, mythos_route: "alt", max_tokens: 1500, temperature: 0.2,
+      messages: [
+        { role: "system", content: "Du bist ein strenger Prüfer (Senior-Entwickler). Prüfe das ERGEBNIS gegen die ANFRAGE – nur auf ECHTE Fehler: Code, der so nicht läuft (Syntax, nicht definierte Funktionen/Variablen, falsche Bibliotheks-Aufrufe, fehlende Importe oder Dateien), abgeschnittene oder mit Platzhaltern („…“, „Rest bleibt gleich“) gekürzte Dateien, Anforderungen der Anfrage, die fehlen oder falsch umgesetzt sind. Keine Stil- oder Geschmackskritik. Ist alles in Ordnung, antworte exakt: OK. Sonst eine nummerierte Liste (höchstens 6 Punkte): genaue Stelle + was falsch ist + wie es richtig wäre." },
+        { role: "user", content: "ANFRAGE:\n" + question.slice(0, 4000) + "\n\nERGEBNIS:\n" + answer },
+      ],
+    }, key)).trim();
+    if (!verdict || verdict.length < 15 || /^(ok\b|alles (ok|in ordnung))/i.test(verdict)) { step("Gegenprüfung durch zweites Modell bestanden"); return answer; }
+    step("Gegenprüfung hat etwas gefunden – wird behoben");
+    const fixed = await aiText({
+      model: STRONG, mythos_tier: "strong", max_tokens: 24000,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: question },
+        { role: "assistant", content: answer },
+        { role: "user", content: "Ein Prüfer hat diese Punkte gemeldet:\n" + verdict.slice(0, 3000) + "\n\nPrüfe jeden Punkt selbst am Code. Behebe alle, die stimmen, und gib dann die VOLLSTÄNDIGE korrigierte Antwort aus (jede Datei komplett, nichts kürzen, den Prüfer nicht erwähnen). Stimmt kein Punkt, gib deine Antwort unverändert aus." },
+      ],
+    }, key);
+    // Nie eine verstümmelte Fassung übernehmen.
+    return fixed && fixed.length > answer.length * 0.7 ? fixed : answer;
+  } catch { return answer; }
+}
+
 /** Helfer wie bei Claude: Aufgabe in unabhängige Teile zerlegen.
  *  kind "research": Teile recherchieren parallel, danach fasst Mythos zusammen.
  *  kind "build": viele/gleichartige Ergebnisse (z. B. 5 Modelle, mehrere Seiten) – jeder Helfer baut seins komplett. */
@@ -236,7 +262,9 @@ Du bist **Mythos v1** — wenn du nach deinem Modell, deiner Version oder deinem
 
         if (planned.kind === "single") {
           // Eine zusammenhängende Aufgabe: ein Agent mit Werkzeugen (bei Dateien/Code das stärkere Modell).
-          const final = await agentLoop([{ role: "system", content: fullSystem }, ...messages], LOVABLE_API_KEY, supabase, step, 8, build ? STRONG : MODEL, interim);
+          let final = await agentLoop([{ role: "system", content: fullSystem }, ...messages], LOVABLE_API_KEY, supabase, step, 8, build ? STRONG : MODEL, interim);
+          // Code/Dateien: vor dem Abschicken von einem zweiten Modell gegenprüfen lassen.
+          if (build && final && final.length > 400 && final.length < 70000 && /```/.test(final)) final = await reviewAndRepair(question, final, fullSystem, LOVABLE_API_KEY, step);
           step("Antwort fertig geschrieben");
           await streamText(final || "Ich konnte dazu leider nichts finden.");
         } else if (planned.kind === "build") {

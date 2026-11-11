@@ -166,6 +166,9 @@ Deno.serve(async (req) => {
     const b: any = { model: a.model, messages: [...systemMsgs, ...a.msgs], stream: streamFlag };
     if (!a.model.startsWith("openai/")) b.max_tokens = max_tokens;
     if (typeof temperature === "number") b.temperature = temperature;
+    // Für die Ausweich-Anbieter (ohne Gateway): Ausgabelänge und ggf. „zweite Meinung“ von einem anderen Modell.
+    b.mythos_max_tokens = Math.max(Number(max_tokens) || 0, 8000);
+    if (body.route === "alt") b.mythos_route = "alt";
     // Sichtbare Gedanken: bei unterstützten Modellen kurz mitdenken lassen und live mitschicken.
     if (a.model.startsWith("openai/")) b.reasoning_effort = effort === "high" ? "medium" : effort === "max" ? "high" : "low";
     return b;

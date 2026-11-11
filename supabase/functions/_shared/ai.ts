@@ -6,6 +6,7 @@
 // /apikeyadmin gespeicherter Wert in der Tabelle app_secrets (siehe nvidia/index.ts).
 import { createClient } from "npm:@supabase/supabase-js@2.103.3";
 import { geminiUsageToOpenAi } from "./usageParse.ts";
+import { nvidiaChat, nvidiaCanHandle, nvidiaKeys, type Tier } from "./nvidia.ts";
 
 const GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const GOOGLE_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
@@ -35,13 +36,13 @@ export function geminiChain(model: string): string[] {
   const m = String(model || "").toLowerCase();
   if (m.includes("image")) return ["gemini-3.1-flash-image", "gemini-3.1-flash-image-preview", "gemini-2.5-flash-image"];
   if (m.includes("lite") || m.includes("nano") || m.includes("luna")) {
-    return ["gemini-3.1-flash-lite", "gemini-3.6-flash"];
+    return ["gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-3.6-flash"];
   }
   if (m.includes("pro") || m.includes("ultra") || m.includes("gpt-5.5") || m.includes("sol")) {
     // pro-preview ist im Free-Tier oft quota-gesperrt -> starke Flash-Modelle als Ersatz
-    return ["gemini-3.1-pro-preview", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.1-flash-lite"];
+    return ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.1-flash-lite"];
   }
-  return ["gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.1-flash-lite"];
+  return ["gemini-3.6-flash", "gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.5-flash", "gemini-3.1-flash-lite"];
 }
 
 export function mapToGemini(model: string): string {
@@ -117,18 +118,63 @@ export async function toGeminiBody(body: Record<string, any>) {
   // Bildgenerierung: Gemini muss ausdrücklich Bilder zurückgeben dürfen.
   if (Array.isArray(body.modalities) && body.modalities.includes("image")) gen.responseModalities = ["TEXT", "IMAGE"];
 
+  // Schwierige Aufgaben: das Modell gründlich nachdenken lassen (wird bei „unbekannt“ automatisch ohne wiederholt).
+  const eff = String(body.reasoning_effort ?? body.reasoning?.effort ?? "");
+  if (eff === "high" || eff === "medium" || tierOf(body.model) === "strong") gen.thinkingConfig = { thinkingLevel: eff === "medium" ? "medium" : "high" };
+
   const out: Record<string, unknown> = { contents };
   if (systemTexts.length) out.systemInstruction = { parts: [{ text: systemTexts.join("\n\n") }] };
   if (Object.keys(gen).length) out.generationConfig = gen;
   return out;
 }
 
-async function googleFetch(model: string, stream: boolean, payload: unknown, key: string) {
+async function googleFetch(model: string, stream: boolean, payload: any, key: string, signal?: AbortSignal) {
   const url = `${GOOGLE_BASE}/${model}:${stream ? "streamGenerateContent?alt=sse" : "generateContent"}`;
-  return await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-    body: JSON.stringify(payload),
+  const send = (p: unknown) => fetch(url, { method: "POST", signal, headers: { "Content-Type": "application/json", "x-goog-api-key": key }, body: JSON.stringify(p) });
+  const r = await send(payload);
+  // Modell kennt die Denk-Einstellung nicht -> gleiche Anfrage ohne.
+  if (r.status === 400 && payload?.generationConfig?.thinkingConfig) {
+    await r.body?.cancel().catch(() => {});
+    const { thinkingConfig: _t, ...gen } = payload.generationConfig;
+    return await send({ ...payload, generationConfig: gen });
+  }
+  return r;
+}
+
+/** Wie stark muss das Modell sein? Aus dem gewünschten Modellnamen abgeleitet. */
+export function tierOf(model: unknown): Tier {
+  const m = String(model || "").toLowerCase();
+  if (/lite|nano|luna|[-_]mini|terra/.test(m)) return "fast";
+  if (/pro|ultra|sol|opus|gpt-5\.5|gpt-5\.4|gpt-6/.test(m)) return "strong";
+  return "mid";
+}
+
+/** Mehrere Anbieter gestaffelt starten: der erste zuerst; antwortet er nicht schnell genug (oder scheitert),
+ *  startet der nächste dazu. Die erste gute Antwort gewinnt, der Rest wird abgebrochen. */
+async function staggered(cands: Array<(signal: AbortSignal) => Promise<Response | null>>, delayMs: number): Promise<Response | null> {
+  return await new Promise((resolve) => {
+    const ctls = cands.map(() => new AbortController());
+    let started = 0, finished = 0, done = false, lastBad: Response | null = null;
+    const timers: number[] = [];
+    const finish = (r: Response | null, winner: number) => {
+      if (done) return; done = true;
+      timers.forEach((t) => clearTimeout(t));
+      ctls.forEach((c, i) => { if (i !== winner) c.abort(); });
+      resolve(r);
+    };
+    const start = () => {
+      if (done || started >= cands.length) return;
+      const i = started++;
+      if (started < cands.length) timers.push(setTimeout(start, delayMs) as unknown as number);
+      cands[i](ctls[i].signal).then((r) => {
+        if (done) { r?.body?.cancel().catch(() => {}); return; }
+        if (r && r.ok) return finish(r, i);
+        if (r) lastBad = r;
+        finished++;
+        if (finished >= cands.length) finish(lastBad, -1); else start();
+      }).catch(() => { finished++; if (finished >= cands.length) finish(lastBad, -1); else start(); });
+    };
+    start();
   });
 }
 
@@ -192,11 +238,17 @@ export async function aiChat(
   body: Record<string, any>,
   lovableKey?: string,
 ): Promise<Response> {
+  // Interner Hinweis (nie an Anbieter weitergeben): diese Anfrage braucht das stärkste Modell, z. B. Dateien/Code.
+  const hint = body.mythos_tier === "strong" ? "strong" as Tier : null;
+  // "alt": bewusst die andere Modell-Familie fragen (zweite Meinung / Gegenprüfung).
+  const alt = body.mythos_route === "alt";
+  const maxHint = Number(body.mythos_max_tokens) || 0;
+  if ("mythos_tier" in body || "mythos_route" in body || "mythos_max_tokens" in body) { body = { ...body }; delete body.mythos_tier; delete body.mythos_route; delete body.mythos_max_tokens; }
   const streaming = body.stream === true;
   const key = lovableKeyOrNull(lovableKey) ?? lovableKeyOrNull(Deno.env.get("LOVABLE_API_KEY"));
 
   const skippedGateway = !!key && Date.now() <= gatewayEmptyUntil;
-  if (key && !skippedGateway) {
+  if (key && !skippedGateway && !(alt && nvidiaCanHandle(body) && (await nvidiaKeys()).length > 0)) {
     try {
       const r = await fetch(GATEWAY, {
         method: "POST",
@@ -216,7 +268,35 @@ export async function aiChat(
     }
   }
 
-  // ---- Google Fallback ----
+  // ---- Ohne Gateway: Google AI Studio und NVIDIA zusammen ----
+  // Starke Aufgaben und alles mit Werkzeugen zuerst an die großen NVIDIA-Modelle (Google kann im
+  // Gratis-Tarif nur Flash und in diesem Weg keine Werkzeuge); der Rest zuerst an Gemini Flash.
+  // Antwortet der erste nicht zügig oder ist ausgelastet, springt automatisch der andere ein.
+  if (maxHint && body.max_tokens == null && body.max_completion_tokens == null) body = { ...body, max_tokens: maxHint };
+  const tier = hint ?? tierOf(body.model);
+  // Hochgestufte Anfrage: auch bei Google die stärkste Kette und gründliches Nachdenken.
+  const gBody = hint && tierOf(body.model) !== "strong" ? { ...body, model: "google/gemini-pro", reasoning_effort: body.reasoning_effort ?? "high" } : body;
+  const hasTools = Array.isArray(body.tools) && body.tools.length > 0;
+  const nvReady = nvidiaCanHandle(body) && (await nvidiaKeys()).length > 0;
+  let resp: Response | null;
+  if (!nvReady) resp = await googleChat(gBody);
+  else {
+    const g = (_s: AbortSignal) => googleChat(gBody);
+    const n = (s: AbortSignal) => nvidiaChat(body, tier, { signal: s, skip: alt ? 1 : 0 });
+    const nvFirst = tier === "strong" || hasTools;
+    // Zweite Meinung: ein ANDERES Modell als sonst – bei starken Aufgaben das zweitbeste NVIDIA-Modell, sonst NVIDIA statt Gemini.
+    resp = await staggered(nvFirst || alt ? [n, g] : [g, n], streaming ? 9_000 : 45_000);
+  }
+  if (resp && resp.ok) return resp;
+
+  // Auch das hat nicht geklappt: Gateway doch wieder versuchen (vielleicht wurde Guthaben nachgeladen).
+  if (skippedGateway) { gatewayEmptyUntil = 0; return aiChat(hint ? { ...body, mythos_tier: hint } : body, lovableKey); }
+  return resp ?? new Response(JSON.stringify({ error: "AI unavailable: kein Anbieter erreichbar" }), { status: 503, headers: { "Content-Type": "application/json" } });
+}
+
+/** Direkt zu Google AI Studio (Gemini Flash): mehrere Modelle und Schlüssel, überlastete werden übersprungen. */
+async function googleChat(body: Record<string, any>): Promise<Response> {
+  const streaming = body.stream === true;
   const keys = await googleKeys();
   const chain = geminiChain(body.model);
   const payload = await toGeminiBody(body);
@@ -234,11 +314,7 @@ export async function aiChat(
   if (streaming && order.length > 1) {
     const racers = order.slice(0, 6).map(([m, k]) => {
       const ctrl = new AbortController();
-      const p = fetch(`${GOOGLE_BASE}/${m}:streamGenerateContent?alt=sse`, {
-        method: "POST", signal: ctrl.signal,
-        headers: { "Content-Type": "application/json", "x-goog-api-key": k },
-        body: JSON.stringify(payload),
-      }).then(r => {
+      const p = googleFetch(m, true, payload, k, ctrl.signal).then(r => {
         if (!r.ok || !r.body) {
           if (r.status === 429 || r.status === 503) googleCooldown.set(m + k.slice(-6), Date.now() + (r.status === 429 ? 10 : 2) * 60_000);
           console.warn("[ai] google race failed", m, r.status);
@@ -293,9 +369,6 @@ export async function aiChat(
     }
   }
 
-
-  // Google hat auch nicht geklappt: Gateway doch wieder versuchen (vielleicht wurde Guthaben nachgeladen).
-  if (skippedGateway) { gatewayEmptyUntil = 0; return aiChat(body, lovableKey); }
 
   return new Response(JSON.stringify({ error: `AI unavailable: ${lastText}` }), {
     status: lastStatus,
