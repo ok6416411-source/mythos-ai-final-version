@@ -3,6 +3,7 @@ import { ExternalLink, RotateCw, Share2, X, Code2, Eye, Check } from "lucide-rea
 import { toast } from "sonner";
 import type { PreviewItem } from "@/lib/livePreview";
 import { previewDoc, shareResult } from "@/lib/share";
+import { openInMythosBrowser } from "@/components/EmbeddedBrowser";
 
 const BBModelViewer = lazy(() => import("@/components/preview/BBModelViewer"));
 
@@ -14,7 +15,10 @@ export default function LivePreview({ item, prompt, onClose }: { item: PreviewIt
   const [shared, setShared] = useState(false);
   const doc = item.kind === "bbmodel" ? "" : previewDoc(item.name, item.content);
 
-  const openTab = () => { const u = URL.createObjectURL(new Blob([doc || item.content], { type: item.kind === "bbmodel" ? "application/json" : "text/html" })); window.open(u, "_blank"); };
+  const openTab = () => {
+    if (item.kind !== "bbmodel") return openInMythosBrowser({ html: doc || item.content, title: item.name });
+    const u = URL.createObjectURL(new Blob([item.content], { type: "application/json" })); window.open(u, "_blank");
+  };
   const share = async (gallery: boolean) => {
     setSharing(true);
     try {
@@ -36,7 +40,7 @@ export default function LivePreview({ item, prompt, onClose }: { item: PreviewIt
         <span className="mr-1 text-[11px] text-muted-foreground">Live-Vorschau</span>
         <Btn title={code ? "Vorschau" : "Code"} onClick={() => setCode(!code)}>{code ? <Eye className="h-4 w-4" /> : <Code2 className="h-4 w-4" />}</Btn>
         <Btn title="Neu laden" onClick={() => setNonce(nonce + 1)}><RotateCw className="h-4 w-4" /></Btn>
-        <Btn title="In neuem Tab öffnen" onClick={openTab}><ExternalLink className="h-4 w-4" /></Btn>
+        <Btn title="Groß öffnen" onClick={openTab}><ExternalLink className="h-4 w-4" /></Btn>
         <button type="button" disabled={sharing} onClick={() => share(false)} title="Link zum Teilen kopieren"
           className="ml-1 inline-flex items-center gap-1.5 rounded-full bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:opacity-50">
           {shared ? <Check className="h-3.5 w-3.5" /> : <Share2 className="h-3.5 w-3.5" />} Teilen

@@ -1,5 +1,6 @@
 import ErrorCenter from "@/components/ErrorCenter";
 import ModelFxLayer from "@/components/ModelFxLayer";
+import EmbeddedBrowser from "@/components/EmbeddedBrowser";
 import { lazy, Suspense, type ComponentType } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
@@ -90,6 +91,7 @@ const App = () => (
       <Sonner />
       <ErrorCenter />
       <ModelFxLayer />
+      <EmbeddedBrowser />
       <BrowserRouter>
         <AuthProvider>
           <SplashScreen />

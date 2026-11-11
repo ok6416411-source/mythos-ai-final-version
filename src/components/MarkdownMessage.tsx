@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { openInMythosBrowser } from "@/components/EmbeddedBrowser";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Check, Copy, Download, Play, FileArchive, FileText, FileCode2, FileImage, FileSpreadsheet, Box, Loader2 } from "lucide-react";
@@ -125,13 +126,8 @@ function CodeCard({ lang, code }: { lang: string; code: string }) {
     setTimeout(() => setCopied(false), 1600);
   };
 
-  const run = () => {
-    const url = URL.createObjectURL(new Blob([code], { type: "text/html;charset=utf-8" }));
-    const a = document.createElement("a");
-    a.href = url; a.target = "_blank"; a.rel = "noopener";
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
-  };
+  // Im eingebetteten Mythos-Browser öffnen statt in einem neuen Tab.
+  const run = () => openInMythosBrowser({ html: code, title: (code.match(/<title>([^<]{1,60})<\/title>/i)?.[1] || "App").trim() });
 
   return (
     <div className="not-prose group/code relative my-3 overflow-hidden rounded-xl border border-white/10 bg-background/50">

@@ -529,8 +529,27 @@ Bilder & PDFs: Du kannst hochgeladene Bilder direkt sehen und analysieren.${memo
     // Sofort antworten und Verbindung mit Pings offen halten, während das Modell startet/nachdenkt.
     // So wartet der Browser nie auf leere Leitung, und jedes Wort erscheint, sobald es da ist.
     const enc = new TextEncoder();
+    // Läuft weiter, auch wenn der Nutzer die Seite verlässt: Die Antwort wird fertig erzeugt und
+    // dann direkt in den Chat gespeichert (sonst ginge die Anfrage beim Verlassen verloren).
+    let gone = false, answer = "", lineBuf = "";
+    const dec = new TextDecoder();
+    const collect = (value: Uint8Array) => {
+      lineBuf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = lineBuf.indexOf("\n")) >= 0) {
+        const line = lineBuf.slice(0, i).trim(); lineBuf = lineBuf.slice(i + 1);
+        if (!line.startsWith("data:")) continue;
+        try { const d = JSON.parse(line.slice(5).trim())?.choices?.[0]?.delta?.content; if (typeof d === "string") answer += d; } catch { /* DONE */ }
+      }
+    };
+    let finishWork: () => void = () => {};
+    const work = new Promise<void>((r) => { finishWork = r; });
+    try { (globalThis as any).EdgeRuntime?.waitUntil?.(work); } catch { /* lokal ohne EdgeRuntime */ }
     const live = new ReadableStream({
-      async start(c) {
+      cancel() { gone = true; },
+      async start(c0) {
+        // Schreiben ins Netz darf nie das Weiterarbeiten stoppen.
+        const c = { enqueue: (v: Uint8Array) => { if (!gone) try { c0.enqueue(v); } catch { gone = true; } }, close: () => { try { c0.close(); } catch { /* zu */ } } } as unknown as ReadableStreamDefaultController<Uint8Array>;
         let open = true;
         const ping = setInterval(() => { if (open) try { c.enqueue(enc.encode(": ping\n\n")); } catch { /* closed */ } }, 4000);
         c.enqueue(enc.encode(": start\n\n"));
@@ -546,7 +565,7 @@ Bilder & PDFs: Du kannst hochgeladene Bilder direkt sehen und analysieren.${memo
               : "❌ Antwort fehlgeschlagen. Bitte nochmal versuchen.";
             c.enqueue(sse({ choices: [{ delta: { content: msg } }] })); c.enqueue(sseDone());
           } else {
-            const usage = await forwardUsageStream(resp.body, value => c.enqueue(value));
+            const usage = await forwardUsageStream(resp.body, value => { collect(value); c.enqueue(value); });
             await finishUsage(c, usage);
           }
         } catch (e) {
@@ -555,6 +574,14 @@ Bilder & PDFs: Du kannst hochgeladene Bilder direkt sehen und analysieren.${memo
         } finally {
           open = false; clearInterval(ping);
           try { c.close(); } catch { /* closed */ }
+          // Nutzer ist weg: fertige Antwort selbst speichern, damit sie beim Zurückkommen im Chat steht.
+          if (gone && conversationId && answer.trim()) {
+            try {
+              await supabase.from("messages").insert({ conversation_id: conversationId, role: "assistant", content: answer, metadata: { saved_by: "server", task_id: taskId } });
+              await supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", conversationId);
+            } catch (e) { console.error("save after leave:", e); }
+          }
+          finishWork();
         }
       },
     });

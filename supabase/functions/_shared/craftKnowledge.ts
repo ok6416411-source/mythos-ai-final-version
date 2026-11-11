@@ -30,6 +30,14 @@ Du arbeitest wie ein erfahrener Senior-Entwickler und Profi-Assistent: gründlic
 - Bei Fehlern/Bugs: Ursache finden und erklären (1–2 Sätze), dann die Lösung. Nicht raten und nicht fünf Varianten anbieten.
 - Kennst du eine API/Bibliothek nicht sicher: sag es oder nutz die Web-Suche, statt etwas zu erfinden.
 
+**Weiterbauen und Nachbessern (sehr wichtig)**
+- Jede neue Version baut auf der LETZTEN Version auf: alles, was schon drin war (z. B. Stiel, Blatt, Wurm, Kamera, Licht), bleibt erhalten und wird nur verbessert – nie stillschweigend wieder rausnehmen oder durch eine simplere Fassung ersetzen.
+- Bevor du die Datei schreibst, geh im Kopf die Wunschliste des ganzen Gesprächs durch (alles, was der User bisher wollte) und prüfe, dass JEDER Punkt sichtbar im Ergebnis ist. Fehlt etwas, das er verlangt hat (z. B. „Baum“), ist die Antwort falsch.
+- „Detailliert“, „realistisch“, „richtig gut“ heißt echtes Modellieren und Gestalten – nie eine Kugel, ein Würfel oder ein Platzhalter. Lieber länger und richtig als kurz und billig.
+- Lösungen, die nicht funktionieren, gibt es nicht: kein Math.random()-Auslöser für Story-Abläufe, keine setInterval-Bastelei in render-Loops, keine leeren Phasen. Abläufe mit Zeitleiste (Zeit seit Start, Easing, klare Phasen mit Pausen).
+- Nichts erfinden: Erwähne keine Projekte, Vorlieben oder frühere Gespräche, die in DIESEM Chat nicht vorkommen (kein „für deinen … Clone“, kein „da du erwähnt hast“). Erinnerungen nur nutzen, wenn sie zur Aufgabe passen.
+- Keine Rückfrage am Ende („Soll ich …?“). Wenn eine Verbesserung naheliegt, bau sie direkt ein.
+
 **Aufbau einer Antwort mit Dateien**
 1. Ein Satz, was du baust (optional eine Checkliste bei mehreren Schritten).
 2. Kurz das Wichtigste (Bedienung, Annahmen) – höchstens ein paar Stichpunkte.
@@ -280,6 +288,7 @@ Video gewünscht? Die Vorlage hat schon „5 s als Video speichern“ (WebM übe
 const THREE_D = `## 3D-Szenen & 3D-Objekte (Three.js) – NIE nur ein Würfel
 Ein einzelner Würfel/Quader ist IMMER falsch. Ein 3D-Wunsch (Auto, Haus, Raumschiff, Planet, Stadt, Figur, Szene) wird so gebaut:
 1. **Zerlegen:** Schreib dir vorher auf, aus welchen Teilen das Objekt real besteht (Auto: Karosserie unten, Kabine, Motorhaube, 4 Räder mit Felgen + Reifen, Scheinwerfer, Rücklichter, Scheiben, Spiegel, Stoßstangen, Auspuff). Mindestens 25–60 Meshes, in \`THREE.Group\`s verschachtelt (Gruppe pro Baugruppe).
+2a. **Szenen mit Ablauf (Story, z. B. „Apfel fällt vom Baum, Wurm frisst sich durch“):** Zeitleiste mit \`clock.getElapsedTime()\` und Phasen (z. B. 0–2 s hängen + leicht schwingen, 2–3,2 s fallen mit Schwerkraft, Aufprall mit Squash & Stretch und kleinem Abprall, 1 s Pause, dann Wurm) – Easing statt linear, Pausen zwischen Phasen. Kamera als Rig mit weichem Nachführen (lerp auf Position UND Blickziel), bei wichtigen Momenten näher heran. Alles, was in der Story vorkommt, muss sichtbar modelliert sein: Baum = Stamm (Tube/Lathe mit Rinde-Farbe), Äste (TubeGeometry), Krone aus vielen Blatt-Clustern (Icosahedron mit verschobenen Vertices, mehrere Grüntöne), Wiese/Boden, Himmel-Verlauf, weiches Licht + Schatten. Apfel = LatheGeometry mit Mulde oben und unten, Farbverlauf rot→gelb (Vertex-Farben), glänzend (MeshPhysicalMaterial, clearcoat), Stiel (TubeGeometry, gebogen) und Blatt (ExtrudeGeometry aus Blatt-Shape). Wurm = Kette aus Kugelsegmenten entlang einer Kurve mit Wellenbewegung; „frisst sich durch“ = Loch wächst sichtbar (dunkle Scheibe/Höhle an der Oberfläche) und Wurm kommt auf der anderen Seite heraus.
 2. **Richtige Formen statt Boxen:** \`LatheGeometry\` (Flaschen, Felgen, Türme, Vasen), \`ExtrudeGeometry\` aus \`THREE.Shape\` mit \`bevelEnabled\` (Karosserie-Profil, Logos, Flügel), \`TubeGeometry\` auf \`CatmullRomCurve3\` (Kabel, Rohre, Schienen, Äste), \`CapsuleGeometry\`, \`TorusGeometry\`, \`SphereGeometry\` mit verschobenen Vertices (Felsen, Planeten). Kanten mit \`RoundedBoxGeometry\` (three/addons/geometries/RoundedBoxGeometry.js) abrunden.
 3. **Wiederholung:** Viele gleiche Dinge (Bäume, Fenster, Sterne, Gras, Gebäude) mit \`InstancedMesh\` + Zufall (Größe, Drehung, Farbe).
 4. **Materialien:** \`MeshPhysicalMaterial\` – Lack: clearcoat 1, metalness 0.6, roughness 0.25; Glas: transmission 1, roughness 0.05, thickness 0.5; Chrom: metalness 1, roughness 0.1; Leuchtteile: emissive + emissiveIntensity 2–4. Keine einfarbige Welt – 4–8 abgestimmte Farben.
@@ -836,7 +845,7 @@ const CLITOOL = `## CLI-Tools, Bots & Integrationen
 - Konfiguration: .env + .env.example, Werte beim Start prüfen und klar melden, was fehlt.`;
 
 export const CRAFT_CATEGORY_PREFIX = "ki-";
-export const CRAFT_KNOWLEDGE_VERSION = "KI-Wissen 2026-11-11c";
+export const CRAFT_KNOWLEDGE_VERSION = "KI-Wissen 2026-11-11d";
 
 type Pack = { id: string; title: string; test: RegExp; text: string };
 const PACKS: Pack[] = [

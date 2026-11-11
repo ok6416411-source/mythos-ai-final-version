@@ -448,3 +448,6 @@ html.mfx-on ::-webkit-scrollbar-thumb { background: var(--mfx-a); }
 @keyframes mfx-glow { 0%,100% { box-shadow: 0 0 6px var(--ia) } 50% { box-shadow: 0 0 18px 4px var(--ib) } }
 @keyframes mfx-pulse { 0% { box-shadow: 0 0 0 0 var(--ia) } 100% { box-shadow: 0 0 0 9px transparent } }
 @media (prefers-reduced-motion: reduce) { .mfx-layer, .mfx-select { display: none } .mfx-item, .mfx-item * { animation: none !important } }
+
+/* Keine grauen Fokus-Rahmen nach Tippen/Klicken (nur bei Tastatur-Bedienung sichtbar) */
+:focus:not(:focus-visible), [tabindex="-1"]:focus { outline: none !important; }

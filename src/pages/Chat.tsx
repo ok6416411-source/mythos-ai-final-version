@@ -285,6 +285,24 @@ const Chat = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sub.loading, sub.tier]);
 
+  // Anfrage geschickt und Seite verlassen? Der Server rechnet weiter und speichert die Antwort selbst.
+  // Steht beim Öffnen als Letztes noch die Frage da, kurz nachschauen, bis die Antwort angekommen ist.
+  useEffect(() => {
+    if (!activeId || sending || loadingChat) return;
+    const last = messages[messages.length - 1] as (Msg & { created_at?: string }) | undefined;
+    if (!last || last.role !== "user" || !last.created_at) return;
+    if (Date.now() - new Date(last.created_at).getTime() > 6 * 60_000) return;
+    const id = activeId, since = last.created_at;
+    let n = 0;
+    const t = setInterval(async () => {
+      if (sendingRef.current || ++n > 72) return clearInterval(t);
+      const { count } = await supabase.from("messages").select("id", { count: "exact", head: true })
+        .eq("conversation_id", id).eq("role", "assistant").gt("created_at", since);
+      if (count) { clearInterval(t); void loadMessages(id); }
+    }, 5000);
+    return () => clearInterval(t);
+  }, [messages, activeId, sending, loadingChat]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const [convsLoaded, setConvsLoaded] = useState(false);
   const loadConvs = async () => {
     const { data } = await supabase.from("conversations").select("*").order("updated_at", { ascending: false });
