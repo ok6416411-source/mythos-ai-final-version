@@ -1,5 +1,5 @@
 // App-Builder im Stil von Lovable und Base44: links der Chat, rechts die Live-Vorschau und der Code.
-// Die KI baut eine komplette, eigenständige index.html und ändert sie bei jeder weiteren Nachricht.
+// Die KI baut eine komplette, eigenständige index.html; spätere Wünsche ändern nur die betroffenen Stellen (SUCHEN/ERSETZEN).
 // Projekte liegen im Browser (localStorage) des jeweiligen Kontos.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
@@ -13,8 +13,9 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { isAllowed } from "@/lib/mythosModels";
 import { copyText } from "@/lib/copyText";
 import { CONTINUE_PROMPT, MAX_CONTINUE, looksCut, stitch } from "@/lib/codeContinue";
+import { applyEdits, changedLines, countEditStarts, hasEditMarkers, parseEdits, repairPrompt } from "@/lib/htmlPatch";
 
-type BMsg = { role: "user" | "assistant"; content: string; html?: string; at: string };
+type BMsg = { role: "user" | "assistant"; content: string; html?: string; note?: string; at: string };
 type Project = { id: string; name: string; html: string; messages: BMsg[]; updated: string };
 
 const EXAMPLES = [
@@ -33,8 +34,23 @@ Regeln:
 - Modernes, sauberes Design, responsiv fürs Handy, sinnvolle Beispielinhalte statt Platzhaltertext.
 - Bilder: nutze https://picsum.photos/seed/<wort>/800/600 oder Emojis/SVG, keine erfundenen Dateien.
 - Daten speicherst du bei Bedarf in localStorage.
-- Bei Änderungswünschen änderst du die bestehende Datei und gibst wieder die komplette Datei aus.
 - Keine Erklärung des Codes nach dem Block.`;
+
+/** Gibt es schon eine Datei, wird sie gezielt geändert statt neu geschrieben (schneller, nichts geht verloren). */
+const EDIT_RULES = `
+
+ÄNDERN STATT NEU SCHREIBEN (gilt, sobald unten eine „Aktuelle index.html“ steht):
+- Gib NICHT die ganze Datei aus. Schreib nach deinen ein bis zwei Sätzen EINEN Codeblock \`\`\`edit, der nur die geänderten Stellen enthält – je Stelle ein Block in genau dieser Form:
+<<<<<<< SUCHEN
+(2–8 Zeilen, Zeichen für Zeichen aus der aktuellen Datei kopiert, inklusive Einrückung; das Stück darf in der Datei nur EINMAL vorkommen)
+=======
+(der neue Text, der dieses Stück ersetzt)
+>>>>>>> ERSETZEN
+- Mehrere Stellen = mehrere Blöcke nacheinander im selben \`\`\`edit-Codeblock, in der Reihenfolge der Datei. Blöcke dürfen sich nicht überschneiden.
+- Etwas Neues einfügen: Nimm die Zeile davor als SUCHEN und wiederhole sie im neuen Text, gefolgt vom Neuen. Etwas löschen: den neuen Text leer lassen.
+- Ändere nur, was für den Wunsch nötig ist. Alles andere bleibt unangetastet – Design, Texte und Funktionen, nach denen nicht gefragt wurde, nicht umbauen.
+- Denk an alle betroffenen Stellen: neues Element → auch sein CSS und sein JavaScript (je ein eigener Block).
+- Nur wenn fast alles anders wird (komplett neues Design, andere App), gib stattdessen EINEN Codeblock \`\`\`html mit der kompletten neuen Datei aus.`;
 
 const key = (uid?: string) => `mythos.build.${uid ?? "gast"}`;
 const now = () => new Date().toISOString();
@@ -49,6 +65,8 @@ function save(uid: string | undefined, list: Project[]) {
 
 /** HTML aus der Antwort holen, auch wenn der Block (noch) nicht geschlossen ist. */
 function extractHtml(text: string): string | null {
+  // Gezielte Änderungen (SUCHEN/ERSETZEN) sind keine ganze Datei.
+  if (hasEditMarkers(text)) return null;
   const m = /```(?:html)?[^\n]*\n([\s\S]*?)(?:```|$)/i.exec(text);
   const code = m?.[1]?.trim();
   if (code && /<(!doctype|html|body|div|script|style)/i.test(code)) return code;
@@ -150,12 +168,16 @@ export default function Build() {
     // Verlauf ohne alte Codeblöcke, dafür die aktuelle Datei: spart Platz und die KI kennt immer den neuesten Stand.
     const history = [...proj.messages, userMsg].slice(-10).map((m) => ({ role: m.role, content: m.role === "assistant" ? proseOf(m.content) || "Datei aktualisiert." : m.content }));
     const ctx = proj.html ? `\n\nAktuelle index.html:\n\`\`\`html\n${proj.html}\n\`\`\`` : "";
-    const messages = [{ role: "system", content: SYSTEM + ctx }, ...history];
+    const base = proj.html;
+    const sysFor = (h: string) => SYSTEM + (h ? EDIT_RULES + `\n\nAktuelle index.html:\n\`\`\`html\n${h}\n\`\`\`` : "");
+    const messages = [{ role: "system", content: base ? sysFor(base) : SYSTEM + ctx }, ...history];
+    // Bei Änderungs-Blöcken: abgeschnitten = offener Codeblock oder ein angefangener, nicht beendeter Block.
+    const cut = (t: string) => (hasEditMarkers(t) ? ((t.match(/^\s*```/gm) || []).length % 2 === 1 || countEditStarts(t) > parseEdits(t).length) : looksCut(t));
     const ctrl = new AbortController(); abortRef.current = ctrl;
     let full = "";
     try {
       full = await call(messages, "", ctrl);
-      for (let k = 0; k < MAX_CONTINUE && looksCut(full) && !ctrl.signal.aborted; k++) {
+      for (let k = 0; k < MAX_CONTINUE && cut(full) && !ctrl.signal.aborted; k++) {
         const more = await call([...messages, { role: "assistant", content: full }, { role: "user", content: CONTINUE_PROMPT }], full, ctrl);
         if (!more) break;
         full += stitch(full, more);
@@ -163,14 +185,36 @@ export default function Build() {
     } catch (e) {
       if ((e as Error).name !== "AbortError") toast.error((e as Error).message || "Verbindungsfehler");
     }
-    const newHtml = extractHtml(full);
+    let newHtml = extractHtml(full);
+    let note: string | undefined;
+    // Gezielte Änderungen anwenden; was nicht passt, lässt Mythos bis zu zweimal selbst nachbessern.
+    if (full && base && hasEditMarkers(full)) {
+      let r = applyEdits(base, parseEdits(full));
+      let total = r.applied;
+      try {
+        for (let round = 0; round < 2 && r.failed.length && !ctrl.signal.aborted; round++) {
+          setLive(proseOf(full) + "\n\n");
+          const fix = await call([{ role: "system", content: sysFor(r.html) }, { role: "user", content: prompt }, { role: "assistant", content: proseOf(full) || "Änderungen gesendet." }, { role: "user", content: repairPrompt(r.failed) }], "", ctrl);
+          const again = extractHtml(fix);
+          if (again && /<\/html>/i.test(again)) { r = { html: again, applied: 1, failed: [] }; total++; break; }
+          const rr = applyEdits(r.html, parseEdits(fix));
+          total += rr.applied; r = rr;
+        }
+      } catch { /* was schon passt, bleibt */ }
+      if (r.html !== base) {
+        newHtml = r.html;
+        const lines = changedLines(base, r.html);
+        note = `${total} ${total === 1 ? "Stelle" : "Stellen"} geändert · ${lines} ${lines === 1 ? "Zeile" : "Zeilen"}` + (r.failed.length ? ` · ${r.failed.length} nicht übernommen` : "");
+      }
+      if (r.failed.length) toast.warning(r.html !== base ? `${r.failed.length} Änderung(en) passten nicht zur Datei. Sag einfach nochmal, was noch fehlt.` : "Die Änderungen passten nicht zur Datei. Versuch es bitte nochmal.");
+    }
     if (full) {
       const done = !!newHtml && /<\/html>/i.test(newHtml);
       if (newHtml && !done) toast.warning("Die Datei ist noch nicht ganz fertig. Schreib „mach weiter“.");
       update(id, (p) => ({
         ...p,
         html: newHtml ?? p.html,
-        messages: [...p.messages, { role: "assistant", content: full, html: newHtml ?? undefined, at: now() }],
+        messages: [...p.messages, { role: "assistant", content: full, html: newHtml ?? undefined, note, at: now() }],
         updated: now(),
       }));
       if (newHtml && window.matchMedia("(max-width: 1023px)").matches) setTab("preview");
@@ -274,7 +318,7 @@ export default function Build() {
             {m.html && (
               <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm">
                 <FileCode2 className="h-4 w-4 text-muted-foreground" />
-                <span className="flex-1">index.html {active.html === m.html ? "(aktuell)" : ""}</span>
+                <span className="flex-1 min-w-0 truncate">index.html {active.html === m.html ? "(aktuell)" : ""}{m.note && <span className="ml-2 text-xs text-muted-foreground">{m.note}</span>}</span>
                 {active.html !== m.html && (
                   <button onClick={() => update(active.id, (p) => ({ ...p, html: m.html!, updated: now() }))} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
                     <RotateCcw className="h-3.5 w-3.5" /> Wiederherstellen
@@ -289,7 +333,7 @@ export default function Build() {
             {proseOf(live) && <p className="whitespace-pre-wrap text-foreground/90">{proseOf(live)}</p>}
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
-              <span className="mythos-shimmer">{liveHtml ? `Schreibt index.html (${liveHtml.split("\n").length} Zeilen)` : "Plant die App…"}</span>
+              <span className="mythos-shimmer">{liveHtml ? `Schreibt index.html (${liveHtml.split("\n").length} Zeilen)` : hasEditMarkers(live) ? `Ändert index.html gezielt (${countEditStarts(live)} ${countEditStarts(live) === 1 ? "Stelle" : "Stellen"})` : active?.html ? "Sucht die Stellen zum Ändern…" : "Plant die App…"}</span>
             </div>
           </div>
         )}

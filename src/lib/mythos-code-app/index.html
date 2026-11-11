@@ -361,6 +361,83 @@ body.light .todo{background:rgba(0,0,0,.015)!important}
 .fb{border:0;background:none;color:inherit;padding:5px;border-radius:7px;cursor:pointer;display:grid;place-items:center}.fb:hover{background:rgba(255,255,255,.07);color:var(--fg)}
 .fb.on{color:var(--fg)}.fb.on svg{fill:currentColor}.fbar.sent .fb:not(.on){opacity:.35;pointer-events:none}
 .fbform{display:flex;gap:6px;margin-left:6px}.fbform input{height:28px;width:220px;border-radius:99px;border:1px solid var(--line2);background:transparent;color:inherit;padding:0 12px;font:inherit;font-size:12.5px;outline:none}
+
+/* ============ Feinschliff: kleine Bedienelemente ============ */
+:root{--hover:rgba(255,255,255,.07);--press:rgba(255,255,255,.12);--ring:rgba(255,255,255,.34);--ease:cubic-bezier(.2,.8,.2,1);--pop:0 12px 36px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.06)}
+body.light{--hover:rgba(0,0,0,.05);--press:rgba(0,0,0,.09);--ring:rgba(0,0,0,.32);--pop:0 12px 32px rgba(0,0,0,.14),0 0 0 1px rgba(0,0,0,.06)}
+::selection{background:rgba(255,255,255,.22)}body.light ::selection{background:rgba(0,0,0,.16)}
+svg.ic{width:15px;height:15px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;vertical-align:-2.5px}
+svg.ic.lead{margin-right:6px}.chip svg.ic.lead,.nav svg.ic.lead{margin-right:0}
+button,.chip,.nav,.item,.itab,.search,select.chip{transition:background .16s var(--ease),color .16s,border-color .16s,box-shadow .16s,opacity .16s,transform .12s var(--ease)}
+button:active:not(:disabled){transform:scale(.96)}
+button:focus-visible,.nav:focus-visible,.item:focus-visible,select:focus-visible,.switch input:focus-visible{outline:2px solid var(--ring);outline-offset:2px}
+button:disabled{cursor:default}
+/* Chips: ruhiger, gleich hoch, klare Zustände */
+.chip{min-height:30px;padding:0 11px;font-size:12.5px;font-weight:500;line-height:1;border-color:var(--line);background:rgba(255,255,255,.03);color:#cdcdcd;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
+button.chip:hover,select.chip:hover{background:var(--hover);border-color:var(--line2);color:var(--fg)}
+button.chip:active{background:var(--press)}
+.chip.icon{width:30px;padding:0;justify-content:center}
+.chip.on{background:var(--press);border-color:var(--line2);color:var(--fg)}
+.chip.mono{font-variant-numeric:tabular-nums;letter-spacing:0}
+span.chip{color:var(--muted)}
+select.chip{padding-right:26px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239a9a9a' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center}
+body.light .chip{box-shadow:inset 0 1px 0 rgba(255,255,255,.6)}
+header{gap:6px;padding:10px 16px}
+/* Hauptknopf */
+.btn{box-shadow:0 1px 0 rgba(255,255,255,.4) inset,0 6px 20px rgba(0,0,0,.35)}.btn:hover{transform:translateY(-1px);box-shadow:0 1px 0 rgba(255,255,255,.4) inset,0 10px 28px rgba(0,0,0,.45)}
+/* Runde Knöpfe im Eingabefeld */
+.round{width:36px;height:36px;font-size:16px;color:#d4d4d4}.round svg.ic{width:17px;height:17px}
+.round:hover:not(:disabled){background:var(--hover);color:var(--fg)}
+#btnUp,#btnImprove,#btnVoice{background:transparent;border:1px solid var(--line)}#btnUp:hover,#btnImprove:hover,#btnVoice:hover{background:var(--hover);border-color:var(--line2)}
+#btnSend{box-shadow:0 2px 10px rgba(0,0,0,.35)}#btnSend:hover:not(:disabled){transform:scale(1.06)}#btnSend:active:not(:disabled){transform:scale(.94)}
+#btnSend svg.ic{stroke-width:2.4}
+.pill{transition:background .16s,color .16s}
+/* Schalter */
+.switch{gap:9px;padding:3px 0;color:var(--muted);transition:color .16s}.switch:hover{color:var(--fg)}
+.switch input{width:32px;height:19px;background:rgba(255,255,255,.14);box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);transition:background .2s var(--ease)}
+.switch input::after{top:2.5px;left:2.5px;width:14px;height:14px;background:#d9d9d9;box-shadow:0 1px 3px rgba(0,0,0,.45);transition:left .2s var(--ease),background .2s,width .15s}
+.switch input:active::after{width:17px}
+.switch input:checked{background:#f5f5f5}.switch input:checked::after{left:15.5px;background:#141414}.switch input:checked:active::after{left:12.5px}
+body.light .switch input{background:rgba(0,0,0,.16)}body.light .switch input::after{background:#fff}body.light .switch input:checked{background:#141414}body.light .switch input:checked::after{background:#fff}
+/* Seitenleiste */
+.nav{min-height:34px;padding:0 10px;border-radius:9px;font-size:13.5px;color:#d6d6d6}
+.nav .ic,.nav .plus{display:grid;place-items:center;width:18px;opacity:.72;transition:opacity .16s}.nav:hover .ic,.nav:hover .plus,.nav.on .ic{opacity:1}
+.nav:hover{background:var(--hover)}.nav:active{background:var(--press)}.nav.on{background:var(--press);color:var(--fg)}
+#navProj button{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;color:var(--muted)}#navProj button:hover{background:var(--press);color:var(--fg)}
+.sec{font-size:10.5px;font-weight:600;letter-spacing:.09em;padding:16px 10px 6px}
+.item{min-height:32px;padding:0 6px 0 10px;border-radius:9px}.item:hover{background:var(--hover)}.item.on{background:var(--press)}
+.item .x{width:22px;height:22px;padding:0;border-radius:6px;display:grid;place-items:center;flex-shrink:0}.item .x svg.ic{width:13px;height:13px}
+.item:hover .x{opacity:.65}.item .x:hover{opacity:1;background:var(--press)}
+.item .date{font-variant-numeric:tabular-nums}
+/* Suche */
+.search{border-radius:10px;padding:8px 11px;background-color:rgba(255,255,255,.035)}.search:hover{border-color:var(--line2)}.search:focus{border-color:var(--ring);box-shadow:0 0 0 3px rgba(255,255,255,.06)}
+.search.big{padding-left:34px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='%238a8a8a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.3-4.3'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:11px center}
+body.light .search{background-color:rgba(0,0,0,.03)}body.light .search:focus{box-shadow:0 0 0 3px rgba(0,0,0,.05)}
+/* Menüs und Fenster */
+#modelMenu,.slash{box-shadow:var(--pop);animation:pop .16s var(--ease)}
+#modelMenu .mm{border-radius:9px}#modelMenu .mm:hover{background:var(--hover)}
+.slash button{border-radius:10px}
+.connect-modal{backdrop-filter:blur(10px);background:rgba(0,0,0,.55)}.connect-modal.open .connect-box{animation:pop .2s var(--ease);box-shadow:var(--pop)}
+@keyframes pop{from{opacity:0;transform:translateY(6px) scale(.98)}to{opacity:1;transform:none}}
+/* Kleine Aktionen an Nachrichten */
+.a .speak,.sum .speak,.u .edit,.t.done .regen{width:26px;height:26px;padding:0;border-radius:7px;display:inline-grid;place-items:center;font-size:13px}
+.a .speak:hover,.sum .speak:hover,.u .edit:hover,.t.done .regen:hover{background:var(--hover)}
+.u .edit{left:-34px}
+.codehead .copy{padding:3px 8px;border-radius:6px}.codehead .copy:hover{background:var(--hover)}
+.fileacts button,.filesall button{border-radius:8px;padding:6px 11px;font-weight:500}.fileacts button:hover,.filesall button:hover{background:var(--hover);border-color:var(--line2)}
+.fileacts button.primary{background:var(--fg);border-color:var(--fg);color:var(--bg)}.fileacts button.primary:hover{opacity:.88;background:var(--fg)}
+.itab{border-radius:9px}.itab:hover{background:var(--hover);color:var(--fg)}.itab .ix{display:grid;place-items:center;width:18px;height:18px;border-radius:5px}.itab .ix:hover{background:var(--press)}.itab .ix svg.ic{width:12px;height:12px}
+.under.bar{gap:10px}
+/* Rollbalken: schmal, erst beim Überfahren deutlich */
+::-webkit-scrollbar{width:9px;height:9px}::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.09);border-radius:9px;border:2.5px solid transparent;background-clip:padding-box}
+::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.2);border:2.5px solid transparent;background-clip:padding-box}
+body.light ::-webkit-scrollbar-thumb{background:rgba(0,0,0,.14);border:2.5px solid transparent;background-clip:padding-box}body.light ::-webkit-scrollbar-thumb:hover{background:rgba(0,0,0,.28);background-clip:padding-box}
+/* Tooltip */
+#tip{position:fixed;z-index:9999;max-width:280px;padding:6px 10px;border-radius:8px;background:#f4f4f4;color:#111;font-size:12px;line-height:1.35;font-weight:500;pointer-events:none;opacity:0;transform:translateY(3px);transition:opacity .12s,transform .12s var(--ease);box-shadow:0 6px 20px rgba(0,0,0,.4)}
+#tip.on{opacity:1;transform:none}body.light #tip{background:#161616;color:#f5f5f5}
+kbd{font:500 11px/1 ui-monospace,Consolas,monospace;padding:3px 6px;border-radius:5px;border:1px solid var(--line2);border-bottom-width:2px;background:rgba(255,255,255,.04)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style></head><body>
 <div class="bg"><div class="blob b1"></div><div class="blob b2"></div></div>
 <div id="login" class="screen">
@@ -396,7 +473,7 @@ body.light .todo{background:rgba(0,0,0,.015)!important}
   </header>
   <div class="main2">
   <aside id="side">
-    <input id="csearch" class="search big" placeholder="🔎  Suchen">
+    <input id="csearch" class="search big" placeholder="Suchen">
     <button class="nav" id="btnNew"><span class="plus">＋</span>Neu</button>
     <div class="nav" id="navProj"><span class="ic">🗀</span>Projekte<button id="btnAddProj" title="Projekt hinzufügen">＋</button></div>
     <div id="plist"></div>

@@ -2587,3 +2587,94 @@ function showError(msg) {
 }
 window.addEventListener("error", (e) => showError(e.message || e.error));
 window.addEventListener("unhandledrejection", (e) => showError((e.reason && e.reason.message) || e.reason));
+
+
+// ---------- Feinschliff: einheitliche Linien-Icons statt Emoji + eigene Tooltips ----------
+(function polishUI() {
+  const P = (d) => '<path d="' + d + '"/>';
+  const ICON = {
+    x: P("M18 6 6 18") + P("m6 6 12 12"), plus: P("M5 12h14") + P("M12 5v14"),
+    pencil: P("M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z") + P("m15 5 4 4"),
+    redo: P("M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8") + P("M21 3v5h-5"),
+    undo: P("M3 7v6h6") + P("M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"),
+    volume: P("M11 5 6 9H2v6h4l5 4V5Z") + P("M15.54 8.46a5 5 0 0 1 0 7.07") + P("M19.07 4.93a10 10 0 0 1 0 14.14"),
+    eye: P("M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z") + '<circle cx="12" cy="12" r="3"/>',
+    folder: P("M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"),
+    tree: P("M21 12h-8") + P("M21 6H8") + P("M21 18h-8") + P("M3 6v4c0 1.1.9 2 2 2h3") + P("M3 10v6c0 1.1.9 2 2 2h3"),
+    terminal: P("m4 17 6-6-6-6") + P("M12 19h8"),
+    sun: '<circle cx="12" cy="12" r="4"/>' + P("M12 2v2") + P("M12 20v2") + P("m4.93 4.93 1.41 1.41") + P("m17.66 17.66 1.41 1.41") + P("M2 12h2") + P("M20 12h2") + P("m6.34 17.66-1.41 1.41") + P("m19.07 4.93-1.41 1.41"),
+    moon: P("M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"),
+    left: P("m12 19-7-7 7-7") + P("M19 12H5"), right: P("M5 12h14") + P("m12 5 7 7-7 7"), up: P("m5 12 7-7 7 7") + P("M12 19V5"), down: P("M12 5v14") + P("m19 12-7 7-7-7"),
+    external: P("M15 3h6v6") + P("M10 14 21 3") + P("M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"),
+    monitor: '<rect x="2" y="3" width="20" height="14" rx="2"/>' + P("M8 21h8") + P("M12 17v4"),
+    film: '<rect x="3" y="3" width="18" height="18" rx="2"/>' + P("M7 3v18") + P("M17 3v18") + P("M3 12h18") + P("M3 7.5h4") + P("M3 16.5h4") + P("M17 7.5h4") + P("M17 16.5h4"),
+    users: P("M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2") + '<circle cx="9" cy="7" r="4"/>' + P("M22 21v-2a4 4 0 0 0-3-3.87") + P("M16 3.13a4 4 0 0 1 0 7.75"),
+    box: P("M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z") + P("m3.3 7 8.7 5 8.7-5") + P("M12 22V12"),
+    clock: '<circle cx="12" cy="12" r="10"/>' + P("M12 6v6l4 2"),
+    sliders: P("M21 4h-7") + P("M10 4H3") + P("M21 12h-9") + P("M8 12H3") + P("M21 20h-5") + P("M12 20H3") + P("M14 2v4") + P("M8 10v4") + P("M16 18v4"),
+    plug: P("M12 22v-5") + P("M9 8V2") + P("M15 8V2") + P("M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"),
+    message: P("M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"),
+    branch: P("M6 3v12") + '<circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/>' + P("M18 9a9 9 0 0 1-9 9"),
+    mic: P("M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z") + P("M19 10v2a7 7 0 0 1-14 0v-2") + P("M12 19v3"),
+    stop: '<rect x="6" y="6" width="12" height="12" rx="2.5" fill="currentColor" stroke="none"/>',
+    play: '<path d="M7 4.5v15l12-7.5z" fill="currentColor" stroke="none"/>',
+    pause: '<rect x="6.5" y="5" width="3.6" height="14" rx="1.2" fill="currentColor" stroke="none"/><rect x="13.9" y="5" width="3.6" height="14" rx="1.2" fill="currentColor" stroke="none"/>',
+    sparkles: P("M9.94 15.5A2 2 0 0 0 8.5 14.06l-6.14-1.58a.5.5 0 0 1 0-.96L8.5 9.94A2 2 0 0 0 9.94 8.5l1.58-6.14a.5.5 0 0 1 .96 0L14.06 8.5A2 2 0 0 0 15.5 9.94l6.14 1.58a.5.5 0 0 1 0 .96L15.5 14.06a2 2 0 0 0-1.44 1.44l-1.58 6.14a.5.5 0 0 1-.96 0z"),
+    camera: P("M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z") + '<circle cx="12" cy="13" r="3"/>',
+    target: '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
+    panels: '<rect x="3" y="3" width="18" height="18" rx="2"/>' + P("M12 3v18"),
+    waves: P("M2 10v3") + P("M6 6v11") + P("M10 3v18") + P("M14 8v7") + P("M18 5v13") + P("M22 10v3"),
+    upload: P("M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4") + P("m17 8-5-5-5 5") + P("M12 3v12"),
+  };
+  // Emoji/Zeichen → Icon. „solo“ = nur ersetzen, wenn das Zeichen allein steht (sonst wäre es normaler Text).
+  const MAP = {
+    "📁": "folder", "🗀": "folder", "⎇": "branch", "🔌": "plug", "◫": "panels", "⏰": "clock", "◷": "clock", "⏱": "clock", "👂": "mic", "🎙": "mic", "👁": "eye", "🗂": "tree", "⌨": "terminal",
+    "⬆": "upload", "☀": "sun", "☾": "moon", "🌙": "moon", "＋": "plus", "🖥": "monitor", "🎬": "film", "👥": "users", "◇": "box", "⚙": "sliders", "💬": "message", "⟳": "redo", "↻": "redo", "↗": "external",
+    "⏸": "pause", "▶": "play", "🎯": "target", "✕": "x", "✎": "pencil", "↩": "undo", "✨": "sparkles", "📷": "camera", "🗣": "waves", "🔊": "volume",
+  };
+  const SOLO = { "+": "plus", "×": "x", "↑": "up", "↓": "down", "←": "left", "→": "right", "■": "stop" };
+  const keys = Object.keys(MAP).sort((a, b) => b.length - a.length);
+  const svg = (name) => { const t = document.createElement("template"); t.innerHTML = '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">' + ICON[name] + "</svg>"; return t.content.firstChild; };
+  const SEL = "button, .chip, .nav > .ic, .nav > .plus, .itab > .ix, .under.bar";
+  function iconize(el) {
+    if (!el || el.nodeType !== 1 || el.closest("#log .body, pre, code, textarea")) return;
+    let node = null;
+    for (const c of el.childNodes) { if (c.nodeType === 3 && c.nodeValue.trim()) { node = c; break; } if (c.nodeType === 1) break; }
+    if (!node) return;
+    const txt = node.nodeValue.replace(/^\s+/, ""), solo = SOLO[txt.trim()];
+    let name = solo, rest = "";
+    if (!name) { const k = keys.find((g) => txt.startsWith(g)); if (!k) return; name = MAP[k]; rest = txt.slice(k.length).replace(/^️/, "").replace(/^\s+/, ""); }
+    const ic = svg(name);
+    if (rest || el.children.length) ic.classList.add("lead");
+    if (!el.getAttribute("aria-label") && el.title) el.setAttribute("aria-label", el.title);
+    node.nodeValue = rest;
+    el.insertBefore(ic, node);
+  }
+  const scan = (root) => { if (!root || root.nodeType !== 1) return; if (root.matches && root.matches(SEL)) iconize(root); root.querySelectorAll && root.querySelectorAll(SEL).forEach(iconize); };
+  try {
+    scan(document.body);
+    new MutationObserver((list) => { for (const m of list) { if (m.type === "characterData") { const p = m.target.parentElement; if (p && p.matches(SEL)) iconize(p); } else { if (m.target.matches && m.target.matches(SEL)) iconize(m.target); m.addedNodes.forEach(scan); } } })
+      .observe(document.body, { childList: true, subtree: true, characterData: true });
+  } catch (e) { /* Icons sind nur Zierde */ }
+
+  // Eigene Tooltips: schneller, lesbarer und im App-Stil (statt der grauen Windows-Kästchen).
+  const tip = document.createElement("div"); tip.id = "tip"; document.body.appendChild(tip);
+  let timer = 0, cur = null;
+  const hide = () => { clearTimeout(timer); tip.classList.remove("on"); cur = null; };
+  const show = (el) => {
+    const text = el.getAttribute("data-tip"); if (!text || !el.isConnected) return;
+    tip.textContent = text; tip.classList.add("on");
+    const r = el.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
+    let x = r.left + r.width / 2 - w / 2, y = r.bottom + 8;
+    if (y + h > innerHeight - 6) y = r.top - h - 8;
+    tip.style.left = Math.max(6, Math.min(innerWidth - w - 6, x)) + "px"; tip.style.top = Math.max(6, y) + "px";
+  };
+  document.addEventListener("mouseover", (e) => {
+    const el = e.target.closest && e.target.closest("[title], [data-tip]"); if (!el || el === cur) return;
+    if (el.closest("webview, #log .body")) return;
+    if (el.title) { el.setAttribute("data-tip", el.title); if (!el.getAttribute("aria-label")) el.setAttribute("aria-label", el.title); el.removeAttribute("title"); }
+    hide(); cur = el; timer = setTimeout(() => show(el), 380);
+  }, true);
+  document.addEventListener("mouseout", (e) => { if (cur && !(e.relatedTarget && cur.contains(e.relatedTarget))) hide(); }, true);
+  ["mousedown", "keydown", "wheel", "blur"].forEach((ev) => window.addEventListener(ev, hide, true));
+})();
