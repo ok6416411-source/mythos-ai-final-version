@@ -74,3 +74,33 @@ export default function TokenLimitsAdmin() {
     </div>
   );
 }
+
+/** Admin: Pexels-Schlüssel, damit der App-Builder passende Stock-Fotos und -Videos (MP4) findet. */
+export function MediaKeyAdmin() {
+  const [key, setKey] = useState("");
+  const [busy, setBusy] = useState(false);
+  const save = async (value: string) => {
+    setBusy(true);
+    const { data, error } = await supabase.functions.invoke("labs", { body: { kind: "media_key_set", key: value } });
+    setBusy(false);
+    let msg = data?.error as string | undefined;
+    const ctx = (error as { context?: Response } | null)?.context;
+    if (!msg && ctx && typeof ctx.json === "function") msg = (await ctx.json().catch(() => null))?.error;
+    if (error || msg) toast.error(msg || "Speichern fehlgeschlagen");
+    else { toast.success(value ? "Pexels-Schlüssel gespeichert und geprüft" : "Pexels-Schlüssel entfernt"); setKey(""); }
+  };
+  return (
+    <div className="glass mt-4 rounded-xl p-5">
+      <h3 className="mb-1 font-display font-semibold">Fotos und Videos für den App-Builder</h3>
+      <p className="mb-3 text-xs text-muted-foreground">
+        Ohne Schlüssel sucht Mythos passende Medien bei Wikimedia Commons (frei, aber kleine Auswahl, Videos oft nicht hübsch).
+        Mit einem kostenlosen Pexels-Schlüssel (pexels.com/api) findet er hochwertige Stock-Fotos und MP4-Videos zu fast jedem Thema.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <Input type="password" value={key} onChange={(e) => setKey(e.target.value.trim())} placeholder="Pexels-API-Schlüssel" className="h-9 max-w-sm" autoComplete="off" />
+        <Button size="sm" onClick={() => save(key)} disabled={busy || key.length < 20}>{busy && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}Speichern</Button>
+        <Button size="sm" variant="outline" onClick={() => save("")} disabled={busy}>Entfernen</Button>
+      </div>
+    </div>
+  );
+}

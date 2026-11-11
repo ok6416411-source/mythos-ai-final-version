@@ -11,7 +11,7 @@ import { Plus, Edit, Trash2, Shield, Users, Phone, Gift } from "lucide-react";
 import { toast } from "sonner";
 import PhoneInbox from "@/components/PhoneInbox";
 import RewardsAdmin from "@/components/RewardsAdmin";
-import TokenLimitsAdmin from "@/components/TokenLimitsAdmin";
+import TokenLimitsAdmin, { MediaKeyAdmin } from "@/components/TokenLimitsAdmin";
 import { SERVER_KNOWLEDGE, SERVER_KNOWLEDGE_VERSION } from "../../supabase/functions/_shared/serverKnowledge.ts";
 import { CRAFT_ARTICLES, CRAFT_KNOWLEDGE_VERSION } from "../../supabase/functions/_shared/craftKnowledge.ts";
 
@@ -197,6 +197,7 @@ const Admin = () => {
 
           <TabsContent value="limits" className="mt-6">
             <TokenLimitsAdmin />
+            <MediaKeyAdmin />
           </TabsContent>
           <TabsContent value="rewards" className="mt-6">
             <RewardsAdmin />

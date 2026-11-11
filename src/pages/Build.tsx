@@ -1,14 +1,16 @@
 // App-Builder im Stil von Lovable und Base44: links der Chat, rechts die Live-Vorschau und der Code.
 // Die KI baut eine komplette, eigenständige index.html; spätere Wünsche ändern nur die betroffenen Stellen (SUCHEN/ERSETZEN).
-// Projekte liegen im Browser (localStorage) des jeweiligen Kontos.
+// Projekte liegen im Browser und werden mit dem Konto abgeglichen; veröffentlichte Apps stehen unter /build/<name>.
 import { authHeader } from "@/lib/authHeader";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
   ArrowLeft, ArrowUp, Check, Code2, Copy, Download, ExternalLink, Eye, FileCode2, Loader2, MessageSquare,
-  Monitor, Plus, RefreshCw, RotateCcw, Smartphone, Square, Trash2,
+  Monitor, Plus, RefreshCw, RotateCcw, Smartphone, Square, Trash2, Paperclip, Globe, Rocket, X, CloudOff, Cloud, Film,
 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/useAuth";
 import { useSubscription } from "@/hooks/useSubscription";
 import { isAllowed } from "@/lib/mythosModels";
@@ -16,8 +18,9 @@ import { copyText } from "@/lib/copyText";
 import { CONTINUE_PROMPT, MAX_CONTINUE, looksCut, stitch } from "@/lib/codeContinue";
 import { applyEdits, changedLines, countEditStarts, hasEditMarkers, parseEdits, repairPrompt } from "@/lib/htmlPatch";
 
-type BMsg = { role: "user" | "assistant"; content: string; html?: string; note?: string; at: string };
-type Project = { id: string; name: string; html: string; messages: BMsg[]; updated: string };
+type Att = { url: string; name: string; mime: string };
+type BMsg = { role: "user" | "assistant"; content: string; html?: string; note?: string; at: string; atts?: Att[]; sources?: { url: string; title: string }[] };
+type Project = { id: string; name: string; html: string; messages: BMsg[]; updated: string; slug?: string; publishedAt?: string };
 
 const EXAMPLES = [
   "Eine Landingpage für mein Café mit Speisekarte und Kontaktformular",
@@ -35,7 +38,20 @@ Regeln:
 - Modernes, sauberes Design, responsiv fürs Handy, sinnvolle Beispielinhalte statt Platzhaltertext.
 - Bilder: nutze https://picsum.photos/seed/<wort>/800/600 oder Emojis/SVG, keine erfundenen Dateien.
 - Daten speicherst du bei Bedarf in localStorage.
-- Keine Erklärung des Codes nach dem Block.`;
+- Keine Erklärung des Codes nach dem Block.
+
+BILDER UND VIDEOS:
+- Hat der Nutzer Dateien hochgeladen (stehen in seiner Nachricht unter „Hochgeladene Dateien“), dann verwende GENAU diese Adressen – unverändert, vollständig, in src="…". Bilder siehst du zusätzlich selbst: beschreibe/platziere sie passend (Logo in den Kopf, Fotos in Galerie/Hero usw.).
+- Bild einbauen: <img src="ADRESSE" alt="kurze Beschreibung" loading="lazy" style="width:100%;height:auto;object-fit:cover">. Als Hintergrund: background:url("ADRESSE") center/cover.
+- Video einbauen: <video src="ADRESSE" controls playsinline preload="metadata" style="width:100%;border-radius:12px"></video>. Als stummer Hintergrund: autoplay muted loop playsinline (ohne controls).
+- YouTube nur, wenn der Nutzer einen Link gibt: <iframe src="https://www.youtube-nocookie.com/embed/VIDEO_ID" allowfullscreen style="width:100%;aspect-ratio:16/9;border:0"></iframe>.
+- Stehen unten „PASSENDE MEDIEN ZUM THEMA“, sind das geprüfte, zum Thema passende Fotos/Videos: Verwende GENAU diese Adressen (vollständig, unverändert) und wähle nach dem Titel aus, was inhaltlich passt. Stehen in den „RECHERCHE-ERGEBNISSEN“ Bild-Adressen, darfst du auch die verwenden.
+- VIDEOS: Verwende AUSSCHLIESSLICH Video-Adressen aus den hochgeladenen Dateien oder aus „PASSENDE MEDIEN ZUM THEMA“. NIEMALS eine Video-Adresse aus dem Gedächtnis (Beispiel-/Testvideos zeigen irgendetwas völlig anderes). Gibt es keine passende Adresse: KEIN <video> einbauen – stattdessen eine schöne CSS/SVG-Animation oder ein Foto, und sag in deinem Satz, dass der Nutzer ein eigenes Video über die Büroklammer hochladen kann.
+- FOTOS: ERFINDE NIEMALS Adressen zu Bilddateien. Gibt es keine Vorgabe und keine Liste, nimm für reine Stimmungsbilder https://picsum.photos/seed/STICHWORT/BREITE/HOEHE (lädt immer, zeigt aber ein zufälliges Motiv – also nicht für Bilder, die etwas Bestimmtes zeigen müssen). Für Icons, Logos und Illustrationen zeichne Inline-SVG.
+- Jedes <img> bekommt onerror="this.style.display='none'" oder einen farbigen Ersatz, damit nie ein kaputtes Bild zu sehen ist.
+
+INTERNET:
+- Stehen unten „RECHERCHE-ERGEBNISSE“, stammen sie frisch aus dem Internet. Nutze daraus echte Fakten, Texte, Namen, Preise und Adressen statt Erfundenem, und erfinde nichts dazu, was dort nicht steht.`;
 
 /** Gibt es schon eine Datei, wird sie gezielt geändert statt neu geschrieben (schneller, nichts geht verloren). */
 const EDIT_RULES = `
@@ -88,6 +104,25 @@ function downloadFile(name: string, content: string) {
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
+async function labsCall<T = Record<string, unknown>>(body: Record<string, unknown>): Promise<T> {
+  const { data, error } = await supabase.functions.invoke("labs", { body });
+  if (error) {
+    const ctx = (error as { context?: Response }).context;
+    const msg = ctx && typeof ctx.json === "function" ? (await ctx.json().catch(() => null))?.error : null;
+    throw new Error(msg || error.message || "Verbindungsfehler");
+  }
+  if (data?.error) throw new Error(data.error);
+  return data as T;
+}
+/** Braucht der Wunsch aktuelle oder echte Infos aus dem Internet? */
+const needsWeb = (t: string) => /https?:\/\/|\bwww\.|recherch|im internet|im netz|google|such(e|st)? (nach|mal|im)|schau (nach|im)|nachschau|aktuell|neueste|neuesten|heute|dieses jahr|20(2[5-9]|3\d)|news|nachrichten|preise?\b|öffnungszeit|adresse von|website von|webseite von|echte (daten|infos|inhalte)|wer ist|was ist .* für ein|tabelle der|ergebnisse|spielplan|wetter|kurs\b|statistik/i.test(t);
+const urlsIn = (t: string) => [...t.matchAll(/https?:\/\/[^\s)>"']+/g)].map((m) => m[0]).slice(0, 3);
+/** Wunsch nach deutlich mehr Umfang oder einem grundlegenden Umbau (dann wird die ganze Datei neu geschrieben). */
+const isGrowthAsk = (t: string) => /(viel|deutlich|wesentlich|noch|ganz viel|mega|krass)\s+mehr|mehr (sachen|inhalt|inhalte|infos|informationen|seiten|abschnitte|sektionen|funktionen|features|details|text|stuff|zeug)|füge?\b.*\b(viel|mehr|weitere|ganz)|erweiter|ausbau|bau.* aus\b|ausführlicher|umfangreicher|detaillierter|größer|mehr davon|mach mehr/i.test(t);
+const isBigChange = (t: string) => isGrowthAsk(t) || /komplett|von grund auf|ganz neu|neu (machen|gestalten|designen|aufbauen)|redesign|überarbeite (alles|die ganze|das ganze)|alles (neu|anders|ändern)|ganz anders|professioneller|viel (besser|schöner|krasser|moderner)|krasser|hochwertiger/i.test(t);
+const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const toSlug = (t: string) => t.toLowerCase().replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
+
 export default function Build() {
   const { user } = useAuth();
   const sub = useSubscription();
@@ -102,10 +137,41 @@ export default function Build() {
   const [reloadKey, setReloadKey] = useState(0);
   const [copied, setCopied] = useState(false);
   const taskRef = useRef<string | null>(null);
+  const [atts, setAtts] = useState<Att[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [webOn, setWebOn] = useState(false);      // „Im Internet nachsehen“ erzwingen (sonst automatisch bei Bedarf)
+  const [stage, setStage] = useState("");          // Zwischenstand: „Sucht im Internet…“
+  const [pubOpen, setPubOpen] = useState(false);
+  const [cloud, setCloud] = useState<"" | "saving" | "saved" | "off">("");
+  const fileRef = useRef<HTMLInputElement>(null);
+  const cloudReady = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { setProjects(load(user?.id)); }, [user?.id]);
+  // Projekte: sofort aus dem Browser, dann mit dem Konto abgleichen (neuerer Stand gewinnt) – so sind sie auf jedem Gerät da.
+  useEffect(() => {
+    const local = load(user?.id);
+    setProjects(local); cloudReady.current = false;
+    if (!user?.id) return;
+    let dead = false;
+    labsCall<{ projects: Project[] }>({ kind: "builder_load" }).then((d) => {
+      if (dead) return;
+      const byId = new Map<string, Project>();
+      for (const p of [...(d.projects || []), ...load(user.id)]) { const o = byId.get(p.id); if (!o || p.updated > o.updated) byId.set(p.id, p); }
+      const merged = [...byId.values()].sort((a, b) => b.updated.localeCompare(a.updated)).slice(0, 30);
+      setProjects(merged); save(user.id, merged); cloudReady.current = true; setCloud("saved");
+    }).catch(() => { cloudReady.current = false; setCloud("off"); });
+    return () => { dead = true; };
+  }, [user?.id]);
+  // Änderungen kurz sammeln und dann im Konto sichern (nicht mitten im Schreiben der KI).
+  useEffect(() => {
+    if (!user?.id || !cloudReady.current || busy) return;
+    setCloud("saving");
+    const t = setTimeout(() => {
+      labsCall({ kind: "builder_save", projects }).then(() => setCloud("saved")).catch(() => setCloud("off"));
+    }, 2500);
+    return () => clearTimeout(t);
+  }, [projects, busy, user?.id]);
   const active = projects.find((p) => p.id === activeId) ?? null;
   const liveHtml = busy ? extractHtml(live) : null;
   const html = liveHtml ?? active?.html ?? "";
@@ -123,7 +189,7 @@ export default function Build() {
   const model = isAllowed("code15:high", sub.tier) ? "code15:high" : "v1:normal";
 
   /** Ein gestreamter Aufruf der Chat-Funktion; liefert den Text. */
-  const call = async (messages: { role: string; content: string }[], prefix: string, ctrl: AbortController) => {
+  const call = async (messages: { role: string; content: unknown }[], prefix: string, ctrl: AbortController) => {
     const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`, {
       method: "POST",
       signal: ctrl.signal,
@@ -165,21 +231,67 @@ export default function Build() {
     const id = proj.id;
     // Eine Kennung pro Auftrag: Fortsetzungen und Nachbesserungen zählen zur laufenden Aufgabe (werden trotz Limit fertig).
     taskRef.current = crypto.randomUUID();
-    const userMsg: BMsg = { role: "user", content: prompt, at: now() };
+    const sent = atts; setAtts([]);
+    const userMsg: BMsg = { role: "user", content: prompt, at: now(), atts: sent.length ? sent : undefined };
     update(id, (p) => ({ ...p, messages: [...p.messages, userMsg], updated: now() }));
     setInput(""); setBusy(true); setLive(""); setTab("chat");
 
     // Verlauf ohne alte Codeblöcke, dafür die aktuelle Datei: spart Platz und die KI kennt immer den neuesten Stand.
-    const history = [...proj.messages, userMsg].slice(-10).map((m) => ({ role: m.role, content: m.role === "assistant" ? proseOf(m.content) || "Datei aktualisiert." : m.content }));
+    const kindOf = (a: Att) => (a.mime.startsWith("video/") ? "Video" : a.mime.startsWith("image/") ? "Bild" : "Datei");
+    const withFiles = (m: BMsg) => m.content + (m.atts?.length ? "\n\nHochgeladene Dateien (genau diese Adressen im Code verwenden):\n" + m.atts.map((a) => `- ${a.name} (${kindOf(a)}): ${a.url}`).join("\n") : "");
+    const history: { role: string; content: unknown }[] = [...proj.messages, userMsg].slice(-10).map((m) => ({ role: m.role, content: m.role === "assistant" ? proseOf(m.content) || "Datei aktualisiert." : withFiles(m) }));
+    // Die gerade hochgeladenen Bilder sieht die KI auch selbst (nicht nur die Adresse).
+    const pics = sent.filter((a) => a.mime.startsWith("image/")).slice(0, 4);
+    if (pics.length) history[history.length - 1] = { role: "user", content: [{ type: "text", text: withFiles(userMsg) }, ...pics.map((a) => ({ type: "image_url", image_url: { url: a.url } }))] };
     const ctx = proj.html ? `\n\nAktuelle index.html:\n\`\`\`html\n${proj.html}\n\`\`\`` : "";
     const base = proj.html;
     const sysFor = (h: string) => SYSTEM + (h ? EDIT_RULES + `\n\nAktuelle index.html:\n\`\`\`html\n${h}\n\`\`\`` : "");
-    const messages = [{ role: "system", content: base ? sysFor(base) : SYSTEM + ctx }, ...history];
+    // Großer Umbau („viel mehr“, „komplett neu“, „erweitere“ …): ganze Datei neu schreiben lassen statt einzelner Stellen –
+    // sonst kommen nur ein paar Zeilen dazu, obwohl viel versprochen wird.
+    const big = !!base && isBigChange(prompt);
+    const rewriteFor = (h: string) => `\n\nGROSSER UMBAU: Der Nutzer will deutlich mehr bzw. etwas grundlegend Neues. Schreib die KOMPLETTE index.html neu (ein \`\`\`html-Codeblock, keine SUCHEN/ERSETZEN-Blöcke). Behalte alles Gute der aktuellen Datei (Inhalte, Texte, Funktionen, Medien-Adressen) und baue darauf auf. „Mehr“ heißt wirklich mehr: mindestens 4 neue, vollständig ausgearbeitete Abschnitte/Funktionen mit echtem Inhalt (keine Platzhalter, kein Lorem ipsum), dazu passendes CSS und JavaScript – die Datei wird dadurch deutlich länger als vorher (aktuell ${h.split("\n").length} Zeilen). Zähle in deinem Satz nur auf, was du WIRKLICH eingebaut hast.\n\nAktuelle index.html:\n\`\`\`html\n${h}\n\`\`\``;
+    const messages: { role: string; content: unknown }[] = [{ role: "system", content: big ? SYSTEM + rewriteFor(base) : base ? sysFor(base) : SYSTEM + ctx }, ...history];
     // Bei Änderungs-Blöcken: abgeschnitten = offener Codeblock oder ein angefangener, nicht beendeter Block.
     const cut = (t: string) => (hasEditMarkers(t) ? ((t.match(/^\s*```/gm) || []).length % 2 === 1 || countEditStarts(t) > parseEdits(t).length) : looksCut(t));
     const ctrl = new AbortController(); abortRef.current = ctrl;
     let full = "";
+    let sources: { url: string; title: string }[] | undefined;
     try {
+      // Erst im Internet nachsehen, wenn der Wunsch es braucht (oder der Schalter an ist).
+      if (webOn || needsWeb(prompt)) {
+        setStage("Sucht im Internet…");
+        try {
+          const urls = urlsIn(prompt);
+          const query = prompt.replace(/https?:\/\/\S+/g, " ").replace(/\s+/g, " ").trim().slice(0, 160);
+          const r = await labsCall<{ hits: { url: string; title: string; snippet: string }[]; pages: { url: string; title: string; text: string; images: string[] }[] }>({ kind: "web_research", query: urls.length && query.length < 12 ? "" : query, urls });
+          if (r.pages?.length || r.hits?.length) {
+            setStage(`Liest ${r.pages?.length || 0} Seiten…`);
+            const block = "RECHERCHE-ERGEBNISSE (frisch aus dem Internet, " + new Date().toLocaleDateString("de-DE") + "):\n" +
+              (r.hits || []).map((h, i) => `${i + 1}. ${h.title} – ${h.url}\n   ${h.snippet}`).join("\n") +
+              (r.pages || []).map((pg) => `\n\n--- ${pg.title || pg.url} (${pg.url}) ---\n${pg.text}${pg.images?.length ? "\nBild-Adressen dieser Seite: " + pg.images.join(" , ") : ""}`).join("");
+            messages[0] = { role: "system", content: String(messages[0].content) + "\n\n" + block.slice(0, 24000) };
+            sources = [...(r.pages || []).map((pg) => ({ url: pg.url, title: pg.title || pg.url })), ...(r.hits || []).map((h) => ({ url: h.url, title: h.title }))].filter((x, i, a) => a.findIndex((y) => y.url === x.url) === i).slice(0, 5);
+          } else toast("Im Internet nichts Passendes gefunden – Mythos baut ohne Recherche.");
+        } catch { toast("Internet-Suche gerade nicht erreichbar – Mythos baut ohne Recherche."); }
+        setStage("");
+      }
+      // Passende Fotos/Videos zum Thema suchen, statt die KI Adressen raten zu lassen.
+      const wantVideo = /video|film\b|clip|bewegtbild/i.test(prompt) && !sent.some((a) => a.mime.startsWith("video/"));
+      const wantImage = (!base || /foto|bild|galerie|gallery|hero|hintergrund|image|photo|impression/i.test(prompt)) && !sent.some((a) => a.mime.startsWith("image/"));
+      if (wantVideo || wantImage) {
+        setStage(wantVideo ? "Sucht passende Videos und Fotos…" : "Sucht passende Fotos…");
+        const add = (t: string) => { messages[0] = { role: "system", content: String(messages[0].content) + "\n\n" + t }; };
+        try {
+          const topic = (proj.name + " – " + prompt).slice(0, 500);
+          const r = await labsCall<{ items: { type: string; url: string; title: string; width?: number; height?: number }[] }>({ kind: "media_search", prompt: topic, want: [...(wantVideo ? ["video"] : []), ...(wantImage ? ["image"] : [])] });
+          const vids = (r.items || []).filter((m) => m.type === "video"), imgs = (r.items || []).filter((m) => m.type === "image");
+          const line = (m: { url: string; title: string; width?: number; height?: number }) => `- „${m.title}“${m.width ? ` (${m.width}×${m.height})` : ""}: ${m.url}`;
+          if (vids.length || imgs.length) add("PASSENDE MEDIEN ZUM THEMA (frei nutzbar; nur verwenden, was laut Titel wirklich passt):" + (vids.length ? "\nVideos:\n" + vids.map(line).join("\n") : "") + (imgs.length ? "\nFotos:\n" + imgs.map(line).join("\n") : "") + (wantVideo && !vids.length ? "\nVideos: KEINE gefunden – kein <video> einbauen (siehe Regel)." : ""));
+          else if (wantVideo) add("PASSENDE MEDIEN ZUM THEMA: keine gefunden – kein <video> einbauen (siehe Regel).");
+          if (wantVideo && !vids.length) toast("Kein passendes freies Video gefunden. Lade am besten dein eigenes über die Büroklammer hoch.", { duration: 7000 });
+        } catch { if (wantVideo) add("PASSENDE MEDIEN ZUM THEMA: Suche nicht erreichbar – kein <video> einbauen (siehe Regel)."); }
+        setStage("");
+      }
       full = await call(messages, "", ctrl);
       for (let k = 0; k < MAX_CONTINUE && cut(full) && !ctrl.signal.aborted; k++) {
         const more = await call([...messages, { role: "assistant", content: full }, { role: "user", content: CONTINUE_PROMPT }], full, ctrl);
@@ -212,18 +324,35 @@ export default function Build() {
       }
       if (r.failed.length) toast.warning(r.html !== base ? `${r.failed.length} Änderung(en) passten nicht zur Datei. Sag einfach nochmal, was noch fehlt.` : "Die Änderungen passten nicht zur Datei. Versuch es bitte nochmal.");
     }
+    // Viel versprochen, wenig geliefert? Dann einmal nachfassen und die ganze Datei ausbauen lassen.
+    if (full && base && !ctrl.signal.aborted && (big || isGrowthAsk(prompt))) {
+      const after = newHtml ?? base;
+      const grew = after.length - base.length, lines = changedLines(base, after);
+      if (grew < Math.max(1500, base.length * 0.2) && lines < 120) {
+        try {
+          setLive(""); setStage("Das war zu wenig – baut jetzt richtig aus…");
+          const sys2 = { role: "system", content: SYSTEM + rewriteFor(after) };
+          let big2 = await call([sys2, { role: "user", content: prompt }, { role: "assistant", content: proseOf(full) || "Erledigt." },
+            { role: "user", content: `Das war viel zu wenig: Es sind nur ${lines} Zeilen dazugekommen bzw. geändert worden. Ich wollte DEUTLICH mehr. Schreib jetzt die komplette index.html neu und baue wirklich alles aus, was du angekündigt hast – jeder Abschnitt vollständig mit echtem Inhalt, CSS und JavaScript. Ein \`\`\`html-Codeblock.` }], "", ctrl);
+          for (let k = 0; k < MAX_CONTINUE && looksCut(big2) && !ctrl.signal.aborted; k++) { const m2 = await call([sys2, { role: "user", content: prompt }, { role: "assistant", content: big2 }, { role: "user", content: CONTINUE_PROMPT }], big2, ctrl); if (!m2) break; big2 += stitch(big2, m2); }
+          const h2 = extractHtml(big2);
+          if (h2 && /<\/html>/i.test(h2) && h2.length > after.length) { newHtml = h2; full = big2; note = `komplett überarbeitet · ${base.split("\n").length} → ${h2.split("\n").length} Zeilen`; }
+        } catch { /* der kleine Stand bleibt */ }
+        setStage("");
+      } else if (big && newHtml && !note) note = `komplett überarbeitet · ${base.split("\n").length} → ${newHtml.split("\n").length} Zeilen`;
+    }
     if (full) {
       const done = !!newHtml && /<\/html>/i.test(newHtml);
       if (newHtml && !done) toast.warning("Die Datei ist noch nicht ganz fertig. Schreib „mach weiter“.");
       update(id, (p) => ({
         ...p,
         html: newHtml ?? p.html,
-        messages: [...p.messages, { role: "assistant", content: full, html: newHtml ?? undefined, note, at: now() }],
+        messages: [...p.messages, { role: "assistant", content: full, html: newHtml ?? undefined, note, sources, at: now() }],
         updated: now(),
       }));
       if (newHtml && window.matchMedia("(max-width: 1023px)").matches) setTab("preview");
     }
-    setLive(""); setBusy(false); abortRef.current = null;
+    setLive(""); setStage(""); setBusy(false); abortRef.current = null;
   };
 
   const doCopy = async () => {
@@ -240,6 +369,64 @@ export default function Build() {
     if (activeId === id) setActiveId(null);
   };
 
+  // Bilder und Videos hochladen: sie bekommen eine feste Adresse, die die KI in die App einbaut.
+  const addFiles = async (files: FileList | File[] | null) => {
+    const list = [...(files || [])].filter((f) => /^(image|video)\//.test(f.type)).slice(0, 6 - atts.length);
+    if (!list.length || !user) { if (files && [...files].length) toast.error("Nur Bilder und Videos (höchstens 6)."); return; }
+    setUploading(true);
+    try {
+      for (const f of list) {
+        if (f.size > (f.type.startsWith("video/") ? 80 : 12) * 1024 * 1024) { toast.error(`${f.name} ist zu groß (Bilder bis 12 MB, Videos bis 80 MB).`); continue; }
+        const ext = (f.name.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 5);
+        const path = `${user.id}/build/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        const { error } = await supabase.storage.from("chat-uploads").upload(path, f, { contentType: f.type, cacheControl: "31536000" });
+        if (error) { toast.error(`${f.name}: Hochladen fehlgeschlagen`, { description: error.message }); continue; }
+        const url = supabase.storage.from("chat-uploads").getPublicUrl(path).data.publicUrl;
+        setAtts((a) => [...a, { url, name: f.name, mime: f.type }]);
+      }
+    } finally { setUploading(false); if (fileRef.current) fileRef.current.value = ""; }
+  };
+
+  // Veröffentlichen unter /build/<name>
+  const [slug, setSlug] = useState("");
+  const [slugState, setSlugState] = useState<{ s: "idle" | "checking" | "free" | "taken" | "bad"; msg?: string }>({ s: "idle" });
+  const [publishing, setPublishing] = useState(false);
+  const openPublish = () => { if (!active) return; setSlug(active.slug || toSlug(active.name)); setSlugState({ s: "idle" }); setPubOpen(true); };
+  useEffect(() => {
+    if (!pubOpen) return;
+    if (slug.length < 3) { setSlugState({ s: "bad", msg: "Mindestens 3 Zeichen" }); return; }
+    if (!SLUG_RE.test(slug)) { setSlugState({ s: "bad", msg: "Nur Kleinbuchstaben, Zahlen und Bindestriche" }); return; }
+    setSlugState({ s: "checking" });
+    let dead = false;
+    const t = setTimeout(() => {
+      labsCall<{ free: boolean; mine?: boolean; reason?: string }>({ kind: "app_check", slug }).then((r) => { if (!dead) setSlugState(r.free ? { s: "free", msg: r.mine ? "Gehört schon dir – wird aktualisiert" : "Ist frei" } : { s: /vergeben/i.test(r.reason || "") ? "taken" : "bad", msg: r.reason || "Nicht verfügbar" }); })
+        .catch((e) => { if (!dead) setSlugState({ s: "bad", msg: (e as Error).message }); });
+    }, 350);
+    return () => { dead = true; clearTimeout(t); };
+  }, [slug, pubOpen]);
+  const appUrl = (sl: string) => `${location.origin}/build/${sl}`;
+  const publish = async () => {
+    if (!active?.html || slugState.s !== "free") return;
+    setPublishing(true);
+    try {
+      // Wechselt der Name, wird der alte wieder frei.
+      if (active.slug && active.slug !== slug) await labsCall({ kind: "app_unpublish", slug: active.slug }).catch(() => {});
+      await labsCall({ kind: "app_publish", slug, title: active.name, html: active.html, project_id: active.id });
+      update(active.id, (p) => ({ ...p, slug, publishedAt: now() }));
+      await copyText(appUrl(slug));
+      toast.success("Veröffentlicht – Link kopiert", { description: appUrl(slug) });
+      setSlugState({ s: "free", msg: "Gehört schon dir – wird aktualisiert" });
+    } catch (e) { toast.error((e as Error).message); setSlugState({ s: "taken", msg: (e as Error).message }); }
+    finally { setPublishing(false); }
+  };
+  const unpublish = async () => {
+    if (!active?.slug) return;
+    setPublishing(true);
+    try { await labsCall({ kind: "app_unpublish", slug: active.slug }); update(active.id, (p) => ({ ...p, slug: undefined, publishedAt: undefined })); toast.success("Offline genommen – der Name ist wieder frei"); setPubOpen(false); }
+    catch (e) { toast.error((e as Error).message); }
+    finally { setPublishing(false); }
+  };
+
   const Btn = ({ onClick, title, children, disabled }: { onClick: () => void; title: string; children: React.ReactNode; disabled?: boolean }) => (
     <button onClick={onClick} title={title} aria-label={title} disabled={disabled}
       className="rounded-lg p-2 text-muted-foreground hover:bg-white/5 hover:text-foreground disabled:opacity-40 touch-manipulation">{children}</button>
@@ -248,7 +435,19 @@ export default function Build() {
   const composer = (big = false) => (
     <form onSubmit={(e) => { e.preventDefault(); send(); }}
       className={`rounded-3xl border border-white/10 bg-white/[0.04] p-3 ${big ? "shadow-[0_8px_40px_hsl(0_0%_0%/0.4)]" : ""}`}>
+      {atts.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-2">
+          {atts.map((a) => (
+            <div key={a.url} className="group relative h-16 w-16 overflow-hidden rounded-xl border border-white/10 bg-black/40" title={a.name}>
+              {a.mime.startsWith("image/") ? <img src={a.url} alt={a.name} className="h-full w-full object-cover" /> : <video src={a.url} muted playsInline preload="metadata" className="h-full w-full object-cover" />}
+              {a.mime.startsWith("video/") && <Film className="absolute bottom-1 left-1 h-3.5 w-3.5 text-white drop-shadow" />}
+              <button type="button" onClick={() => setAtts((l) => l.filter((x) => x.url !== a.url))} aria-label={`${a.name} entfernen`} className="absolute right-0.5 top-0.5 rounded-full bg-black/70 p-0.5 text-white"><X className="h-3 w-3" /></button>
+            </div>
+          ))}
+        </div>
+      )}
       <textarea
+        onPaste={(e) => { const fs = [...e.clipboardData.files]; if (fs.length) { e.preventDefault(); void addFiles(fs); } }}
         value={input}
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !window.matchMedia("(pointer: coarse)").matches) { e.preventDefault(); send(); } }}
@@ -257,13 +456,24 @@ export default function Build() {
         className="w-full resize-none bg-transparent px-1 text-[16px] placeholder:text-muted-foreground focus:outline-none"
       />
       <div className="flex items-center justify-between">
-        <span className="px-1 text-xs text-muted-foreground">{model === "code15:high" ? "MythosCode v1.5" : "Mythos v1"}</span>
+        <div className="flex min-w-0 items-center gap-1">
+          <input ref={fileRef} type="file" accept="image/*,video/*" multiple hidden onChange={(e) => addFiles(e.target.files)} />
+          <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading || atts.length >= 6} title="Bilder oder Videos hochladen, die in die App sollen" aria-label="Bilder oder Videos hochladen"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-white/5 hover:text-foreground disabled:opacity-40">
+            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+          </button>
+          <button type="button" onClick={() => setWebOn((v) => !v)} aria-pressed={webOn} title={webOn ? "Internet-Suche ist an: Mythos sieht vor dem Bauen im Internet nach" : "Im Internet nachsehen (sonst nur, wenn dein Wunsch es braucht)"}
+            className={`inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-xs ${webOn ? "bg-white/15 text-foreground" : "text-muted-foreground hover:bg-white/5 hover:text-foreground"}`}>
+            <Globe className="h-4 w-4" /> <span className="hidden sm:inline">Internet</span>
+          </button>
+          <span className="truncate px-1 text-xs text-muted-foreground">{model === "code15:high" ? "MythosCode v1.5" : "Mythos v1"}</span>
+        </div>
         {busy ? (
           <button type="button" onClick={() => abortRef.current?.abort()} aria-label="Stoppen" className="flex h-9 w-9 items-center justify-center rounded-full bg-foreground text-background">
             <Square className="h-3.5 w-3.5 fill-current" />
           </button>
         ) : (
-          <button type="submit" disabled={!input.trim()} aria-label="Senden" className="flex h-9 w-9 items-center justify-center rounded-full bg-foreground text-background disabled:opacity-30">
+          <button type="submit" disabled={!input.trim() || uploading} aria-label="Senden" className="flex h-9 w-9 items-center justify-center rounded-full bg-foreground text-background disabled:opacity-30">
             <ArrowUp className="h-4 w-4" />
           </button>
         )}
@@ -315,10 +525,27 @@ export default function Build() {
     <div className="flex h-full min-h-0 flex-col">
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
         {active.messages.map((m, i) => m.role === "user" ? (
-          <div key={i} className="ml-auto max-w-[85%] whitespace-pre-wrap rounded-2xl bg-white/[0.08] px-4 py-2.5 text-[15px]">{m.content}</div>
+          <div key={i} className="ml-auto max-w-[85%] space-y-2">
+            {m.atts && m.atts.length > 0 && (
+              <div className="flex flex-wrap justify-end gap-1.5">
+                {m.atts.map((a) => (
+                  <a key={a.url} href={a.url} target="_blank" rel="noreferrer" title={a.name} className="relative block h-14 w-14 overflow-hidden rounded-lg border border-white/10 bg-black/40">
+                    {a.mime.startsWith("image/") ? <img src={a.url} alt={a.name} loading="lazy" className="h-full w-full object-cover" /> : <span className="grid h-full w-full place-items-center text-muted-foreground"><Film className="h-5 w-5" /></span>}
+                  </a>
+                ))}
+              </div>
+            )}
+            <div className="whitespace-pre-wrap rounded-2xl bg-white/[0.08] px-4 py-2.5 text-[15px]">{m.content}</div>
+          </div>
         ) : (
           <div key={i} className="space-y-2 text-[15px]">
             {proseOf(m.content) && <p className="whitespace-pre-wrap text-foreground/90">{proseOf(m.content)}</p>}
+            {m.sources && m.sources.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                <Globe className="h-3.5 w-3.5" /> Im Internet nachgesehen:
+                {m.sources.map((src) => { let host = src.url; try { host = new URL(src.url).hostname.replace(/^www\./, ""); } catch { /* so lassen */ } return <a key={src.url} href={src.url} target="_blank" rel="noreferrer" title={src.title} className="rounded-full border border-white/10 px-2 py-0.5 hover:text-foreground">{host}</a>; })}
+              </div>
+            )}
             {m.html && (
               <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm">
                 <FileCode2 className="h-4 w-4 text-muted-foreground" />
@@ -337,7 +564,7 @@ export default function Build() {
             {proseOf(live) && <p className="whitespace-pre-wrap text-foreground/90">{proseOf(live)}</p>}
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
-              <span className="mythos-shimmer">{liveHtml ? `Schreibt index.html (${liveHtml.split("\n").length} Zeilen)` : hasEditMarkers(live) ? `Ändert index.html gezielt (${countEditStarts(live)} ${countEditStarts(live) === 1 ? "Stelle" : "Stellen"})` : active?.html ? "Sucht die Stellen zum Ändern…" : "Plant die App…"}</span>
+              <span className="mythos-shimmer">{stage ? stage : liveHtml ? `Schreibt index.html (${liveHtml.split("\n").length} Zeilen)` : hasEditMarkers(live) ? `Ändert index.html gezielt (${countEditStarts(live)} ${countEditStarts(live) === 1 ? "Stelle" : "Stellen"})` : active?.html ? "Sucht die Stellen zum Ändern…" : "Plant die App…"}</span>
             </div>
           </div>
         )}
@@ -398,8 +625,47 @@ export default function Build() {
           {seg("code", view, () => setView("code"), Code2, "Code")}
         </div>
         <div className="hidden lg:block">{tools}</div>
+        <span className="hidden items-center gap-1 text-xs text-muted-foreground sm:inline-flex" title={cloud === "off" ? "Nur auf diesem Gerät gespeichert (Konto-Speicher gerade nicht erreichbar)" : "In deinem Konto gespeichert – auf jedem Gerät verfügbar"}>
+          {cloud === "off" ? <CloudOff className="h-3.5 w-3.5" /> : cloud === "saving" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Cloud className="h-3.5 w-3.5" />}
+          <span className="hidden md:inline">{cloud === "off" ? "Nur lokal" : cloud === "saving" ? "Speichert…" : "Gespeichert"}</span>
+        </span>
+        <button onClick={openPublish} disabled={!active.html || busy} className="inline-flex items-center gap-1.5 rounded-full bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:opacity-40">
+          <Rocket className="h-3.5 w-3.5" /> {active.slug ? "Veröffentlicht" : "Veröffentlichen"}
+        </button>
         <Btn onClick={() => { setActiveId(null); setInput(""); }} title="Neues Projekt"><Plus className="h-4 w-4" /></Btn>
       </header>
+
+      <Dialog open={pubOpen} onOpenChange={setPubOpen}>
+        <DialogContent className="max-w-md">
+          <DialogTitle>App veröffentlichen</DialogTitle>
+          <DialogDescription>Such dir eine Adresse aus. Jeder mit dem Link kann die App öffnen – ohne Anmeldung.</DialogDescription>
+          <label className="block text-sm">
+            <span className="mb-1.5 block text-xs text-muted-foreground">Adresse</span>
+            <div className="flex items-center overflow-hidden rounded-xl border border-border bg-muted/30 focus-within:border-foreground/40">
+              <span className="shrink-0 pl-3 text-sm text-muted-foreground">{location.host}/build/</span>
+              <input value={slug} onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-{2,}/g, "-").slice(0, 40))} onKeyDown={(e) => { if (e.key === "Enter") void publish(); }}
+                autoFocus spellCheck={false} autoCapitalize="none" placeholder="mein-cafe" className="min-w-0 flex-1 bg-transparent py-2.5 pr-3 text-sm font-medium outline-none" aria-label="Name der Adresse" />
+            </div>
+          </label>
+          <p className={`flex items-center gap-1.5 text-xs ${slugState.s === "free" ? "text-emerald-400" : slugState.s === "checking" || slugState.s === "idle" ? "text-muted-foreground" : "text-red-400"}`} role="status">
+            {slugState.s === "checking" ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Prüft, ob der Name frei ist…</> : slugState.s === "free" ? <><Check className="h-3.5 w-3.5" /> {slugState.msg}</> : slugState.s === "idle" ? "" : <><X className="h-3.5 w-3.5" /> {slugState.msg}</>}
+          </p>
+          {active.slug && (
+            <div className="rounded-xl border border-border bg-muted/30 p-3 text-xs">
+              <div className="text-muted-foreground">Aktuell online{active.publishedAt ? ` (Stand ${new Date(active.publishedAt).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" })})` : ""}:</div>
+              <a href={appUrl(active.slug)} target="_blank" rel="noreferrer" className="break-all font-medium underline-offset-2 hover:underline">{appUrl(active.slug)}</a>
+              {active.publishedAt && active.updated > active.publishedAt && <div className="mt-1 text-amber-400">Du hast seitdem etwas geändert – „Aktualisieren“ bringt den neuen Stand online.</div>}
+            </div>
+          )}
+          <div className="flex flex-wrap justify-end gap-2">
+            {active.slug && <button onClick={unpublish} disabled={publishing} className="mr-auto rounded-full border border-border px-3.5 py-2 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50">Offline nehmen</button>}
+            {active.slug && <button onClick={async () => { await copyText(appUrl(active.slug!)); toast.success("Link kopiert"); }} className="inline-flex items-center gap-1.5 rounded-full border border-border px-3.5 py-2 text-sm hover:bg-muted"><Copy className="h-4 w-4" /> Link</button>}
+            <button onClick={publish} disabled={publishing || slugState.s !== "free"} className="inline-flex items-center gap-1.5 rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90 disabled:opacity-40">
+              {publishing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />} {active.slug === slug ? "Aktualisieren" : active.slug ? "Unter neuem Namen veröffentlichen" : "Veröffentlichen"}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Handy: Umschalter Chat / Vorschau / Code */}
       <div className="flex items-center justify-between gap-1 border-b border-white/10 px-2 py-1.5 lg:hidden">

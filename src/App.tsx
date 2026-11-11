@@ -51,6 +51,7 @@ const Twin = lazyPage(() => import("./pages/Twin"));
 const Games = lazyPage(() => import("./pages/Games"));
 const Try = lazyPage(() => import("./pages/Try"));
 const SharePage = lazyPage(() => import("./pages/SharePage"));
+const PublishedApp = lazyPage(() => import("./pages/PublishedApp"));
 const Werbung = lazyPage(() => import("./pages/Werbung"));
 const WerbungVorschau = lazyPage(() => import("./pages/WerbungVorschau"));
 const BrowserAgent = lazyPage(() => import("./pages/BrowserAgent"));
@@ -137,6 +138,7 @@ const App = () => (
             <Route path="/cloud-pc" element={<RequireAuth><CloudPc /></RequireAuth>} />
             <Route path="/filmstudio" element={<RequireAuth><FilmStudio /></RequireAuth>} />
             <Route path="/build" element={<RequireAuth><Build /></RequireAuth>} />
+            <Route path="/build/:slug" element={<PublishedApp />} />
             <Route path="/impressum" element={<Impressum />} />
             <Route path="/datenschutz" element={<Datenschutz />} />
             <Route path="/nutzungsbedingungen" element={<Nutzungsbedingungen />} />

@@ -6,6 +6,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.103.3";
 import { aiChat } from "../_shared/ai.ts";
 import { relevantCraftKnowledge } from "../_shared/craftKnowledge.ts";
 import { generateImage } from "../_shared/image.ts";
+import { webSearch, readPage, safeUrl, commonsMedia, pexelsMedia, type Media } from "../_shared/web.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -75,6 +76,21 @@ async function ask(body: any): Promise<string> {
   return j?.choices?.[0]?.message?.content ?? "";
 }
 
+// ---------- App-Builder: veröffentlichte Apps unter /build/<name> ----------
+type AppEntry = { slug: string; title: string; html: string; user_id: string; author: string; project_id?: string; created_at: string; updated_at: string };
+const RESERVED = new Set(["new", "neu", "app", "apps", "admin", "api", "build", "login", "auth", "mythos", "www", "index", "null", "undefined", "s", "galerie", "settings", "edit", "share", "public", "assets", "static"]);
+const cleanSlug = (v: unknown) => String(v ?? "").trim().toLowerCase();
+function slugProblem(slug: string): string | null {
+  if (slug.length < 3) return "Mindestens 3 Zeichen";
+  if (slug.length > 40) return "Höchstens 40 Zeichen";
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) return "Nur Kleinbuchstaben, Zahlen und Bindestriche (kein Bindestrich am Anfang/Ende)";
+  if (RESERVED.has(slug)) return "Dieser Name ist reserviert";
+  return null;
+}
+const appPath = (slug: string) => `apps/${slug}.json`;
+const myAppsPath = (uid: string) => `apps-by-user/${uid}.json`;
+type MyApp = { slug: string; title: string; project_id?: string; updated_at: string };
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
@@ -98,6 +114,14 @@ Deno.serve(async (req) => {
       const item = await get<Record<string, unknown>>(`shares/${id}.json`);
       if (!item) return json({ error: "Dieser Link existiert nicht (mehr)." }, 404);
       return json({ item });
+    }
+    // Öffentlich: veröffentlichte App ansehen (ohne Login).
+    if (kind === "app_get") {
+      const slug = cleanSlug(body.slug);
+      if (slugProblem(slug)) return json({ error: "Diese App gibt es nicht." }, 404);
+      const app = await get<AppEntry>(appPath(slug));
+      if (!app) return json({ error: "Diese App gibt es nicht (mehr)." }, 404);
+      return json({ item: { slug: app.slug, title: app.title, html: app.html, author: app.author, updated_at: app.updated_at } });
     }
     if (kind === "arena_board") {
       const votes = (await get<Votes>("arena/votes.json")) || {};
@@ -136,6 +160,107 @@ Deno.serve(async (req) => {
       return json({ ok: true });
     }
 
+    // ---------- App-Builder ----------
+    if (kind === "app_check") {
+      const slug = cleanSlug(body.slug);
+      const problem = slugProblem(slug);
+      if (problem) return json({ free: false, reason: problem });
+      const app = await get<AppEntry>(appPath(slug));
+      if (!app) return json({ free: true });
+      return app.user_id === user.id ? json({ free: true, mine: true, title: app.title }) : json({ free: false, reason: "Schon vergeben" });
+    }
+    if (kind === "app_publish") {
+      const slug = cleanSlug(body.slug);
+      const problem = slugProblem(slug);
+      if (problem) return json({ error: problem }, 400);
+      const html = String(body.html || "");
+      if (html.length < 50 || html.length > 1_500_000) return json({ error: "Die App ist leer oder zu groß (max. 1,5 MB)." }, 400);
+      const existing = await get<AppEntry>(appPath(slug));
+      if (existing && existing.user_id !== user.id) return json({ error: "Dieser Name ist schon vergeben." }, 409);
+      const mine = (await get<MyApp[]>(myAppsPath(user.id))) || [];
+      if (!existing && mine.length >= 50) return json({ error: "Du hast schon 50 veröffentlichte Apps. Nimm zuerst eine offline." }, 400);
+      const nowIso = new Date().toISOString();
+      const title = String(body.title || slug).trim().slice(0, 80);
+      const entry: AppEntry = { slug, title, html, user_id: user.id, author: String(body.author || user.email?.split("@")[0] || "Mythos-Nutzer").slice(0, 40), project_id: body.project_id ? String(body.project_id).slice(0, 60) : existing?.project_id, created_at: existing?.created_at || nowIso, updated_at: nowIso };
+      await put(appPath(slug), entry);
+      // Kurz danach nochmal lesen: haben zwei gleichzeitig denselben Namen genommen, gewinnt der, der drinsteht.
+      const check = await get<AppEntry>(appPath(slug));
+      if (check && check.user_id !== user.id) return json({ error: "Dieser Name wurde gerade vergeben." }, 409);
+      await put(myAppsPath(user.id), [{ slug, title, project_id: entry.project_id, updated_at: nowIso }, ...mine.filter((m) => m.slug !== slug)].slice(0, 60));
+      return json({ ok: true, slug, updated_at: nowIso });
+    }
+    if (kind === "app_unpublish") {
+      const slug = cleanSlug(body.slug);
+      const app = slugProblem(slug) ? null : await get<AppEntry>(appPath(slug));
+      if (!app || app.user_id !== user.id) return json({ error: "Diese App gehört dir nicht." }, 403);
+      await admin.storage.from(BUCKET).remove([appPath(slug)]);
+      const mine = (await get<MyApp[]>(myAppsPath(user.id))) || [];
+      await put(myAppsPath(user.id), mine.filter((m) => m.slug !== slug));
+      return json({ ok: true });
+    }
+    if (kind === "app_mine") return json({ items: (await get<MyApp[]>(myAppsPath(user.id))) || [] });
+    // Projekte des Builders im Konto sichern (auf jedem Gerät verfügbar).
+    if (kind === "builder_save") {
+      const projects = Array.isArray(body.projects) ? body.projects.slice(0, 30) : null;
+      if (!projects) return json({ error: "projects fehlt" }, 400);
+      const text = JSON.stringify(projects);
+      if (text.length > 6_000_000) return json({ error: "Zu viele/zu große Projekte – lösche alte." }, 413);
+      await put(`builder/${user.id}.json`, { saved_at: new Date().toISOString(), projects });
+      return json({ ok: true });
+    }
+    if (kind === "builder_load") {
+      const d = await get<{ saved_at: string; projects: unknown[] }>(`builder/${user.id}.json`);
+      return json({ projects: d?.projects || [], saved_at: d?.saved_at || null });
+    }
+    // Im Internet nachsehen: suchen und die besten Seiten lesen (für aktuelle Infos, echte Inhalte, Bild-Adressen).
+    if (kind === "web_research") {
+      const query = String(body.query || "").trim().slice(0, 200);
+      const urls = (Array.isArray(body.urls) ? body.urls : []).map((u: unknown) => safeUrl(String(u))).filter(Boolean).slice(0, 3) as string[];
+      const hits = query ? await webSearch(query, 5) : [];
+      const toRead = [...urls, ...hits.map((h) => h.url)].filter((u, i, a) => a.indexOf(u) === i).slice(0, urls.length ? Math.max(urls.length, 3) : 3);
+      const pages = (await Promise.all(toRead.map((u) => readPage(u, urls.includes(u) ? 9000 : 4000)))).filter(Boolean);
+      return json({ hits, pages });
+    }
+
+    // Admin: Pexels-Schlüssel für bessere Stock-Fotos/-Videos hinterlegen (kostenlos auf pexels.com/api).
+    if (kind === "media_key_set") {
+      const { data: roles } = await admin.from("user_roles").select("role").eq("user_id", user.id);
+      if (!roles?.some((r: { role: string }) => r.role === "admin")) return json({ error: "Nur für Admins." }, 403);
+      const value = String(body.key || "").trim();
+      if (value && value.length < 20) return json({ error: "Das sieht nicht nach einem Pexels-Schlüssel aus." }, 400);
+      if (value) { const t = await pexelsMedia("bakery", "image", value, 1); if (!t.length) return json({ error: "Pexels hat den Schlüssel nicht angenommen." }, 400); }
+      const { error } = await admin.from("app_secrets").upsert({ name: "PEXELS_API_KEY", value });
+      if (error) return json({ error: error.message }, 500);
+      return json({ ok: true, active: !!value });
+    }
+    // Passende freie Fotos/Videos zum Thema finden (statt dass die KI Adressen aus dem Gedächtnis rät).
+    if (kind === "media_search") {
+      const prompt = String(body.prompt || "").slice(0, 600);
+      const want = (Array.isArray(body.want) ? body.want : ["image"]).filter((t: unknown) => t === "image" || t === "video") as ("image" | "video")[];
+      if (!prompt || !want.length) return json({ items: [], queries: [] });
+      // Suchbegriffe auf Englisch aus dem Wunsch ableiten (die Bild-Datenbanken sind englisch verschlagwortet).
+      let queries: string[] = [];
+      try {
+        const r = await aiChat({ model: "google/gemini-3.1-flash-lite", stream: false, response_format: { type: "json_object" }, max_tokens: 200, messages: [
+          { role: "system", content: 'Der Nutzer baut eine Website/App und braucht passende Stock-Fotos oder -Videos. Gib JSON zurück: {"queries":["…","…","…"]} – drei kurze ENGLISCHE Suchbegriffe (je 1–3 Wörter), die genau das zeigen, worum es geht (Motiv, nicht die Website). Beispiel Bäckerei: ["bakery","baking bread","baker dough"]. Keine anderen Themen.' },
+          { role: "user", content: prompt }] });
+        const j = JSON.parse((await r.json())?.choices?.[0]?.message?.content || "{}");
+        queries = (Array.isArray(j.queries) ? j.queries : []).map((q: unknown) => String(q).replace(/[^\w\s-]/g, "").trim().slice(0, 40)).filter(Boolean).slice(0, 3);
+      } catch { /* unten: Rückfall */ }
+      if (!queries.length && typeof body.fallback === "string") queries = [body.fallback.slice(0, 40)];
+      if (!queries.length) return json({ items: [], queries: [] });
+      let pexels = Deno.env.get("PEXELS_API_KEY") || "";
+      if (!pexels) { try { const { data } = await admin.from("app_secrets").select("value").eq("name", "PEXELS_API_KEY").maybeSingle(); pexels = data?.value || ""; } catch { /* ohne */ } }
+      const items: Media[] = [];
+      for (const type of want) {
+        const per = type === "video" ? 4 : 8;
+        const lists = await Promise.all(queries.map((q) => (pexels ? pexelsMedia(q, type, pexels, per) : Promise.resolve([] as Media[])).then((a) => (a.length ? a : commonsMedia(q, type, per)))));
+        // Reihum aus jeder Suche nehmen, damit die Auswahl abwechslungsreich ist.
+        const seen = new Set<string>();
+        for (let i = 0; i < per && [...seen].length < per; i++) for (const l of lists) { const m = l[i]; if (m && !seen.has(m.url) && seen.size < per) { seen.add(m.url); items.push(m); } }
+      }
+      return json({ items, queries });
+    }
     if (kind === "share_create") {
       const fileName = String(body.name || "ergebnis.html").slice(0, 120);
       const content = String(body.content || "");
