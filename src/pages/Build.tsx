@@ -13,7 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/useAuth";
 import { useSubscription } from "@/hooks/useSubscription";
-import { isAllowed } from "@/lib/mythosModels";
+import { isAllowed, mythosLabel } from "@/lib/mythosModels";
 import { copyText } from "@/lib/copyText";
 import { CONTINUE_PROMPT, MAX_CONTINUE, looksCut, stitch } from "@/lib/codeContinue";
 import { applyEdits, changedLines, countEditStarts, hasEditMarkers, parseEdits, repairPrompt } from "@/lib/htmlPatch";
@@ -111,7 +111,11 @@ async function labsCall<T = Record<string, unknown>>(body: Record<string, unknow
     const msg = ctx && typeof ctx.json === "function" ? (await ctx.json().catch(() => null))?.error : null;
     throw new Error(msg || error.message || "Verbindungsfehler");
   }
-  if (data?.error) throw new Error(data.error);
+  if (data?.error) {
+    // Alte Server-Version: kennt die neue Aktion noch nicht → verständlich sagen statt „Unbekannte Aktion“.
+    if (/unbekannte aktion|unknown (action|kind)/i.test(String(data.error))) throw new Error("Diese Funktion ist auf dem Server noch nicht aktiv – die Server-Funktion „labs“ muss neu veröffentlicht werden.");
+    throw new Error(data.error);
+  }
   return data as T;
 }
 /** Braucht der Wunsch aktuelle oder echte Infos aus dem Internet? */
@@ -466,7 +470,7 @@ export default function Build() {
             className={`inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-xs ${webOn ? "bg-white/15 text-foreground" : "text-muted-foreground hover:bg-white/5 hover:text-foreground"}`}>
             <Globe className="h-4 w-4" /> <span className="hidden sm:inline">Internet</span>
           </button>
-          <span className="truncate px-1 text-xs text-muted-foreground">{model === "code15:high" ? "Mythos Atlas 1.5" : "Mythos Spark 1"}</span>
+          <span className="truncate px-1 text-xs text-muted-foreground">{mythosLabel(model).split(" · ")[0]}</span>
         </div>
         {busy ? (
           <button type="button" onClick={() => abortRef.current?.abort()} aria-label="Stoppen" className="flex h-9 w-9 items-center justify-center rounded-full bg-foreground text-background">
@@ -636,13 +640,13 @@ export default function Build() {
       </header>
 
       <Dialog open={pubOpen} onOpenChange={setPubOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-md rounded-2xl overflow-hidden">
           <DialogTitle>App veröffentlichen</DialogTitle>
           <DialogDescription>Such dir eine Adresse aus. Jeder mit dem Link kann die App öffnen – ohne Anmeldung.</DialogDescription>
           <label className="block text-sm">
             <span className="mb-1.5 block text-xs text-muted-foreground">Adresse</span>
             <div className="flex items-center overflow-hidden rounded-xl border border-border bg-muted/30 focus-within:border-foreground/40">
-              <span className="shrink-0 pl-3 text-sm text-muted-foreground">{location.host}/build/</span>
+              <span className="shrink-0 pl-3 text-sm text-muted-foreground"><span className="hidden sm:inline">{location.host}</span>/build/</span>
               <input value={slug} onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-{2,}/g, "-").slice(0, 40))} onKeyDown={(e) => { if (e.key === "Enter") void publish(); }}
                 autoFocus spellCheck={false} autoCapitalize="none" placeholder="mein-cafe" className="min-w-0 flex-1 bg-transparent py-2.5 pr-3 text-sm font-medium outline-none" aria-label="Name der Adresse" />
             </div>
