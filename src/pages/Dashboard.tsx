@@ -34,7 +34,7 @@ const Dashboard = () => {
   const { user, profile, refreshProfile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get("tab");
-  const initialTab = tabParam === "profile" || tabParam === "invite" ? tabParam : "keys";
+  const initialTab = tabParam === "profile" || tabParam === "invite" || tabParam === "design" ? tabParam : "keys";
 
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [name, setName] = useState("");

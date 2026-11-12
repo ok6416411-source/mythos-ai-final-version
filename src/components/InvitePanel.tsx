@@ -16,12 +16,18 @@ const InvitePanel = () => {
   const [count, setCount] = useState(0);
   const [bonusDays, setBonusDays] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [missing, setMissing] = useState(false);
 
   useEffect(() => {
     if (!user || !isPro) return;
     (async () => {
       const { data, error } = await (supabase.rpc as any)("get_invite_code");
-      if (error) { toast.error("Einladungslink konnte nicht geladen werden"); return; }
+      if (error) {
+        // Fehlt die Datenbank-Funktion (Migration „pro_invites“ noch nicht angewendet), ruhig erklären statt Fehler-Popup.
+        if (/get_invite_code|function|schema cache|does not exist|PGRST202/i.test(error.message + " " + (error as any).code)) setMissing(true);
+        else toast.error("Einladungslink konnte nicht geladen werden");
+        return;
+      }
       setCode(data as string);
       const { data: refs } = await (supabase.from as any)("referrals")
         .select("bonus_days").eq("inviter_id", user.id);
@@ -57,6 +63,16 @@ const InvitePanel = () => {
           Mit Pro kannst du Freunde einladen. Sie bekommen 7 Tage Light, du bekommst 7 Tage Pro gratis pro Freund.
         </p>
         <Link to="/app"><Button className="bg-gradient-primary text-primary-foreground hover:opacity-90">Pro holen</Button></Link>
+      </div>
+    );
+  }
+
+  if (missing) {
+    return (
+      <div className="glass-strong rounded-2xl p-6 md:p-8 text-center space-y-3">
+        <Gift className="h-8 w-8 mx-auto text-primary" />
+        <h2 className="font-display text-xl font-semibold">Freunde einladen</h2>
+        <p className="text-sm text-muted-foreground">Einladungen sind gleich da – die Datenbank wird gerade noch dafür eingerichtet. Schau später nochmal vorbei.</p>
       </div>
     );
   }
