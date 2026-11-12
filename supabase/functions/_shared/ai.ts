@@ -7,6 +7,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.103.3";
 import { geminiUsageToOpenAi } from "./usageParse.ts";
 import { nvidiaChat, nvidiaCanHandle, nvidiaKeys, type Tier } from "./nvidia.ts";
+import { freeChat, freeProvidersReady } from "./freeProviders.ts";
 
 const GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const GOOGLE_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
@@ -178,6 +179,35 @@ async function staggered(cands: Array<(signal: AbortSignal) => Promise<Response 
   });
 }
 
+/** Wartet bei einem Stream, bis wirklich Text (oder ein Werkzeug-Aufruf) kommt – erst dann zählt der Anbieter
+ *  als „hat geantwortet“. Leere Streams zählen als gescheitert. Gibt einen Stream mit allem Gelesenen zurück. */
+async function firstContent(r: Response, signal: AbortSignal): Promise<Response | null> {
+  if (!r.body) return null;
+  const reader = r.body.getReader();
+  const dec = new TextDecoder();
+  const got: Uint8Array[] = [];
+  let text = "";
+  const onAbort = () => reader.cancel().catch(() => {});
+  signal.addEventListener("abort", onAbort, { once: true });
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) return null;
+      got.push(value);
+      text += dec.decode(value, { stream: true });
+      if (/"content":"(?:[^"\\]|\\.)+"|"tool_calls":\s*\[\s*\{/.test(text)) break;
+      if (text.includes("[DONE]")) return null;
+      if (text.length > 200_000) break;
+    }
+  } catch { return null; } finally { signal.removeEventListener("abort", onAbort); }
+  const stream = new ReadableStream<Uint8Array>({
+    start(c) { for (const g of got) c.enqueue(g); },
+    async pull(c) { try { const { done, value } = await reader.read(); if (done) c.close(); else c.enqueue(value); } catch (e) { c.error(e); } },
+    cancel() { reader.cancel().catch(() => {}); },
+  });
+  return new Response(stream, { status: r.status, headers: r.headers });
+}
+
 /** Google-SSE -> OpenAI-kompatibler SSE-Stream */
 function googleSseToOpenAi(src: ReadableStream<Uint8Array>): ReadableStream<Uint8Array> {
   const dec = new TextDecoder();
@@ -248,45 +278,39 @@ export async function aiChat(
   const key = lovableKeyOrNull(lovableKey) ?? lovableKeyOrNull(Deno.env.get("LOVABLE_API_KEY"));
 
   const skippedGateway = !!key && Date.now() <= gatewayEmptyUntil;
-  if (key && !skippedGateway && !(alt && nvidiaCanHandle(body) && (await nvidiaKeys()).length > 0)) {
-    try {
-      const r = await fetch(GATEWAY, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (r.ok) return r;
-      const info = await r.text().catch(() => "");
-      console.warn("[ai] gateway failed", r.status, info.slice(0, 200));
-      // Guthaben leer: ein paar Minuten direkt zu Google, statt jedes Mal erst am Gateway abzuprallen.
-      if (r.status === 402) gatewayEmptyUntil = Date.now() + 5 * 60_000;
-      if (!shouldFallback(r.status)) {
-        return new Response(info, { status: r.status, headers: { "Content-Type": "application/json" } });
-      }
-    } catch (e) {
-      console.warn("[ai] gateway exception", e instanceof Error ? e.message : String(e));
-    }
-  }
-
-  // ---- Ohne Gateway: Google AI Studio und NVIDIA zusammen ----
-  // Starke Aufgaben und alles mit Werkzeugen zuerst an die großen NVIDIA-Modelle (Google kann im
-  // Gratis-Tarif nur Flash und in diesem Weg keine Werkzeuge); der Rest zuerst an Gemini Flash.
-  // Antwortet der erste nicht zügig oder ist ausgelastet, springt automatisch der andere ein.
   if (maxHint && body.max_tokens == null && body.max_completion_tokens == null) body = { ...body, max_tokens: maxHint };
   const tier = hint ?? tierOf(body.model);
   // Hochgestufte Anfrage: auch bei Google die stärkste Kette und gründliches Nachdenken.
   const gBody = hint && tierOf(body.model) !== "strong" ? { ...body, model: "google/gemini-pro", reasoning_effort: body.reasoning_effort ?? "high" } : body;
   const hasTools = Array.isArray(body.tools) && body.tools.length > 0;
   const nvReady = nvidiaCanHandle(body) && (await nvidiaKeys()).length > 0;
-  let resp: Response | null;
-  if (!nvReady) resp = await googleChat(gBody);
-  else {
-    const g = (_s: AbortSignal) => googleChat(gBody);
-    const n = (s: AbortSignal) => nvidiaChat(body, tier, { signal: s, skip: alt ? 1 : 0 });
-    const nvFirst = tier === "strong" || hasTools;
-    // Zweite Meinung: ein ANDERES Modell als sonst – bei starken Aufgaben das zweitbeste NVIDIA-Modell, sonst NVIDIA statt Gemini.
-    resp = await staggered(nvFirst || alt ? [n, g] : [g, n], streaming ? 9_000 : 45_000);
+  const gReady = !hasTools && (await googleKeys()).length > 0;
+  const extras = nvidiaCanHandle(body) ? await freeProvidersReady() : [];
+
+  // ---- Rennen: alle verfügbaren Anbieter gleichzeitig (Lovable, Google, NVIDIA, OpenRouter, Groq, Cerebras) ----
+  // Wer zuerst echten Text liefert, antwortet; die anderen werden sofort abgebrochen.
+  // Alle bekommen denselben Verlauf (gleiches „Gedächtnis“), egal wer gewinnt.
+  const cands: Array<(signal: AbortSignal) => Promise<Response | null>> = [];
+  if (key && !skippedGateway && !alt) {
+    cands.push(async (signal) => {
+      const r = await fetch(GATEWAY, { method: "POST", signal, headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      if (r.ok) return r;
+      const info = await r.text().catch(() => "");
+      console.warn("[ai] gateway failed", r.status, info.slice(0, 200));
+      if (r.status === 402) gatewayEmptyUntil = Date.now() + 5 * 60_000;
+      // Fehler, die kein anderer Anbieter besser kann (z. B. kaputte Anfrage), trotzdem melden.
+      return shouldFallback(r.status) ? null : new Response(info, { status: r.status, headers: { "Content-Type": "application/json" } });
+    });
   }
+  if (gReady) cands.push(() => googleChat(gBody));
+  if (nvReady) cands.push((s) => nvidiaChat(body, tier, { signal: s, skip: alt ? 1 : 0 }));
+  for (const p of extras) cands.push((s) => freeChat(p, body, tier, s));
+
+  let resp: Response | null = null;
+  if (cands.length) resp = await staggered(cands.map((c) => async (s: AbortSignal) => {
+    const r = await c(s).catch(() => null);
+    return r && r.ok && streaming ? await firstContent(r, s) : r;
+  }), 0);
   if (resp && resp.ok) return resp;
 
   // Auch das hat nicht geklappt: Gateway doch wieder versuchen (vielleicht wurde Guthaben nachgeladen).

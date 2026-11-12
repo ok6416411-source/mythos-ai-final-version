@@ -657,7 +657,7 @@ body.light .msui-num{background:#fff}
           const send = mk("button", "msui-btn", s.sendLabel || "Ergebnis an Mythos schicken"); send.type = "button";
           send.onclick = () => {
             const wrong = qs.map((q, i) => (picks[i] !== ansOf(q) ? "„" + str(q.question || q.frage || "") + "“ (meine Antwort: " + str(arr(q.options)[picks[i]]) + ")" : "")).filter(Boolean);
-            ctx.send("Quiz-Ergebnis" + (s.title ? " „" + s.title + "“" : "") + ": " + right + " von " + qs.length + " richtig." + (wrong.length ? " Falsch beantwortet: " + wrong.join("; ") + ". Erklär mir kurz, was ich da falsch verstanden habe, und stell mir dazu eine neue Frage." : " Alles richtig – gib mir schwierigere Fragen."));
+            ctx.send("Quiz geschafft" + (s.title ? " „" + s.title + "“" : "") + ": " + right + " von " + qs.length + " richtig." + (wrong.length ? " Falsch beantwortet: " + wrong.join("; ") + ". Erklär mir kurz, was ich da falsch verstanden habe, und stell mir dazu eine neue Frage." : " Alles richtig – gib mir schwierigere Fragen."));
           };
           foot.appendChild(send);
         }

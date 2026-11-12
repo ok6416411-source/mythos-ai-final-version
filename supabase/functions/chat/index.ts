@@ -66,6 +66,8 @@ function resolveMythos(id: unknown): Resolved {
 function needsWeb(text: string): { need: boolean; query: string } {
   const t = text.toLowerCase();
   if (t.startsWith("/")) return { need: false, query: "" };
+  // Automatische Rückmeldungen aus klickbaren Bausteinen (Quiz, Auswahl, Fragen) brauchen nie das Internet.
+  if (/^(quiz[- ](ergebnis|geschafft)|antwort auf „|gewählt:|meine antworten)/i.test(t.trim())) return { need: false, query: "" };
   const patterns = [
     /\b(aktuell|aktuelle|aktuellen|heute|gestern|neueste|neuste|news|nachrichten|gerade eben|momentan)\b/,
     /\b(wetter|preis|preise|kurs|aktie|bitcoin|ergebnis|spielstand|tabelle|release|version|update)\b/,

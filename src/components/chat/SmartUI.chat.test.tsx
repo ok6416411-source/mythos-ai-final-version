@@ -40,7 +40,7 @@ describe("Bedienelemente im echten Chat", () => {
     expect(container.textContent).toContain("1 von 2 richtig – fertig!");
     expect(btn(container, "6").classList.contains("bad")).toBe(true);
     act(() => btn(container, "Ergebnis an Mythos schicken").click());
-    expect(sent[0]).toMatch(/Quiz-Ergebnis „Mathe“: 1 von 2 richtig/);
+    expect(sent[0]).toMatch(/Quiz geschafft „Mathe“: 1 von 2 richtig/);
     expect(sent[0]).toContain("3·3?");
     unmount();
     // Chat gewechselt und zurück (alles neu aufgebaut): Antworten sind noch da
