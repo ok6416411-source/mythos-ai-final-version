@@ -26,3 +26,16 @@ describe("alte Modellnamen", () => {
     expect(renameLegacyModels("Lade Mythos Code herunter")).toBe("Lade Mythos Code herunter");
   });
 });
+
+import { closePartialSvg } from "./grafik";
+describe("Grafik live zeichnen", () => {
+  it("schließt halbfertiges SVG gültig", () => {
+    const part = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><linearGradient id="a"><stop offset="0"/></linearGradient></defs><g><rect width="10" height="10"/><circle cx="5" cy="5" r="3"/><path d="M0 0 L10';
+    const out = closePartialSvg(part)!;
+    expect(out.endsWith("</g></svg>")).toBe(true);
+    expect(new DOMParser().parseFromString(out, "image/svg+xml").querySelector("parsererror")).toBeNull();
+  });
+  it("Auftrag startet mit /grafik (keine Websuche)", () => {
+    expect(grafikPrompt("Drache").startsWith("/grafik")).toBe(true);
+  });
+});

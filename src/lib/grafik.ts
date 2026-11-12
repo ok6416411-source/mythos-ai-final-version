@@ -18,11 +18,12 @@ export function grafikRequest(text: string, hasAttachments: boolean): string | n
 
 /** Anweisung an die KI (das Wort „SVG“ sorgt dafür, dass auch ältere Server-Versionen keinen Bildgenerator starten). */
 export function grafikPrompt(motif: string): string {
+  // Beginnt mit „/grafik“: so startet der Server keine Internet-Suche (Grafiken brauchen keine).
   return [
-    `Zeichne diese Grafik als SVG-Code: «${motif}»`,
+    `/grafik – zeichne als SVG-Code: «${motif}»`,
     "",
     "So (verbindlich):",
-    "- Antworte mit höchstens einem kurzen Satz und danach GENAU EINEM ```svg Codeblock – sonst nichts, keine Rückfragen.",
+    "- Wiederhole diesen Auftrag NICHT. Schreib höchstens einen kurzen Satz (z. B. „Hier ist dein Gaming-PC:“) und dann sofort GENAU EINEN ```svg Codeblock – sonst nichts, keine Rückfragen.",
     "- Vollständiges <svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"…\"> – Szene/Bild 0 0 1600 900, Logo/Icon/Avatar 0 0 512 512, Poster 0 0 1080 1350.",
     "- Richtig detailliert und schön: Hintergrund mit Verlauf, mehrere Ebenen (hinten/mitte/vorne), Formen mit <path> statt Grundkörpern, linear-/radialGradient für Licht und Plastizität, weiche Schatten (filter feGaussianBlur/feDropShadow), Highlights, stimmige Farbpalette, Details wie Texturen/Muster.",
     "- Alles, was im Wunsch vorkommt, muss klar erkennbar sein. Text nur, wenn er gewünscht ist (dann gut lesbar).",
@@ -30,4 +31,26 @@ export function grafikPrompt(motif: string): string {
     "- Steht im Wunsch ein Format (z. B. 1028×1028), nimm genau diese viewBox.",
     "- Bei Änderungswünschen an einer vorherigen Grafik: die vorherige Grafik übernehmen und nur verbessern, nichts weglassen.",
   ].join("\n");
+}
+
+/** Ein noch unfertiges SVG (während die KI schreibt) so schließen, dass es schon angezeigt werden kann. */
+export function closePartialSvg(code: string): string | null {
+  const start = code.search(/<svg[\s>]/i);
+  if (start < 0) return null;
+  let s = code.slice(start);
+  const lastGt = s.lastIndexOf(">");
+  if (lastGt < 0) return null;
+  s = s.slice(0, lastGt + 1);
+  // offene Container-Tags zählen und schließen
+  const stack: string[] = [];
+  const re = /<\/?([a-zA-Z][\w:-]*)[^>]*?(\/?)>/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(s))) {
+    const tag = m[1], selfClose = m[2] === "/" || /\/>$/.test(m[0]);
+    if (m[0].startsWith("</")) { const i = stack.lastIndexOf(tag); if (i >= 0) stack.length = i; }
+    else if (!selfClose) stack.push(tag);
+  }
+  // Text in einem offenen <text>/<style> ist ok; offenes <script> nie anzeigen
+  s = s.replace(/<script[\s\S]*$/i, "");
+  return s + stack.reverse().map((t) => `</${t}>`).join("");
 }

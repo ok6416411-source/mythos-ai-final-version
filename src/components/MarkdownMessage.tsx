@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { openInMythosBrowser } from "@/components/EmbeddedBrowser";
+import { closePartialSvg } from "@/lib/grafik";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Check, Copy, Download, Play, FileArchive, FileText, FileCode2, FileImage, FileSpreadsheet, Box, Loader2 } from "lucide-react";
@@ -115,13 +116,50 @@ function WritingCard({ name, lines }: { name: string; lines: number }) {
   );
 }
 
+/** Grafik entsteht live: das unfertige SVG wird laufend geschlossen und angezeigt, dazu ein Fortschritt. */
+function SvgDrawing({ code }: { code: string }) {
+  const [url, setUrl] = useState("");
+  const shapes = (code.match(/<(path|rect|circle|ellipse|polygon|polyline|line|text|use)\b/gi) || []).length;
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const svg = closePartialSvg(code);
+      if (!svg) return;
+      try {
+        const doc = new DOMParser().parseFromString(svg, "image/svg+xml");
+        if (doc.querySelector("parsererror")) return; // halbfertig – letztes gutes Bild behalten
+      } catch { return; }
+      setUrl("data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg));
+    }, 120);
+    return () => clearTimeout(t);
+  }, [code]);
+  return (
+    <div className="not-prose my-2 overflow-hidden rounded-xl border border-white/10 bg-[#0b0b0f]">
+      <div className="relative flex min-h-[220px] items-center justify-center">
+        {url ? <img src={url} alt="Grafik entsteht" className="mx-auto max-h-[70vh] w-full object-contain transition-opacity duration-300" />
+          : <div className="text-sm text-muted-foreground">Leinwand wird vorbereitet …</div>}
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(110deg,transparent_35%,rgba(255,255,255,.06)_50%,transparent_65%)] bg-[length:250%_100%] animate-[mfx-sheen_1.6s_linear_infinite]" />
+      </div>
+      <div className="flex items-center gap-2 border-t border-white/5 px-3 py-2 text-[12px] text-muted-foreground">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        <span>🎨 Zeichnet … {shapes} {shapes === 1 ? "Form" : "Formen"}</span>
+        <div className="ml-auto h-1 w-24 overflow-hidden rounded-full bg-white/10">
+          <div className="h-full rounded-full bg-gradient-to-r from-violet-400 to-sky-400 transition-all duration-500" style={{ width: Math.min(95, 8 + shapes * 1.6) + "%" }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CodeCard({ lang, code }: { lang: string; code: string }) {
   const [copied, setCopied] = useState(false);
   const ext = EXT[lang] || "txt";
   const isHtml = lang === "html" || /^\s*<(!doctype|html)/i.test(code);
-  const isSvg = (lang === "svg" || lang === "xml" || !lang) && /^\s*(<\?xml[^>]*>\s*)?<svg[\s>]/i.test(code) && /<\/svg>\s*$/i.test(code.trim());
+  const looksSvg = (lang === "svg" || lang === "xml" || !lang) && /^\s*(<\?xml[^>]*>\s*)?<svg[\s>]/i.test(code);
+  const isSvg = looksSvg && /<\/svg>\s*$/i.test(code.trim());
+  const drawing = looksSvg && !isSvg;
   const [showCode, setShowCode] = useState(false);
   const svgUrl = useMemo(() => isSvg ? "data:image/svg+xml;charset=utf-8," + encodeURIComponent(code.replace(/<script[\s\S]*?<\/script>/gi, "")) : "", [isSvg, code]);
+  if (drawing) return <SvgDrawing code={code} />;
 
   const copy = async () => {
     if (!(await copyText(code))) { toast.error("Kopieren hat nicht geklappt. Halte den Code gedrückt und kopiere ihn von Hand."); return; }
