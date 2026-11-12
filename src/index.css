@@ -460,3 +460,6 @@ html.mfx-on ::-webkit-scrollbar-thumb { background: var(--mfx-a); }
 
 /* Keine grauen Fokus-Rahmen nach Tippen/Klicken (nur bei Tastatur-Bedienung sichtbar) */
 :focus:not(:focus-visible), [tabindex="-1"]:focus { outline: none !important; }
+
+/* Tastatur offen: Hinweiszeile ausblenden, damit das Eingabefeld direkt auf der Tastatur sitzt */
+html.kb-open .kb-hide { display: none; }

@@ -230,6 +230,50 @@ const Chat = () => {
     if (typeof window === "undefined") return DEFAULT_MYTHOS_ID;
     return localStorage.getItem("mythos.model") || DEFAULT_MYTHOS_ID;
   });
+  // Handy-Tastatur wie in einer App: Die Seite wird genau so hoch wie der sichtbare Bereich über der Tastatur,
+  // Kopfzeile bleibt stehen, das Eingabefeld sitzt direkt auf der Tastatur – kein Hochrutschen, kein Zoom-Gefühl.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const root = document.documentElement;
+    const fit = () => {
+      root.style.setProperty("--app-h", vv.height + "px");
+      root.classList.toggle("kb-open", vv.height < window.innerHeight * 0.8);
+      if (window.scrollY || vv.offsetTop) window.scrollTo(0, 0);
+      const box = scrollRef.current;
+      if (box && followRef.current) box.scrollTop = box.scrollHeight;
+    };
+    fit();
+    vv.addEventListener("resize", fit); vv.addEventListener("scroll", fit);
+    return () => { vv.removeEventListener("resize", fit); vv.removeEventListener("scroll", fit); root.style.removeProperty("--app-h"); root.classList.remove("kb-open"); };
+  }, []);
+  // Unsichtbare KI-Anfrage für interaktive Bausteine (z. B. Mitspieler in Spielen): erscheint nicht im Chat.
+  useEffect(() => {
+    (window as any).mythosAskHidden = async (prompt: string): Promise<string> => {
+      const r = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
+        // Beginnt mit „/“: keine Internetsuche; schnelles Modell mit kurzem Aufwand.
+        body: JSON.stringify({ userId: user?.id, mythos: "v1:low", messages: [{ role: "user", content: "/spiel\n" + prompt }], mode: "general" }),
+      });
+      if (!r.ok || !r.body) throw new Error("HTTP " + r.status);
+      const reader = r.body.getReader(), dec = new TextDecoder();
+      let buf = "", out = "";
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        let i;
+        while ((i = buf.indexOf("\n")) >= 0) {
+          const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+          if (!line.startsWith("data:")) continue;
+          try { const d = JSON.parse(line.slice(5).trim())?.choices?.[0]?.delta?.content; if (typeof d === "string") out += d; } catch { /* [DONE] */ }
+        }
+      }
+      return out.trim();
+    };
+    return () => { delete (window as any).mythosAskHidden; };
+  }, [session?.access_token, user?.id]);
   const mythosRef = useRef(mythosId);
   const lastUserTextRef = useRef("");
   const [mobileSidebar, setMobileSidebar] = useState(false);
@@ -1582,7 +1626,7 @@ const Chat = () => {
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="h-[100dvh] flex overflow-hidden bg-background">
+      <div className="fixed inset-x-0 top-0 flex overflow-hidden bg-background" style={{ height: "var(--app-h, 100dvh)" }}>
         {/* Desktop sidebar */}
         <aside
           className={`hidden md:flex shrink-0 flex-col h-full transition-[width] duration-200 ease-out border-r border-white/5 bg-sidebar text-sidebar-foreground ${
@@ -2177,10 +2221,12 @@ const Chat = () => {
                   )}
                 </div>
               </div>
-              <p className="text-[10px] text-muted-foreground text-center mt-2">
-                Mythos AI ist eine KI und kann Fehler machen. Wichtige Infos bitte prüfen.
-              </p>
-              <LegalLinks className="mt-1" />
+              <div className="kb-hide">
+                <p className="text-[10px] text-muted-foreground text-center mt-2">
+                  Mythos AI ist eine KI und kann Fehler machen. Wichtige Infos bitte prüfen.
+                </p>
+                <LegalLinks className="mt-1" />
+              </div>
             </div>
           </div>
         </main>

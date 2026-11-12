@@ -188,6 +188,7 @@ body.light .msui-num{background:#fff}
 .msui-pg-li{font-size:13px;padding:7px 10px;border-radius:12px;background:rgba(255,255,255,.04)}.msui-pg-li.new{animation:msuiDrIn .5s ease both;background:rgba(167,139,250,.1)}
 .msui-pg-li .a{color:var(--mut);margin-top:2px}
 .msui-pg-panel{display:flex;flex-direction:column;gap:8px}
+.msui-pg-nudge{animation:msuiPgShake .25s 2}
 .msui-pg-target.on{border-color:var(--c);color:var(--c);background:color-mix(in srgb,var(--c) 14%,transparent)}
 .msui-pg-reveal{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:6px 0 10px}.msui-pg-rc{display:flex;flex-direction:column;padding:8px 12px;border-radius:12px;border:1px solid var(--bd);animation:msuiDrFlip .6s cubic-bezier(.2,.8,.2,1) both}.msui-pg-rc span{font-size:12px;color:var(--mut)}
 @property --ang{syntax:"<angle>";inherits:false;initial-value:0deg}
@@ -972,11 +973,289 @@ body.light .msui-num{background:#fff}
     { id: "werbinich", emoji: "🤔", title: "Wer bin ich?", text: "Errate, wer auf deiner Stirn steht", min: 2 },
     { id: "draft", emoji: "💶", title: "20-€-Draft", text: "Biete um die beste Aufstellung", min: 2, max: 2 },
   ];
+
+  // ---------- Lokale Party-Spiele: laufen komplett im Baustein, Mitspieler-Züge holt die KI unsichtbar ----------
+  const IMP_WORDS = [["Pizza","Essen"],["Strand","Ort"],["Gitarre","Instrument"],["Fahrrad","Fahrzeug"],["Zahnbürste","Alltag"],["Schule","Ort"],["Weihnachten","Fest"],["Hund","Tier"],["Minecraft","Spiel"],["Kino","Ort"],["Regenschirm","Gegenstand"],["Fußball","Sport"],["Kaffee","Getränk"],["Flugzeug","Fahrzeug"],["Eis","Essen"],["Zelt","Gegenstand"],["Krankenhaus","Ort"],["Smartphone","Technik"],["Pinguin","Tier"],["Schwimmbad","Ort"],["Geburtstag","Fest"],["Burger","Essen"],["Bibliothek","Ort"],["Schach","Spiel"],["Vulkan","Natur"],["Zug","Fahrzeug"],["Kühlschrank","Haushalt"],["Zahnarzt","Beruf"],["Feuerwehr","Beruf"],["Sonnenbrille","Gegenstand"],["Popcorn","Essen"],["Achterbahn","Freizeit"],["Bäckerei","Ort"],["Laptop","Technik"],["Hai","Tier"],["Karaoke","Freizeit"],["Kerze","Gegenstand"],["Tennis","Sport"],["Wüste","Natur"],["Pyjama","Kleidung"]];
+  const WHO_CARDS = ["Albert Einstein","Pikachu","SpongeBob","Cristiano Ronaldo","Harry Potter","Mario","Taylor Swift","Batman","Elsa","Shrek","Lionel Messi","Darth Vader","Homer Simpson","Spider-Man","Angela Merkel","Steve aus Minecraft","Sonic","Elon Musk","Pippi Langstrumpf","Barbie","Goku","Michael Jackson","Kleopatra","Sherlock Holmes","Yoda","Pumuckl","Rapunzel","Napoleon","Mona Lisa","Bob der Baumeister","Garfield","Iron Man","Pocahontas","Lewis Hamilton","MrBeast","Dracula","Rotkäppchen","Thor","Super Mario Bowser","Benjamin Blümchen"];
+  const pickN = (a, n) => [...a].sort(() => Math.random() - 0.5).slice(0, n);
+  const askAI = async (prompt) => { const f = W.mythosAskHidden; if (typeof f !== "function") throw new Error("offline"); return await f(prompt); };
+  const jsonOf = (t) => { const m = String(t || "").match(/\{[\s\S]*\}/); if (!m) return null; try { return JSON.parse(m[0]); } catch (e) { return null; } };
+  const norm = (t) => String(t || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9äöüß ]/g, " ").replace(/\s+/g, " ").trim();
+  const FALLBACK_Q = ["Wie oft hast du damit zu tun?", "Wo würdest du das am ehesten finden?", "Ist das eher was für Kinder oder Erwachsene?", "Welche Farbe verbindest du damit?", "Würdest du das verschenken?", "Ist das eher laut oder leise?", "Braucht man dafür Geld?"];
+
+  function localParty(gameId, nPlayers, nImp, key, ctx) {
+    const box = mk("div", "msui-box msui-dr msui-pg");
+    let st = store.get(key);
+    if (!st || st.game !== gameId) {
+      const names = ["Du"].concat(MODEL_NAMES.slice(0, nPlayers - 1));
+      if (gameId === "imposter") {
+        const [word, cat] = IMP_WORDS[Math.floor(Math.random() * IMP_WORDS.length)];
+        st = { game: gameId, names, word, cat, imps: pickN(names, nImp), log: [], phase: "turn", asker: names[Math.floor(Math.random() * names.length)], askedBy: "", start: Date.now(), secs: 180, votes: null };
+      } else {
+        const cards = pickN(WHO_CARDS, names.length);
+        st = { game: gameId, names, cards: Object.fromEntries(names.map((n, i) => [n, cards[i]])), log: [], phase: "turn", turn: 0, won: [] };
+      }
+      store.set(key, st);
+    }
+    const save = () => store.set(key, st);
+    let busy = false, tick = 0, alive = true;
+    const isImp = (n) => st.imps && st.imps.includes(n);
+    const say = (from, to, q, a) => { st.log.push({ from, to, q, a }); save(); };
+
+    async function botAskImposter(bot) {
+      const targets = st.names.filter((n) => n !== bot && n !== st.askedBy);
+      const fallback = { to: targets[Math.floor(Math.random() * targets.length)], q: FALLBACK_Q[Math.floor(Math.random() * FALLBACK_Q.length)] };
+      try {
+        const role = isImp(bot) ? "Du bist IMPOSTER und kennst das Wort NICHT (nur Kategorie „" + st.cat + "“) – frag so, dass du mehr erfährst, ohne aufzufallen." : "Das geheime Wort ist „" + st.word + "“. Frag unauffällig so, dass Wissende es erkennen, der Imposter aber nicht.";
+        const r = jsonOf(await askAI("Imposter-Spiel. Du bist " + bot + ". " + role + "\nBisher: " + (st.log.slice(-6).map((l) => l.from + "→" + l.to + ": " + l.q + (l.a ? " / " + l.a : "")).join(" | ") || "nichts") + "\nWähle wen du fragst aus: " + targets.join(", ") + ". Antworte NUR als JSON: {\"to\":\"Name\",\"q\":\"kurze Frage, max 10 Wörter, ohne das Wort\"}"));
+        if (r && targets.includes(r.to) && r.q) return { to: r.to, q: String(r.q).slice(0, 140) };
+      } catch (e) { /* Fallback */ }
+      return fallback;
+    }
+    async function botAnswerImposter(bot, q) {
+      try {
+        const role = isImp(bot) ? "Du bist IMPOSTER, kennst das Wort NICHT (Kategorie „" + st.cat + "“). Antworte vage aber glaubwürdig, damit du nicht auffällst." : "Das geheime Wort ist „" + st.word + "“. Antworte passend aber vage (nenne das Wort NIE), damit der Imposter es nicht errät.";
+        const t = await askAI("Imposter-Spiel. Du bist " + bot + ". " + role + "\nFrage an dich: „" + q + "“\nAntworte in EINEM kurzen Satz (max 12 Wörter), ohne Anführungszeichen.");
+        const a = String(t || "").split("\n")[0].replace(/^["„]|["“]$/g, "").trim();
+        if (a && !norm(a).includes(norm(st.word))) return a.slice(0, 160);
+      } catch (e) { /* Fallback */ }
+      return ["Hmm, kommt drauf an, würde ich sagen.", "Eigentlich ziemlich oft, ehrlich gesagt.", "Puh, eher selten bei mir.", "Das verbinde ich mit guter Laune."][Math.floor(Math.random() * 4)];
+    }
+    async function botVotes() {
+      const bots = st.names.filter((n) => n !== "Du");
+      const out = {};
+      try {
+        const r = jsonOf(await askAI("Imposter-Spiel, Abstimmung. Wort: „" + st.word + "“. Imposter (geheim): " + st.imps.join(", ") + ". Verlauf: " + st.log.map((l) => l.from + "→" + l.to + ": " + l.q + " / " + (l.a || "")).join(" | ") + "\nStimme für jeden dieser Spieler ab: " + bots.join(", ") + ". Wissende stimmen meist für den Verdächtigsten (wer am vagesten/falschesten antwortete), Imposter lenken ab. Nicht für sich selbst. Antworte NUR als JSON: {\"Amber\":{\"vote\":\"Name\",\"why\":\"max 8 Wörter\"}, …}"));
+        if (r) bots.forEach((b) => { const v = r[b]; if (v && st.names.includes(v.vote) && v.vote !== b) out[b] = { vote: v.vote, why: String(v.why || "").slice(0, 80) }; });
+      } catch (e) { /* Fallback */ }
+      bots.forEach((b) => { if (!out[b]) { const c = st.names.filter((n) => n !== b); out[b] = { vote: c[Math.floor(Math.random() * c.length)], why: "Bauchgefühl" }; } });
+      return out;
+    }
+
+    async function botTurnWho(bot) {
+      const mine = st.log.filter((l) => l.from === bot);
+      try {
+        const r = jsonOf(await askAI("„Wer bin ich?“-Spiel. Du bist " + bot + " und weißt NICHT, wer du bist. Deine bisherigen Fragen und die Antworten: " + (mine.map((l) => l.q + " → " + l.a).join(" | ") || "noch keine") + "\nStell die nächste kluge Ja/Nein-Frage über dich ODER rate, wenn du dir sicher bist. Antworte NUR als JSON: {\"q\":\"Bin ich …?\"} oder {\"guess\":\"Name\"}"));
+        if (r && (r.q || r.guess)) return r;
+      } catch (e) { /* Fallback */ }
+      return { q: ["Bin ich ein Mensch?", "Bin ich echt (keine erfundene Figur)?", "Bin ich berühmt durch Sport?", "Komme ich aus einem Videospiel?", "Bin ich weiblich?", "Lebe ich noch?"][mine.length % 6] };
+    }
+    async function whoAnswer(q, card) {
+      try {
+        const t = await askAI("„Wer bin ich?“-Spiel. Die Figur ist „" + card + "“. Frage über die Figur: „" + q + "“. Antworte NUR mit Ja, Nein oder Teilweise und max. 5 Wörtern Zusatz.");
+        const a = String(t || "").split("\n")[0].trim();
+        if (a) return a.slice(0, 60);
+      } catch (e) { /* Fallback */ }
+      return "Hmm … teilweise.";
+    }
+
+    const avatars = () => {
+      const row = mk("div", "msui-pg-players");
+      st.names.forEach((n, i) => {
+        const active = (st.game === "imposter" && st.phase === "turn" && n === st.asker) || (st.game === "werbinich" && st.phase === "turn" && st.names[st.turn] === n);
+        const d = mk("div", "msui-pg-p" + (n === "Du" ? " me" : "") + (active ? " active" : "") + (st.won && st.won.includes(n) ? " out" : ""));
+        d.style.setProperty("--c", MODEL_COLOR[n] || PALETTE[i % PALETTE.length]); d.style.animationDelay = i * 70 + "ms";
+        d.append(mk("span", "av", n === "Du" ? "🙂" : n.slice(0, 1)), mk("span", "n", n));
+        if (st.game === "werbinich" && n !== "Du") d.appendChild(mk("span", "c", st.cards[n]));
+        if (st.phase === "over" && st.game === "imposter" && isImp(n)) d.appendChild(mk("span", "c", "😈 Imposter"));
+        if (st.phase === "over" && st.game === "werbinich" && n === "Du") d.appendChild(mk("span", "c", st.cards.Du));
+        if (busy && active && n !== "Du") d.appendChild(mk("span", "c", "denkt …"));
+        row.appendChild(d);
+      });
+      return row;
+    };
+
+    function paint() {
+      if (!box.isConnected && painted) { alive = false; clearInterval(tick); return; }
+      box.replaceChildren();
+      const tag = st.game === "imposter" ? "🕵️ Imposter" : "🤔 Wer bin ich?";
+      box.appendChild(mk("div", "msui-dr-title", tag));
+      // Rolle (verdeckt)
+      if (st.phase !== "over") {
+        const role = mk("div", "msui-pg-role" + (isImp("Du") ? " imp" : ""));
+        if (st.game === "imposter") {
+          if (isImp("Du")) role.append(mk("span", "k", "Du bist"), mk("b", "", "😈 IMPOSTER"), mk("span", "h", "Kategorie: " + st.cat + " – bluffe!"));
+          else role.append(mk("span", "k", "Das geheime Wort"), mk("b", "", st.word), mk("span", "h", "Verrate es nicht zu deutlich!"));
+        } else role.append(mk("span", "k", "Deine Karte"), mk("b", "", "❓ ???"), mk("span", "h", "Frag mit Ja/Nein-Fragen, wer du bist"));
+        const wrap = mk("div", "msui-pg-rolewrap"); wrap.appendChild(role);
+        if (!st.seen) { const veil = mk("button", "msui-pg-veil", "👁 Antippen zum Ansehen"); veil.type = "button"; veil.onclick = () => { st.seen = true; save(); veil.remove(); }; wrap.appendChild(veil); }
+        box.appendChild(wrap);
+      }
+      box.appendChild(avatars());
+      // Timer
+      if (st.game === "imposter" && st.phase === "turn") {
+        const t = mk("div", "msui-pg-timer"); const bar = mk("i"); t.append(mk("span", "", ""), bar); box.appendChild(t);
+        const upd = () => {
+          const left = Math.max(0, st.secs - Math.floor((Date.now() - st.start) / 1000));
+          t.firstChild.textContent = "⏱ " + Math.floor(left / 60) + ":" + String(left % 60).padStart(2, "0");
+          bar.style.width = (left / st.secs) * 100 + "%"; t.classList.toggle("low", left <= 30);
+          if (!left && !busy) { clearInterval(tick); startVote(); }
+        };
+        clearInterval(tick); upd(); tick = setInterval(() => { if (!box.isConnected) { clearInterval(tick); return; } upd(); }, 1000);
+      }
+      // Verlauf
+      if (st.log.length) {
+        const lg = mk("div", "msui-pg-log");
+        st.log.slice(-10).forEach((l, i, a) => {
+          const it = mk("div", "msui-pg-li" + (i === a.length - 1 ? " new" : ""));
+          const q = mk("div", "q"); q.append(mk("b", "", l.from + " → " + l.to + ": "), mk("span", "", l.q)); it.appendChild(q);
+          if (l.a) { const a2 = mk("div", "a"); a2.append(mk("b", "", (st.game === "werbinich" ? "Antwort" : l.to) + ": "), mk("span", "", l.a)); it.appendChild(a2); }
+          lg.appendChild(it);
+        });
+        box.appendChild(lg);
+        requestAnimationFrame(() => { lg.scrollTop = lg.scrollHeight; });
+      }
+      const panel = mk("div", "msui-pg-panel"); box.appendChild(panel);
+      if (st.phase === "over") return paintOver(panel);
+      if (st.phase === "vote") return paintVote(panel);
+      if (st.game === "imposter") paintImposter(panel); else paintWho(panel);
+    }
+    let painted = false;
+
+    function paintImposter(panel) {
+      const pending = st.pendingQ; // jemand hat dich gefragt
+      if (busy) { panel.appendChild(mk("div", "msui-dr-turn bot", "🤖 " + (st.asker === "Du" ? "Antwort kommt" : st.asker + " ist dran"))); return; }
+      if (st.asker !== "Du" && !pending) { runBots(); return; }
+      if (pending) panel.appendChild(mk("div", "msui-dr-turn", pending.from + " fragt dich: „" + pending.q + "“"));
+      else panel.appendChild(mk("div", "msui-dr-turn", "🙂 Du bist dran – frag jemanden"));
+      const ans = mk("input", "msui-q-other"); ans.placeholder = "Deine Antwort (nicht zu eindeutig!)"; ans.enterKeyHint = "next";
+      if (pending) panel.appendChild(ans);
+      panel.appendChild(mk("div", "msui-mut", "Wen fragst du?" + (st.askedBy ? " (nicht " + st.askedBy + " – der hat dich gerade gefragt)" : "")));
+      const sel = { v: "" }; const w = mk("div", "msui-btns");
+      st.names.filter((n) => n !== "Du" && n !== st.askedBy).forEach((n) => { const b = mk("button", "msui-btn msui-pg-target", n); b.type = "button"; b.style.setProperty("--c", MODEL_COLOR[n]); b.onclick = () => { w.querySelectorAll("button").forEach((x) => x.classList.remove("on")); b.classList.add("on"); sel.v = n; }; w.appendChild(b); });
+      panel.appendChild(w);
+      const q = mk("input", "msui-q-other"); q.placeholder = "Deine Frage, z. B. „Wo findet man das?“"; q.enterKeyHint = "send"; panel.appendChild(q);
+      const go = mk("button", "msui-q-send", pending ? "Antworten & fragen" : "Fragen"); go.type = "button";
+      go.onclick = async () => {
+        if (pending && !ans.value.trim()) { ans.focus(); return; }
+        if (!sel.v) { w.classList.add("msui-pg-nudge"); setTimeout(() => w.classList.remove("msui-pg-nudge"), 500); return; }
+        if (!q.value.trim()) { q.focus(); return; }
+        if (pending) { st.log[st.log.length - 1].a = ans.value.trim(); st.pendingQ = null; }
+        const target = sel.v, question = q.value.trim();
+        say("Du", target, question, "");
+        busy = true; st.asker = target; st.askedBy = "Du"; save(); paint();
+        const a = await botAnswerImposter(target, question);
+        st.log[st.log.length - 1].a = a; busy = false; save(); paint();
+      };
+      q.onkeydown = (e) => { if (e.key === "Enter") go.click(); };
+      const vote = mk("button", "msui-btn", "🗳 Jetzt abstimmen"); vote.type = "button"; vote.onclick = () => startVote();
+      const bw = mk("div", "msui-btns"); bw.append(go, vote); panel.appendChild(bw);
+    }
+    async function runBots() {
+      if (busy || !alive) return;
+      busy = true; paint();
+      // Bots fragen sich durch, bis jemand den Spieler fragt (oder Zeit um)
+      for (let guard = 0; guard < 4 && st.asker !== "Du" && st.phase === "turn"; guard++) {
+        const bot = st.asker;
+        const { to, q } = await botAskImposter(bot);
+        if (!alive) return;
+        say(bot, to, q, "");
+        st.askedBy = bot;
+        if (to === "Du") { st.pendingQ = { from: bot, q }; st.asker = "Du"; break; }
+        paint();
+        const a = await botAnswerImposter(to, q);
+        st.log[st.log.length - 1].a = a; st.asker = to; save(); paint();
+      }
+      if (st.asker !== "Du" && st.phase === "turn") { // nach ein paar Bot-Runden ist der Spieler dran
+        const bot = st.asker, q = (await botAskImposter(bot)).q;
+        say(bot, "Du", q, ""); st.pendingQ = { from: bot, q }; st.askedBy = bot; st.asker = "Du";
+      }
+      busy = false; save(); paint();
+    }
+    function startVote() { if (st.phase !== "turn") return; st.phase = "vote"; save(); paint(); }
+    function paintVote(panel) {
+      panel.appendChild(mk("div", "msui-dr-turn", "🗳 Wer ist der Imposter?" + (st.imps.length > 1 ? " (" + st.imps.length + " Imposter)" : "")));
+      const w = mk("div", "msui-btns msui-pg-vote");
+      st.names.filter((n) => n !== "Du").forEach((n) => {
+        const b = mk("button", "msui-btn msui-dr-main", "👉 " + n); b.type = "button";
+        b.onclick = async () => {
+          w.querySelectorAll("button").forEach((x) => (x.disabled = true));
+          panel.appendChild(mk("div", "msui-dr-turn bot", "🤖 Die anderen stimmen ab"));
+          const v = await botVotes(); v.Du = { vote: n, why: "" };
+          const count = {}; Object.values(v).forEach((x) => (count[x.vote] = (count[x.vote] || 0) + 1));
+          const top = Object.entries(count).sort((a, b) => b[1] - a[1]);
+          const out = top[0] && (!top[1] || top[0][1] > top[1][1]) ? top[0][0] : null;
+          st.votes = v; st.out = out; st.phase = "over";
+          const caught = out && isImp(out);
+          st.win = isImp("Du") ? !caught : !!caught;
+          save(); paint();
+        };
+        w.appendChild(b);
+      });
+      panel.appendChild(w);
+    }
+
+    function paintWho(panel) {
+      const cur = st.names[st.turn];
+      if (busy) { panel.appendChild(mk("div", "msui-dr-turn bot", "🤖 " + cur + " überlegt")); return; }
+      if (st.pendingWho) { // Bot fragt dich über seine Karte
+        const p = st.pendingWho;
+        panel.appendChild(mk("div", "msui-dr-turn", p.from + " fragt: „" + p.q + "“ (" + p.from + " ist " + st.cards[p.from] + ")"));
+        const w = mk("div", "msui-btns");
+        [["✅ Ja", "Ja"], ["❌ Nein", "Nein"], ["🤷 Teilweise", "Teilweise"]].forEach(([l, v]) => { const b = mk("button", "msui-btn msui-dr-main", l); b.type = "button"; b.onclick = () => { st.log[st.log.length - 1].a = v; st.pendingWho = null; nextWho(); }; w.appendChild(b); });
+        panel.appendChild(w); return;
+      }
+      if (cur !== "Du") { runWhoBot(cur); return; }
+      panel.appendChild(mk("div", "msui-dr-turn", "🙂 Du bist dran – Ja/Nein-Frage über dich oder raten"));
+      const inp = mk("input", "msui-q-other"); inp.placeholder = "z. B. „Bin ich ein Mensch?“"; inp.enterKeyHint = "send";
+      const g = mk("input", "msui-q-other"); g.placeholder = "Raten: „Bin ich …?“"; g.enterKeyHint = "send";
+      const w = mk("div", "msui-btns");
+      const b1 = mk("button", "msui-q-send", "Fragen"); b1.type = "button";
+      b1.onclick = async () => { const v = inp.value.trim(); if (!v) return; say("Du", "alle", v, ""); busy = true; paint(); const a = await whoAnswer(v, st.cards.Du); st.log[st.log.length - 1].a = a; busy = false; nextWho(); };
+      const b2 = mk("button", "msui-btn", "🎯 Raten"); b2.type = "button";
+      b2.onclick = () => { const v = g.value.trim().replace(/^bin ich\s*/i, "").replace(/\?$/, ""); if (!v) return; const ok = norm(st.cards.Du).includes(norm(v)) || norm(v).includes(norm(st.cards.Du).split(" ").pop()); say("Du", "alle", "Bin ich " + v + "?", ok ? "✅ Richtig!" : "❌ Nein"); if (ok) { st.phase = "over"; st.win = true; st.winner = "Du"; save(); paint(); } else nextWho(); };
+      inp.onkeydown = (e) => { if (e.key === "Enter") b1.click(); }; g.onkeydown = (e) => { if (e.key === "Enter") b2.click(); };
+      w.append(b1, b2); panel.append(inp, g, w);
+    }
+    async function runWhoBot(bot) {
+      if (busy || !alive) return;
+      busy = true; paint();
+      const r = await botTurnWho(bot);
+      busy = false;
+      if (!alive) return;
+      if (r.guess) {
+        const ok = norm(st.cards[bot]).includes(norm(r.guess)) || norm(r.guess).includes(norm(st.cards[bot]));
+        say(bot, "alle", "Bin ich " + r.guess + "?", ok ? "✅ Richtig!" : "❌ Nein");
+        if (ok) { st.phase = "over"; st.win = false; st.winner = bot; save(); paint(); return; }
+        return nextWho();
+      }
+      say(bot, "Du", String(r.q).slice(0, 140), ""); st.pendingWho = { from: bot, q: r.q }; save(); paint();
+    }
+    function nextWho() { st.turn = (st.turn + 1) % st.names.length; save(); paint(); }
+
+    function paintOver(panel) {
+      const end = mk("div", "msui-dr-endbox");
+      let title, text = "";
+      if (st.game === "imposter") {
+        title = st.win ? "🏆 Gewonnen!" : "💀 Verloren!";
+        text = "Das Wort war „" + st.word + "“. Imposter: " + st.imps.join(", ") + ". " + (st.out ? st.out + " wurde rausgewählt." : "Gleichstand – niemand flog raus.");
+        const rv = mk("div", "msui-pg-reveal");
+        Object.entries(st.votes || {}).forEach(([n, v], i) => { const c = mk("div", "msui-pg-rc"); c.style.animationDelay = i * 150 + "ms"; c.append(mk("b", "", n + " → " + v.vote), mk("span", "", v.why || "")); rv.appendChild(c); });
+        end.append(mk("div", "msui-dr-big", title), mk("div", "msui-sub", text), rv);
+      } else {
+        title = st.win ? "🏆 Du hast es erraten!" : "💀 " + st.winner + " war schneller!";
+        text = "Du warst „" + st.cards.Du + "“.";
+        end.append(mk("div", "msui-dr-big", title), mk("div", "msui-sub", text));
+      }
+      if (st.win) { const conf = mk("div", "msui-dr-confetti"); for (let k = 0; k < 28; k++) { const c = mk("i"); c.style.left = Math.random() * 100 + "%"; c.style.animationDelay = Math.random() * 0.6 + "s"; c.style.background = PALETTE[k % PALETTE.length]; conf.appendChild(c); } end.appendChild(conf); }
+      const bs = mk("div", "msui-btns");
+      const again = mk("button", "msui-btn msui-dr-main", "🔁 Nochmal"); again.type = "button";
+      again.onclick = () => { const g = st.game, n = st.names.length, i = (st.imps || []).length || 1; store.set(key, null); const fresh = localParty(g, n, i, key, ctx); box.replaceWith(fresh); };
+      bs.appendChild(again); end.appendChild(bs); panel.appendChild(end);
+    }
+
+    paint(); painted = true;
+    return box;
+  }
+
   // {"type":"gamesetup","game":"imposter","players":4}
   B.gamesetup = (s, ctx) => {
     const box = mk("div", "msui-box msui-dr");
     box.appendChild(mk("div", "msui-dr-title", s.title || "🎮 Welches Spiel?"));
     const key = "msui-gs-" + hash(JSON.stringify([s.id || "", s.title || ""]));
+    const gkey = key + "-game";
+    const running = store.get(gkey);
+    if (running && running.game) return localParty(running.game, running.names.length, (running.imps || []).length || 1, gkey, ctx);
     const done = store.get(key);
     if (done) { const d = mk("div", "msui-q-done"); d.append(mk("span", "", "✓"), mk("span", "", done)); box.appendChild(d); return box; }
     let game = GAMES.find((g) => g.id === s.game) || GAMES[0], players = Math.max(2, Math.min(6, Number(s.players) || 4)), imp = 1;
@@ -1002,6 +1281,8 @@ body.light .msui-num{background:#fff}
       cfg.appendChild(ppl);
       const go = mk("button", "msui-q-send", "▶ " + game.title + " starten"); go.type = "button";
       go.onclick = () => {
+        // Imposter & Wer bin ich laufen direkt hier im Baustein weiter – keine Chat-Nachrichten.
+        if (game.id !== "draft") { box.replaceWith(localParty(game.id, players, imp, gkey, ctx)); return; }
         const msg = game.id === "draft" ? "Lass uns das 20-€-Draft spielen – schlag mir 3 Themen vor."
           : "Starte " + game.title + " mit " + players + " Spielern (" + names.join(", ") + ")" + (game.id === "imposter" ? ", davon " + imp + " Imposter." : ".");
         store.set(key, game.title + (game.id === "draft" ? "" : " · " + players + " Spieler" + (game.id === "imposter" ? " · " + imp + " Imposter" : "")));
@@ -1319,7 +1600,7 @@ body.light .msui-num{background:#fff}
     "Kommt „Starte das 20-€-Draft mit dem Thema „X““, antworte mit EINEM Satz und dem Spiel: {\"type\":\"draft\",\"theme\":\"X\",\"emoji\":\"🍔\",\"budget\":20,\"slots\":5,\"deck\":[{\"name\":\"Wagyu-Patty\",\"emoji\":\"🥩\",\"value\":9,\"note\":\"kurzer Witz/Fakt\"}, …]} " +
     "mit 14 Karten in zufälliger Reihenfolge: konkrete, echte Dinge/Personen zum Thema, gemischt von Top (value 8-10) über solide bis schwach/witzig (1-3). Das Spiel läuft komplett in der Oberfläche – erkläre keine Regeln und biete nicht selbst im Text.\n" +
     "- SPIELE: Du kannst mit dem Nutzer Party-Spiele spielen und bist dabei Spielleiter. Will jemand „ein Spiel spielen“, zeig zuerst die Auswahl {\"type\":\"gamesetup\"} (Wer bin ich?, Imposter, 20-€-Draft; 2–6 Spieler, Imposter ab 3; 1 Imposter bei 3–4, bis 2 bei 5–6). " +
-    "Die Mitspieler heißen wie die Mythos-Modelle (Amber, Bolt, Spark, Atlas, Pebble) – du spielst sie alle mit eigener Persönlichkeit. Jede Spiel-Antwort: 1–2 Sätze + EIN Baustein mit dem aktuellen Stand.\n" +
+    "Imposter und Wer bin ich? laufen danach KOMPLETT im Baustein (Mitspieler Amber, Bolt, Spark, Atlas, Pebble werden automatisch gespielt) – du musst nichts weiter tun, keine Regeln erklären. Antworte also nur mit einem kurzen Satz + {\"type\":\"gamesetup\"}.\n" +
     "- partygame (Imposter/Wer bin ich): {\"type\":\"partygame\",\"game\":\"imposter|werbinich\",\"id\":\"fest-pro-runde\",\"players\":[{\"name\":\"Du\",\"you\":true},{\"name\":\"Amber\",\"card\":\"nur bei Wer bin ich: Figur\"}],\"you\":{\"word\":\"Pizza\"} oder {\"imposter\":true,\"hint\":\"Essen\"},\"log\":[{\"from\":\"Amber\",\"to\":\"Bolt\",\"q\":\"…\",\"a\":\"…\"}],\"turn\":{\"action\":\"answer|ask|vote|yesno|over\",\"from\":\"Amber\",\"question\":\"…\"},\"timer\":180,\"result\":{\"win\":true,\"text\":\"…\",\"reveal\":[{\"name\":\"Bolt\",\"role\":\"Imposter\"}]}}. " +
     "IMPOSTER: Alle außer den Imposter(n) kennen dasselbe geheime Wort; Imposter bekommen nur eine Kategorie als Tipp. Ist der Nutzer Imposter, steht das Wort NIRGENDS im Baustein. Ein Spieler fragt einen anderen etwas Unauffälliges, der antwortet (vage, ohne das Wort) und fragt den Nächsten. " +
     "Spiele die Bot-Züge selbst im log aus, bis der Nutzer dran ist (turn.action answer = er wurde gefragt, ask = er darf fragen). Nach 3 Minuten (timer) oder wenn der Nutzer abstimmt: alle stimmen ab (Bots begründen kurz), dann auflösen mit result. Merke dir Wort und Imposter über alle Züge gleich. " +
