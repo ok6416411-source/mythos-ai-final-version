@@ -230,6 +230,7 @@ const Chat = () => {
     return localStorage.getItem("mythos.model") || DEFAULT_MYTHOS_ID;
   });
   const mythosRef = useRef(mythosId);
+  const lastUserTextRef = useRef("");
   const [mobileSidebar, setMobileSidebar] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
@@ -1065,7 +1066,9 @@ const Chat = () => {
     const status = checklistStatusPrompt(pinnedRef.current, convId);
     if (status) parts.push(status);
     parts.push(capabilitiesPrompt(SLASH_COMMANDS, isAdmin));
-    parts.push(identityPrompt(mythosRef.current));
+    // Modell-/Mythos-Wissen nur mitschicken, wenn es um Mythos selbst geht – hält die Anfrage klein.
+    const lastAsk = lastUserTextRef.current.toLowerCase();
+    if (/modell|model|mythos|wer bist du|was bist du|wie heißt du|welche ki|amber|spark|bolt|atlas|pebble|aufwand|abo|pro\b|light\b|preis|kostet|kannst du|funktion/.test(lastAsk)) parts.push(identityPrompt(mythosRef.current));
     if (goalNow) {
       parts.push(
         `## /goal-Modus – Schritt ${goalNow.step} von höchstens ${GOAL_MAX_STEPS}\n` +
@@ -1084,6 +1087,7 @@ const Chat = () => {
   /** Arbeitet so lange weiter, wie Werkzeug-Aufrufe oder ein /goal es verlangen. */
   const runAgent = async (convId: string, history: ApiMsg[], userText: string, goalText?: string) => {
     stopRef.current = false;
+    lastUserTextRef.current = userText;
     taskIdRef.current = crypto.randomUUID();
     const servers = getMcpServers().filter(s => s.enabled);
     const tools = servers.length ? await collectTools(servers) : [];
