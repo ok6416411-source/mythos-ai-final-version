@@ -1761,7 +1761,7 @@ const Chat = () => {
           )}
 
           {/* Messages */}
-          <div ref={scrollRef} onScroll={() => { const box = scrollRef.current; if (box) followRef.current = shouldFollowChat(box.scrollTop, box.scrollHeight, box.clientHeight); }} className="flex-1 overflow-y-auto min-h-0">
+          <div ref={scrollRef} onScroll={() => { const box = scrollRef.current; if (box) followRef.current = shouldFollowChat(box.scrollTop, box.scrollHeight, box.clientHeight); }} className="flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain min-h-0">
             {messages.length === 0 && (loadingChat || (chatId && activeId !== chatId)) ? (
               <ChatSkeleton />
             ) : messages.length === 0 ? (
