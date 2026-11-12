@@ -27,6 +27,7 @@ export function grafikPrompt(motif: string): string {
     "- Richtig detailliert und schön: Hintergrund mit Verlauf, mehrere Ebenen (hinten/mitte/vorne), Formen mit <path> statt Grundkörpern, linear-/radialGradient für Licht und Plastizität, weiche Schatten (filter feGaussianBlur/feDropShadow), Highlights, stimmige Farbpalette, Details wie Texturen/Muster.",
     "- Alles, was im Wunsch vorkommt, muss klar erkennbar sein. Text nur, wenn er gewünscht ist (dann gut lesbar).",
     "- Keine externen Bilder, Schriften oder Skripte. Kein Bildgenerator – du zeichnest selbst.",
+    "- Steht im Wunsch ein Format (z. B. 1028×1028), nimm genau diese viewBox.",
     "- Bei Änderungswünschen an einer vorherigen Grafik: die vorherige Grafik übernehmen und nur verbessern, nichts weglassen.",
   ].join("\n");
 }

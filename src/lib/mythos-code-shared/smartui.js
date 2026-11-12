@@ -115,6 +115,55 @@ html.light .msui-btn{background:rgba(0,0,0,.03)}
 body.light .msui input[type=range]{background:rgba(0,0,0,.15)}
 body.light .msui input[type=range]::-webkit-slider-thumb{background:#fff;border:1px solid rgba(0,0,0,.2)}
 body.light .msui-num{background:#fff}
+.msui-dr{position:relative;overflow:hidden;background:radial-gradient(120% 80% at 0% 0%,rgba(167,139,250,.14),transparent 55%),radial-gradient(120% 80% at 100% 100%,rgba(56,189,248,.1),transparent 55%),var(--bg)}
+.msui-dr-title{font-weight:750;font-size:17px;margin-bottom:6px;letter-spacing:-.01em}
+.msui-dr-themes{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:8px 0 10px}
+.msui-dr-theme{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:14px;border-radius:16px;border:1px solid var(--bd);background:linear-gradient(145deg,rgba(255,255,255,.06),rgba(255,255,255,.02));color:inherit;font:inherit;text-align:left;cursor:pointer;overflow:hidden;animation:msuiDrIn .5s cubic-bezier(.2,.9,.3,1.3) both;transition:transform .2s,border-color .2s,box-shadow .2s}
+.msui-dr-theme::after{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 30%,rgba(255,255,255,.12) 50%,transparent 70%);transform:translateX(-100%);transition:transform .7s}
+.msui-dr-theme:hover{transform:translateY(-3px) scale(1.02);border-color:var(--a);box-shadow:0 10px 30px -12px var(--a)}
+.msui-dr-theme:hover::after{transform:translateX(100%)}
+.msui-dr-theme .e{font-size:30px;transition:transform .3s}.msui-dr-theme:hover .e{transform:rotate(-10deg) scale(1.2)}
+.msui-dr-theme .t{font-weight:650;font-size:14.5px}.msui-dr-theme .d{color:var(--mut);font-size:12px}
+.msui-dr-own{display:flex;gap:8px;align-items:center}.msui-dr-own .msui-q-other{flex:1;margin:0}
+.msui-dr-go{opacity:.6;pointer-events:none;transition:opacity .3s}
+.msui-dr-prog{height:4px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden;margin:4px 0 12px}.msui-dr-prog i{display:block;height:100%;background:linear-gradient(90deg,#a78bfa,#38bdf8);transition:width .5s}
+.msui-dr-teams{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.msui-dr-team{border:1px solid var(--bd);border-radius:14px;padding:9px;background:rgba(0,0,0,.15)}
+.msui-dr-team.bot{background:rgba(167,139,250,.06)}
+.msui-dr-th{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:13px}
+.msui-dr-cash{font-variant-numeric:tabular-nums;font-weight:700;padding:1px 8px;border-radius:99px;background:rgba(251,191,36,.15);color:#fbbf24}
+.msui-dr-slots{display:flex;flex-direction:column;gap:4px}
+.msui-dr-slot{display:flex;align-items:center;gap:6px;min-height:30px;padding:4px 7px;border-radius:9px;border:1px dashed var(--bd);font-size:12.5px;color:var(--mut)}
+.msui-dr-slot.full{border-style:solid;color:inherit;background:rgba(255,255,255,.04)}
+.msui-dr-slot .n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.msui-dr-slot .p{color:var(--mut);font-size:11px;font-variant-numeric:tabular-nums}
+.msui-dr-slot.pop{animation:msuiDrPop .6s cubic-bezier(.2,.9,.3,1.5)}
+.msui-dr-stage{display:grid;grid-template-columns:minmax(150px,200px) 1fr;gap:14px;align-items:center;margin-top:14px}
+@media (max-width:520px){.msui-dr-stage{grid-template-columns:1fr}.msui-dr-teams{grid-template-columns:1fr}}
+.msui-dr-card{position:relative;border-radius:18px;padding:16px 14px;text-align:center;border:1px solid var(--glow);background:linear-gradient(160deg,rgba(255,255,255,.09),rgba(255,255,255,.02));box-shadow:0 0 0 1px rgba(255,255,255,.04),0 12px 40px -14px var(--glow);animation:msuiDrFloat 3.5s ease-in-out infinite}
+.msui-dr-card.flip{animation:msuiDrFlip .7s cubic-bezier(.2,.8,.2,1) both,msuiDrFloat 3.5s ease-in-out .7s infinite}
+.msui-dr-card::before{content:"";position:absolute;inset:-1px;border-radius:inherit;padding:1px;background:conic-gradient(from var(--ang,0deg),transparent 0 70%,var(--glow) 85%,transparent);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;animation:msuiDrSpin 3s linear infinite}
+.msui-dr-card .e{font-size:46px;line-height:1.1;filter:drop-shadow(0 6px 12px rgba(0,0,0,.4))}
+.msui-dr-card .n{font-weight:700;font-size:15px;margin-top:6px}.msui-dr-card .d{color:var(--mut);font-size:12px;margin-top:4px}.msui-dr-card .c{color:var(--mut);font-size:10.5px;margin-top:8px;text-transform:uppercase;letter-spacing:.08em}
+.msui-dr-panel{display:flex;flex-direction:column;gap:10px}
+.msui-dr-turn{font-weight:600;font-size:14px}.msui-dr-turn.bot{color:#c4b5fd}.msui-dr-turn.bot::after{content:"";display:inline-block;width:1.2em;text-align:left;animation:msuiDrDots 1.2s steps(4) infinite}
+.msui-dr-bid{display:flex;align-items:baseline;gap:8px}.msui-dr-bid .l{color:var(--mut);font-size:12px}.msui-dr-bid .v{font-size:32px;font-weight:800;font-variant-numeric:tabular-nums;background:linear-gradient(90deg,#fbbf24,#f97316);-webkit-background-clip:text;background-clip:text;color:transparent}.msui-dr-bid .w{color:var(--mut);font-size:12px}
+.msui-dr-bid.pop .v{display:inline-block;animation:msuiDrPop .45s cubic-bezier(.2,.9,.3,1.6)}
+.msui-dr-main{background:linear-gradient(135deg,rgba(167,139,250,.35),rgba(56,189,248,.25));border-color:rgba(167,139,250,.5);font-weight:600;transition:transform .15s,box-shadow .2s}
+.msui-dr-main:hover{transform:translateY(-1px);box-shadow:0 6px 20px -8px #a78bfa}.msui-dr-main:active{transform:scale(.96)}
+.msui-dr-log{margin-top:12px;font-size:12px;color:var(--mut);display:flex;flex-direction:column;gap:2px}.msui-dr-log .new{color:inherit;animation:msuiDrIn .4s ease both}
+.msui-dr-reset{position:absolute;top:12px;right:14px;border:0;background:none;color:var(--mut);font:inherit;font-size:11px;cursor:pointer}.msui-dr-reset:hover{color:inherit}
+.msui-dr-endbox{position:relative;margin-top:14px;text-align:center;padding:10px 0 2px}.msui-dr-endbox .msui-btns{justify-content:center}
+.msui-dr-big{font-size:22px;font-weight:800;margin-bottom:10px;animation:msuiDrPop .7s cubic-bezier(.2,.9,.3,1.6)}
+.msui-dr-confetti{position:absolute;inset:-40px 0 0;pointer-events:none;overflow:hidden}.msui-dr-confetti i{position:absolute;top:-10px;width:7px;height:11px;border-radius:2px;animation:msuiDrFall 2.2s cubic-bezier(.3,.6,.5,1) forwards}
+@keyframes msuiDrIn{from{opacity:0;transform:translateY(10px) scale(.96)}to{opacity:1;transform:none}}
+@keyframes msuiDrPop{0%{transform:scale(.6);opacity:0}60%{transform:scale(1.12);opacity:1}100%{transform:scale(1)}}
+@keyframes msuiDrFlip{0%{transform:perspective(700px) rotateY(90deg) scale(.9);opacity:0}100%{transform:perspective(700px) rotateY(0) scale(1);opacity:1}}
+@keyframes msuiDrFloat{0%,100%{translate:0 0}50%{translate:0 -4px}}
+@keyframes msuiDrSpin{to{--ang:360deg}}
+@keyframes msuiDrDots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}
+@keyframes msuiDrFall{0%{transform:translateY(0) rotate(0)}100%{transform:translateY(260px) rotate(540deg);opacity:0}}
+@property --ang{syntax:"<angle>";inherits:false;initial-value:0deg}
+@media (prefers-reduced-motion:reduce){.msui-dr *{animation:none!important;transition:none!important}}
 `;
   function ensureCss() {
     if (typeof document === "undefined" || document.getElementById("msui-css")) return;
@@ -692,6 +741,201 @@ body.light .msui-num{background:#fff}
     return box;
   };
 
+
+  // ---------- 20-€-Draft (Bietspiel gegen Mythos) ----------
+  // Themen-Auswahl: {"type":"draft","themes":[{"title":"Fußball-Startelf","emoji":"⚽"},…]}
+  // Spiel:          {"type":"draft","theme":"Burger","emoji":"🍔","budget":20,"slots":5,"deck":[{"name":"Wagyu-Patty","emoji":"🥩","value":9,"note":"…"},…]}
+  // Regeln (TikTok-$20-Draft): Karte wird aufgedeckt; wer am Zug ist, nimmt sie für 1 € oder verschenkt sie (je 2×,
+  // belegt einen Platz beim Gegner). Nach dem Nehmen darf der andere erhöhen oder passen – abwechselnd, bis einer passt.
+  // Pleite (0 €) = Karten kommen gratis. Reserve: man behält mind. 1 € je weiterem freien Platz. Die bessere Liste gewinnt.
+  B.draft = (s, ctx) => (Array.isArray(s.deck) && s.deck.length ? draftGame(s, ctx) : draftThemes(s, ctx));
+  B.bietspiel = B.draft; B.draft20 = B.draft;
+
+  function draftThemes(s, ctx) {
+    const box = mk("div", "msui-box msui-dr");
+    box.appendChild(mk("div", "msui-dr-title", "💶 20-€-Draft"));
+    box.appendChild(mk("div", "msui-sub", s.subtitle || "Jeder hat 20 € und 5 Plätze. Bietet abwechselnd – wer passt, verliert die Karte. Am Ende gewinnt die bessere Aufstellung."));
+    const grid = mk("div", "msui-dr-themes");
+    const start = (t) => { box.classList.add("msui-dr-go"); ctx.send("Starte das 20-€-Draft mit dem Thema „" + t + "“."); };
+    arr(s.themes).slice(0, 3).forEach((t, i) => {
+      const title = (t && typeof t === "object" ? String(t.title || t.name || t.label || "") : "") || str(t), emoji = (t && t.emoji) || ["⚽", "🍔", "🌳"][i] || "🎲";
+      const b = mk("button", "msui-dr-theme"); b.type = "button"; b.style.animationDelay = i * 90 + "ms";
+      b.append(mk("span", "e", emoji), mk("span", "t", title));
+      if (t && t.text) b.appendChild(mk("span", "d", t.text));
+      b.onclick = () => start(title);
+      grid.appendChild(b);
+    });
+    box.appendChild(grid);
+    const row = mk("div", "msui-dr-own");
+    const inp = mk("input", "msui-q-other"); inp.placeholder = "Eigenes Thema, z. B. „Bester Garten“ …";
+    const go = mk("button", "msui-q-send", "Los"); go.type = "button";
+    go.onclick = () => { const v = inp.value.trim(); if (v) start(v); };
+    inp.onkeydown = (e) => { if (e.key === "Enter") go.click(); };
+    row.append(inp, go); box.appendChild(row);
+    return box;
+  }
+
+  function draftGame(s, ctx) {
+    const deck = arr(s.deck).map((c) => ({ name: str(c.name || c.title || c), emoji: (c && c.emoji) || "🃏", value: Math.max(1, Math.min(10, Number(c && c.value) || 5)), note: (c && (c.note || c.text)) || "" })).filter((c) => c.name);
+    const BUDGET = Math.max(5, Math.min(100, Number(s.budget) || 20)), SLOTS = Math.max(3, Math.min(11, Number(s.slots) || 5)), GIFTS = 2;
+    const theme = str(s.theme || s.title || "Draft"), themeEmoji = s.emoji || "🏆";
+    const key = "msui-draft-" + hash(JSON.stringify([theme, deck.map((c) => c.name)]));
+    const fresh = () => ({ i: 0, turn: Math.random() < 0.5 ? 0 : 1, phase: "offer", bid: 0, high: -1, toAct: -1, p: [{ cash: BUDGET, team: [], gifts: GIFTS }, { cash: BUDGET, team: [], gifts: GIFTS }], log: [], done: false });
+    let st = store.get(key); if (!st || !st.p) { st = fresh(); store.set(key, st); }
+    const NAME = ["Du", "Mythos"];
+    const save = () => store.set(key, st);
+    const open = (who) => SLOTS - st.p[who].team.length;
+    // Reserve: nach diesem Kauf muss noch 1 € pro weiterem freien Platz übrig bleiben.
+    const maxBid = (who) => Math.max(0, st.p[who].cash - Math.max(0, open(who) - 1));
+    const card = () => deck[st.i];
+    const box = mk("div", "msui-box msui-dr");
+    let timer = 0, lastFx = "";
+
+    function give(who, price, how) {
+      const c = card();
+      st.p[who].cash -= price; st.p[who].team.push({ name: c.name, emoji: c.emoji, value: c.value, price });
+      st.log.unshift((who ? "🤖 Mythos" : "🙂 Du") + " bekommt " + c.emoji + " " + c.name + (how === "gift" ? " geschenkt" : " für " + price + " €"));
+      lastFx = "win" + who;
+      next();
+    }
+    function next() {
+      st.i++; st.phase = "offer"; st.bid = 0; st.high = -1; st.toAct = -1;
+      st.turn = 1 - st.turn;
+      if (st.i >= deck.length || (open(0) <= 0 && open(1) <= 0)) st.done = true;
+      save(); draw();
+    }
+    // Wer ist bei dieser Karte überhaupt dabei?
+    function autoResolve() {
+      if (st.done || st.phase !== "offer") return false;
+      const a = open(0) > 0, b = open(1) > 0;
+      if (!a && !b) { st.done = true; save(); return false; }
+      if (!a || !b) { // nur einer hat noch Platz → bekommt die Karte zum Mindestpreis (pleite = gratis)
+        const who = a ? 0 : 1; give(who, st.p[who].cash > 0 ? 1 : 0, "solo"); return true;
+      }
+      const t = st.turn;
+      if (st.p[t].cash <= 0) { give(t, 0, "broke"); return true; }
+      return false;
+    }
+    function take(who) { st.phase = "bid"; st.bid = 1; st.high = who; st.toAct = 1 - who; lastFx = "bid"; save(); maybePassBroke(); draw(); }
+    function gift(who) { st.p[who].gifts--; give(1 - who, 0, "gift"); }
+    function raise(who, amount) { st.bid = amount; st.high = who; st.toAct = 1 - who; lastFx = "bid"; save(); maybePassBroke(); draw(); }
+    function pass() { give(st.high, st.bid, "bid"); }
+    function maybePassBroke() { if (st.phase === "bid" && st.toAct === 0 && maxBid(0) <= st.bid) { setTimeout(() => { if (st.phase === "bid" && st.toAct === 0) pass(); }, 900); } }
+
+    // Mythos (Bot): schätzt den Wert gegen sein Restgeld und die offenen Plätze ab.
+    function botLimit() {
+      const c = card(), fair = st.p[1].cash / Math.max(1, open(1));
+      const want = fair * (0.35 + c.value / 6.5) * (0.85 + Math.random() * 0.3);
+      return Math.min(maxBid(1), Math.max(1, Math.round(want)));
+    }
+    function botMove() {
+      if (st.done) return;
+      if (st.phase === "offer" && st.turn === 1) {
+        const c = card();
+        if (c.value <= 3 && st.p[1].gifts > 0 && open(0) > 1) return gift(1);
+        return take(1);
+      }
+      if (st.phase === "bid" && st.toAct === 1) {
+        const lim = botLimit();
+        if (st.bid < lim) return raise(1, Math.min(lim, st.bid + (lim - st.bid > 4 && Math.random() < 0.4 ? 2 : 1)));
+        return pass();
+      }
+    }
+
+    function slotRow(who) {
+      const p = st.p[who], wrap = mk("div", "msui-dr-team" + (who ? " bot" : ""));
+      const top = mk("div", "msui-dr-th"); top.append(mk("b", "", (who ? "🤖 " : "🙂 ") + NAME[who]), mk("span", "msui-dr-cash", p.cash + " €"));
+      wrap.appendChild(top);
+      const sl = mk("div", "msui-dr-slots");
+      for (let i = 0; i < SLOTS; i++) {
+        const it = p.team[i], d = mk("div", "msui-dr-slot" + (it ? " full" : ""));
+        if (it) { d.append(mk("span", "e", it.emoji), mk("span", "n", it.name), mk("span", "p", it.price ? it.price + " €" : "gratis")); if (i === p.team.length - 1 && lastFx === "win" + who) d.classList.add("pop"); }
+        else d.appendChild(mk("span", "n", "frei"));
+        sl.appendChild(d);
+      }
+      wrap.appendChild(sl);
+      return wrap;
+    }
+
+    function draw() {
+      clearTimeout(timer);
+      if (!st.done && autoResolve()) return;
+      box.replaceChildren();
+      const h = mk("div", "msui-dr-title"); h.append(mk("span", "", themeEmoji + " 20-€-Draft: " + theme)); box.appendChild(h);
+      const prog = mk("div", "msui-dr-prog"); const bar = mk("i"); bar.style.width = Math.round((Math.min(st.i, deck.length) / deck.length) * 100) + "%"; prog.appendChild(bar); box.appendChild(prog);
+      const teams = mk("div", "msui-dr-teams"); teams.append(slotRow(0), slotRow(1)); box.appendChild(teams);
+
+      if (st.done) {
+        box.classList.add("msui-dr-end");
+        const end = mk("div", "msui-dr-endbox");
+        end.appendChild(mk("div", "msui-dr-big", "🏁 Draft vorbei!"));
+        const conf = mk("div", "msui-dr-confetti"); for (let k = 0; k < 28; k++) { const c = mk("i"); c.style.left = Math.random() * 100 + "%"; c.style.animationDelay = Math.random() * 0.6 + "s"; c.style.background = PALETTE[k % PALETTE.length]; conf.appendChild(c); }
+        end.appendChild(conf);
+        const list = (who) => st.p[who].team.map((t) => t.emoji + " " + t.name + " (" + (t.price ? t.price + " €" : "gratis") + ")").join(", ") || "nichts";
+        const btns = mk("div", "msui-btns");
+        const judge = mk("button", "msui-btn msui-dr-main", "🏆 Mythos soll entscheiden"); judge.type = "button";
+        judge.onclick = () => ctx.send("20-€-Draft „" + theme + "“ ist vorbei. Meine Aufstellung (" + st.p[0].cash + " € übrig): " + list(0) + ". Deine Aufstellung (" + st.p[1].cash + " € übrig): " + list(1) + ". Vergleiche beide ehrlich Platz für Platz, vergib je eine Note und sag, wer gewonnen hat – nur Text, keine Grafik.");
+        const g0 = mk("button", "msui-btn", "🎨 Meine als Grafik"); g0.type = "button";
+        g0.onclick = () => ctx.send("/grafik Quadratische Grafik 1028×1028 (viewBox 0 0 1028 1028), Thema „" + theme + "“: meine Draft-Aufstellung – " + list(0).replace(/ \([^)]*\)/g, "") + ". Alle Teile als ein stimmiges Gesamtbild, Titel „Meine Aufstellung“.");
+        const g1 = mk("button", "msui-btn", "🎨 Mythos’ als Grafik"); g1.type = "button";
+        g1.onclick = () => ctx.send("/grafik Quadratische Grafik 1028×1028 (viewBox 0 0 1028 1028), Thema „" + theme + "“: die Draft-Aufstellung von Mythos – " + list(1).replace(/ \([^)]*\)/g, "") + ". Alle Teile als ein stimmiges Gesamtbild, Titel „Mythos’ Aufstellung“.");
+        const again = mk("button", "msui-btn", "🔁 Neue Runde"); again.type = "button";
+        again.onclick = () => ctx.send("Lass uns nochmal das 20-€-Draft spielen – schlag mir 3 neue Themen vor.");
+        btns.append(judge, g0, g1, again); end.appendChild(btns);
+        box.appendChild(end);
+        return;
+      }
+
+      const c = card();
+      const stage = mk("div", "msui-dr-stage");
+      const cardEl = mk("div", "msui-dr-card" + (st.phase === "offer" ? " flip" : ""));
+      const v = Math.round(c.value);
+      cardEl.style.setProperty("--glow", v >= 8 ? "#fbbf24" : v >= 5 ? "#a78bfa" : "#64748b");
+      cardEl.append(mk("div", "e", c.emoji), mk("div", "n", c.name));
+      if (c.note) cardEl.appendChild(mk("div", "d", c.note));
+      cardEl.appendChild(mk("div", "c", "Karte " + (st.i + 1) + " von " + deck.length));
+      stage.appendChild(cardEl);
+
+      const panel = mk("div", "msui-dr-panel");
+      if (st.phase === "offer") {
+        const t = st.turn;
+        panel.appendChild(mk("div", "msui-dr-turn" + (t ? " bot" : ""), t ? "🤖 Mythos ist am Zug …" : "🙂 Du bist am Zug"));
+        if (t === 0) {
+          const bs = mk("div", "msui-btns");
+          const tk = mk("button", "msui-btn msui-dr-main", "Nehmen für 1 €"); tk.type = "button"; tk.onclick = () => take(0);
+          bs.appendChild(tk);
+          if (st.p[0].gifts > 0 && open(1) > 0) { const gf = mk("button", "msui-btn", "🎁 Mythos schenken (" + st.p[0].gifts + "×)"); gf.type = "button"; gf.onclick = () => gift(0); bs.appendChild(gf); }
+          panel.appendChild(bs);
+        }
+      } else {
+        const bidEl = mk("div", "msui-dr-bid" + (lastFx === "bid" ? " pop" : ""));
+        bidEl.append(mk("span", "l", "Höchstgebot"), mk("span", "v", st.bid + " €"), mk("span", "w", "von " + NAME[st.high]));
+        panel.appendChild(bidEl);
+        const me = st.toAct;
+        panel.appendChild(mk("div", "msui-dr-turn" + (me ? " bot" : ""), me ? "🤖 Mythos überlegt …" : "🙂 Erhöhen oder passen?"));
+        if (me === 0) {
+          const bs = mk("div", "msui-btns"), mx = maxBid(0);
+          [1, 2, 5].forEach((d) => { const amt = st.bid + d; if (amt > mx) return; const b = mk("button", "msui-btn msui-dr-main", amt + " €  (+" + d + ")"); b.type = "button"; b.onclick = () => raise(0, amt); bs.appendChild(b); });
+          if (mx > st.bid + 5) { const all = mk("button", "msui-btn", "All-in " + mx + " €"); all.type = "button"; all.onclick = () => raise(0, mx); bs.appendChild(all); }
+          const ps = mk("button", "msui-btn", "Passen"); ps.type = "button"; ps.onclick = () => pass(); bs.appendChild(ps);
+          panel.appendChild(bs);
+          if (mx <= st.bid) panel.appendChild(mk("div", "msui-mut", "Mehr geht nicht – du brauchst noch 1 € pro freiem Platz."));
+        }
+      }
+      stage.appendChild(panel);
+      box.appendChild(stage);
+      if (st.log.length) { const lg = mk("div", "msui-dr-log"); st.log.slice(0, 3).forEach((l, k) => { const d = mk("div", "", l); if (!k) d.className = "new"; lg.appendChild(d); }); box.appendChild(lg); }
+      const reset = mk("button", "msui-dr-reset", "Neu starten"); reset.type = "button";
+      reset.onclick = () => { st = fresh(); save(); draw(); };
+      box.appendChild(reset);
+      // Mythos spielt mit kleiner Denkpause.
+      if ((st.phase === "offer" && st.turn === 1) || (st.phase === "bid" && st.toAct === 1)) timer = setTimeout(() => { if (box.isConnected) botMove(); }, 900 + Math.random() * 700);
+      lastFx = "";
+    }
+    draw();
+    return box;
+  }
+
   B.buttons = (s, ctx) => {
     const box = mk("div"); if (s.title) box.appendChild(mk("div", "msui-mut", s.title)).style.marginBottom = "6px";
     const bs = mk("div", "msui-btns");
@@ -837,6 +1081,9 @@ body.light .msui-num{background:#fff}
     "- quiz: {\"type\":\"quiz\",\"questions\":[{\"question\":\"…\",\"options\":[\"A\",\"B\",\"C\"],\"answer\":1,\"explanation\":\"…\"}]}\n" +
     "- gallery: {\"type\":\"gallery\",\"items\":[{\"image\":\"Stichwort\",\"caption\":\"…\"}]}\n" +
     "- prompt: {\"type\":\"prompt\",\"title\":\"…\",\"text\":\"Prompt zum Kopieren/Ausprobieren\"}\n" +
+    "- draft (20-€-Draft, Bietspiel gegen dich): Will jemand das „20-€-Spiel“/„20-Dollar-Draft“ spielen, schlage ZUERST 3 Themen vor: {\"type\":\"draft\",\"themes\":[{\"title\":\"Fußball-Startelf\",\"emoji\":\"⚽\",\"text\":\"kurz\"},{…},{…}]} (der Nutzer kann auch eigenes Thema eingeben). " +
+    "Kommt „Starte das 20-€-Draft mit dem Thema „X““, antworte mit EINEM Satz und dem Spiel: {\"type\":\"draft\",\"theme\":\"X\",\"emoji\":\"🍔\",\"budget\":20,\"slots\":5,\"deck\":[{\"name\":\"Wagyu-Patty\",\"emoji\":\"🥩\",\"value\":9,\"note\":\"kurzer Witz/Fakt\"}, …]} " +
+    "mit 14 Karten in zufälliger Reihenfolge: konkrete, echte Dinge/Personen zum Thema, gemischt von Top (value 8-10) über solide bis schwach/witzig (1-3). Das Spiel läuft komplett in der Oberfläche – erkläre keine Regeln und biete nicht selbst im Text.\n" +
     "- buttons: {\"type\":\"buttons\",\"items\":[{\"label\":\"Kürzer\",\"prompt\":\"Mach es kürzer\"}]} – nächste Schritte per Klick (gut am Ende).\n" +
     "Beispiele: „Vergleiche X und Y“ → compare mit Bildern; „Rechner für …“ → calculator; „Erkläre Pythagoras“ → formula + calculator mit svg-Dreieck; " +
     "„Plane einen Ausflug“ → map + timeline + checklist; „Zeig Entwicklung meiner Ausgaben“ → chart; „Lernplan/Quiz“ → steps/quiz. " +
