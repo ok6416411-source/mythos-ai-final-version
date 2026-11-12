@@ -25,7 +25,7 @@ export const PROVIDERS: Provider[] = [
     strong: [/deepseek[^/]*(v3\.[1-9]|v[4-9]|r1)/i, /qwen[^/]*(3|coder)/i, /kimi-k2/i, /glm-[4-9]/i, /llama-4/i, /gpt-oss-120b/i, /llama-3\.3-70b/i, /mistral[^/]*(large|medium|small-3)/i, /gemma-3-27b/i],
     fast: [/gpt-oss-20b/i, /gemma-3-(12|27)b/i, /llama-3\.[23]-(3|8|11)b/i, /mistral[^/]*small/i, /qwen[^/]*(7b|8b|14b)/i],
     fallback: { strong: ["deepseek/deepseek-chat-v3.1:free", "qwen/qwen3-coder:free", "meta-llama/llama-3.3-70b-instruct:free"], fast: ["openai/gpt-oss-20b:free", "google/gemma-3-27b-it:free"] },
-    headers: { "HTTP-Referer": "https://mythos-ai-final-versiono.lovable.app", "X-Title": "Mythos AI" },
+    headers: { "HTTP-Referer": "https://mythos-ai-final-versionolo.lovable.app", "X-Title": "Mythos AI" },
   },
   {
     id: "groq", base: "https://api.groq.com/openai/v1", secret: "GROQ_API_KEY",
