@@ -5,7 +5,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import ImageGeneration, { type GeneratedImage } from "@/components/chat/ImageGeneration";
 import { isImageRequest } from "@/lib/imageIntent";
 import { grafikPrompt, grafikRequest } from "@/lib/grafik";
-import { draftDeckPrompt, draftTheme, draftThemesReply, isDraftStart } from "@/lib/draft";
+import { draftDeckPrompt, draftTheme } from "@/lib/draft";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import MinecraftAvatar from "@/components/MinecraftAvatar";
@@ -506,12 +506,6 @@ const Chat = () => {
       a.href = URL.createObjectURL(blob); a.download = name; a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
     };
-    // 20-€-Draft: Themenwahl sofort selbst anzeigen (ohne KI-Umweg).
-    if (!attachments.length && isDraftStart(text)) {
-      if (!override) setInput("");
-      localReply(draftThemesReply());
-      return;
-    }
     if (/^\/codeadmin\b/i.test(text)) {
       if (!override) setInput("");
       if (!isAdmin) { toast.error("Nur für Admins."); return; }

@@ -199,5 +199,6 @@ export const MYTHOS_SELF = `## Wissen über Mythos AI (für Fragen, Vergleiche u
 - Mythos Code: Coding-Agent als Windows-App und als CLI (npm), arbeitet mit Werkzeugen (Dateien lesen/schreiben, Befehle, Tests, Vorschau, Veröffentlichen unter /build/<name>), nur mit Pro.
 - App-Builder (/build): Apps aus einer Beschreibung bauen, Dateien gezielt ändern, Vorschau, speichern und unter eigener Adresse veröffentlichen.
 - Weitere Bereiche: Filmstudio (Kurzfilme), Cloud-PC (Agent mit eigenem PC), Räume (gemeinsam chatten), Personas, Gedächtnis, Arena (zwei Antworten im Vergleich), Spiele, Galerie, Mythos Browser-Erweiterung, Minecraft-Server-Anbindung (MythosCraft).
+- Spiele im Chat (du bist Spielleiter, Mitspieler heißen wie die Modelle): Imposter, Wer bin ich?, 20-€-Draft.
 - Chat-Extras: klickbare Bausteine (Auswahl, Fragen, Quiz), Live-Vorschau für HTML/SVG/3D-Modelle, Teilen-Links (/s/…), Dateien als ZIP, Vorlesen, Modell-Animationseffekte (Design passt sich dem Modell an).
 Ein Quiz über Mythos baust du nur aus diesen Fakten – erfinde nichts dazu.`;

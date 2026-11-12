@@ -162,6 +162,34 @@ body.light .msui-num{background:#fff}
 @keyframes msuiDrSpin{to{--ang:360deg}}
 @keyframes msuiDrDots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}
 @keyframes msuiDrFall{0%{transform:translateY(0) rotate(0)}100%{transform:translateY(260px) rotate(540deg);opacity:0}}
+
+.msui-dr-theme.on{border-color:var(--a);box-shadow:0 0 0 1px var(--a),0 10px 30px -14px var(--a);background:linear-gradient(145deg,rgba(167,139,250,.18),rgba(255,255,255,.02))}
+.msui-gs-cfg{display:flex;flex-direction:column;gap:10px;margin-top:4px}
+.msui-gs-row{display:flex;justify-content:space-between;align-items:center;font-size:14px}
+.msui-gs-step{display:flex;align-items:center;gap:10px}.msui-gs-step button{width:32px;height:32px;border-radius:50%;border:1px solid var(--bd);background:rgba(255,255,255,.06);color:inherit;font-size:18px;cursor:pointer;transition:transform .15s}.msui-gs-step button:active{transform:scale(.88)}.msui-gs-step button:disabled{opacity:.3;cursor:default}.msui-gs-step b{min-width:18px;text-align:center;font-size:18px;font-variant-numeric:tabular-nums}
+.msui-gs-ppl{display:flex;flex-wrap:wrap;gap:6px}.msui-gs-av{padding:4px 10px;border-radius:99px;font-size:12.5px;font-weight:600;border:1px solid var(--c);color:var(--c);background:color-mix(in srgb,var(--c) 12%,transparent);animation:msuiDrPop .4s cubic-bezier(.2,.9,.3,1.5) both}
+.msui-pg-rolewrap{position:relative;margin:4px 0 12px}
+.msui-pg-role{display:flex;flex-direction:column;align-items:center;gap:2px;padding:14px;border-radius:16px;border:1px solid rgba(167,139,250,.4);background:linear-gradient(135deg,rgba(167,139,250,.16),rgba(56,189,248,.08));animation:msuiDrFlip .7s cubic-bezier(.2,.8,.2,1) both}
+.msui-pg-role.imp{border-color:rgba(248,113,113,.55);background:linear-gradient(135deg,rgba(248,113,113,.2),rgba(251,146,60,.08))}
+.msui-pg-role .k{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--mut)}.msui-pg-role b{font-size:24px;font-weight:800}.msui-pg-role .h{font-size:12px;color:var(--mut)}
+.msui-pg-veil{position:absolute;inset:0;border-radius:16px;border:1px dashed var(--bd);background:rgba(10,10,15,.82);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);color:inherit;font:inherit;font-weight:600;cursor:pointer}
+.msui-pg-players{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:10px}
+.msui-pg-p{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:64px;padding:8px 6px;border-radius:14px;border:1px solid var(--bd);animation:msuiDrIn .45s cubic-bezier(.2,.9,.3,1.3) both;transition:transform .3s,box-shadow .3s}
+.msui-pg-p .av{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;color:#0b0b0f;background:radial-gradient(circle at 30% 30%,#fff8,var(--c))}
+.msui-pg-p .n{font-size:12px;font-weight:600}.msui-pg-p .c{font-size:11px;padding:1px 6px;border-radius:6px;background:rgba(255,255,255,.08)}
+.msui-pg-p.active{transform:translateY(-3px);box-shadow:0 0 0 1px var(--c),0 8px 24px -8px var(--c)}.msui-pg-p.active .av{animation:msuiPgPulse 1.4s ease-in-out infinite}
+.msui-pg-p.out{opacity:.35;filter:grayscale(1)}
+@keyframes msuiPgPulse{0%,100%{box-shadow:0 0 0 0 var(--c)}50%{box-shadow:0 0 0 7px transparent}}
+.msui-pg-timer{position:relative;overflow:hidden;border-radius:10px;border:1px solid var(--bd);padding:6px 10px;margin-bottom:10px;font-weight:700;font-variant-numeric:tabular-nums;text-align:center}
+.msui-pg-timer i{position:absolute;left:0;bottom:0;height:3px;background:linear-gradient(90deg,#a78bfa,#38bdf8);transition:width 1s linear}
+.msui-pg-timer.low{color:#f87171;animation:msuiPgShake .5s ease-in-out infinite}.msui-pg-timer.low i{background:#f87171}
+@keyframes msuiPgShake{0%,100%{transform:none}25%{transform:translateX(-1px)}75%{transform:translateX(1px)}}
+.msui-pg-log{display:flex;flex-direction:column;gap:6px;margin-bottom:10px;max-height:240px;overflow-y:auto}
+.msui-pg-li{font-size:13px;padding:7px 10px;border-radius:12px;background:rgba(255,255,255,.04)}.msui-pg-li.new{animation:msuiDrIn .5s ease both;background:rgba(167,139,250,.1)}
+.msui-pg-li .a{color:var(--mut);margin-top:2px}
+.msui-pg-panel{display:flex;flex-direction:column;gap:8px}
+.msui-pg-target.on{border-color:var(--c);color:var(--c);background:color-mix(in srgb,var(--c) 14%,transparent)}
+.msui-pg-reveal{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:6px 0 10px}.msui-pg-rc{display:flex;flex-direction:column;padding:8px 12px;border-radius:12px;border:1px solid var(--bd);animation:msuiDrFlip .6s cubic-bezier(.2,.8,.2,1) both}.msui-pg-rc span{font-size:12px;color:var(--mut)}
 @property --ang{syntax:"<angle>";inherits:false;initial-value:0deg}
 @media (prefers-reduced-motion:reduce){.msui-dr *{animation:none!important;transition:none!important}}
 `;
@@ -936,6 +964,212 @@ body.light .msui-num{background:#fff}
     return box;
   }
 
+  // ---------- Party-Spiele: Auswahl + Spielfeld (Mythos ist Spielleiter und spielt die anderen) ----------
+  const MODEL_NAMES = ["Amber", "Bolt", "Spark", "Atlas", "Pebble"];
+  const MODEL_COLOR = { Amber: "#f59e0b", Bolt: "#22d3ee", Spark: "#facc15", Atlas: "#34d399", Pebble: "#a8a29e", Du: "#a78bfa" };
+  const GAMES = [
+    { id: "imposter", emoji: "🕵️", title: "Imposter", text: "Einer kennt das Wort nicht und muss bluffen", min: 3 },
+    { id: "werbinich", emoji: "🤔", title: "Wer bin ich?", text: "Errate, wer auf deiner Stirn steht", min: 2 },
+    { id: "draft", emoji: "💶", title: "20-€-Draft", text: "Biete um die beste Aufstellung", min: 2, max: 2 },
+  ];
+  // {"type":"gamesetup","game":"imposter","players":4}
+  B.gamesetup = (s, ctx) => {
+    const box = mk("div", "msui-box msui-dr");
+    box.appendChild(mk("div", "msui-dr-title", s.title || "🎮 Welches Spiel?"));
+    const key = "msui-gs-" + hash(JSON.stringify([s.id || "", s.title || ""]));
+    const done = store.get(key);
+    if (done) { const d = mk("div", "msui-q-done"); d.append(mk("span", "", "✓"), mk("span", "", done)); box.appendChild(d); return box; }
+    let game = GAMES.find((g) => g.id === s.game) || GAMES[0], players = Math.max(2, Math.min(6, Number(s.players) || 4)), imp = 1;
+    const grid = mk("div", "msui-dr-themes"), cfg = mk("div", "msui-gs-cfg");
+    const draw = () => {
+      if (game.max) players = Math.min(players, game.max);
+      if (players < game.min) players = game.min;
+      const maxImp = players >= 5 ? 2 : 1; imp = Math.min(Math.max(1, imp), maxImp);
+      [...grid.children].forEach((b) => b.classList.toggle("on", b.dataset.id === game.id));
+      cfg.replaceChildren();
+      const row = (label, val, dec, inc, decOk, incOk) => {
+        const r = mk("div", "msui-gs-row"); r.appendChild(mk("span", "", label));
+        const st = mk("div", "msui-gs-step");
+        const m = mk("button", "", "−"); m.type = "button"; m.disabled = !decOk; m.onclick = dec;
+        const v = mk("b", "", String(val));
+        const p = mk("button", "", "+"); p.type = "button"; p.disabled = !incOk; p.onclick = inc;
+        st.append(m, v, p); r.appendChild(st); cfg.appendChild(r);
+      };
+      row("Spieler (mit dir)", players, () => { players--; draw(); }, () => { players++; draw(); }, players > game.min, players < (game.max || 6));
+      if (game.id === "imposter") row("davon Imposter", imp, () => { imp--; draw(); }, () => { imp++; draw(); }, imp > 1, imp < (players >= 5 ? 2 : 1));
+      const names = ["Du"].concat(MODEL_NAMES.slice(0, players - 1));
+      const ppl = mk("div", "msui-gs-ppl"); names.forEach((n, i) => { const c = mk("span", "msui-gs-av", n); c.style.setProperty("--c", MODEL_COLOR[n] || "#a78bfa"); c.style.animationDelay = i * 60 + "ms"; ppl.appendChild(c); });
+      cfg.appendChild(ppl);
+      const go = mk("button", "msui-q-send", "▶ " + game.title + " starten"); go.type = "button";
+      go.onclick = () => {
+        const msg = game.id === "draft" ? "Lass uns das 20-€-Draft spielen – schlag mir 3 Themen vor."
+          : "Starte " + game.title + " mit " + players + " Spielern (" + names.join(", ") + ")" + (game.id === "imposter" ? ", davon " + imp + " Imposter." : ".");
+        store.set(key, game.title + (game.id === "draft" ? "" : " · " + players + " Spieler" + (game.id === "imposter" ? " · " + imp + " Imposter" : "")));
+        ctx.send(msg);
+        box.replaceChildren(mk("div", "msui-dr-title", "🎮 " + game.title)); const d = mk("div", "msui-q-done"); d.append(mk("span", "", "✓"), mk("span", "", store.get(key))); box.appendChild(d);
+      };
+      cfg.appendChild(go);
+    };
+    GAMES.forEach((g, i) => {
+      const b = mk("button", "msui-dr-theme"); b.type = "button"; b.dataset.id = g.id; b.style.animationDelay = i * 90 + "ms";
+      b.append(mk("span", "e", g.emoji), mk("span", "t", g.title), mk("span", "d", g.text));
+      b.onclick = () => { game = g; draw(); };
+      grid.appendChild(b);
+    });
+    box.append(grid, cfg); draw();
+    return box;
+  };
+  B.spiele = B.gamesetup; B.games = B.gamesetup;
+
+  // Spielfeld für Imposter / Wer bin ich – Mythos schickt nach jedem Zug den neuen Stand.
+  // {"type":"partygame","game":"imposter","id":"imp1","players":[{"name":"Du","you":true},{"name":"Amber"}],
+  //  "you":{"word":"Pizza"} | {"imposter":true,"hint":"Essen"},   (Wer bin ich: andere haben "card":"Einstein", du "card":"?")
+  //  "log":[{"from":"Amber","to":"Bolt","q":"…","a":"…"}],
+  //  "turn":{"action":"answer|ask|vote|yesno|guess|over","from":"Amber","question":"…"},
+  //  "timer":180, "result":{"text":"…","reveal":[{"name":"Bolt","role":"Imposter"}]}}
+  B.partygame = (s, ctx) => {
+    const game = String(s.game || "imposter").toLowerCase().includes("wer") ? "werbinich" : "imposter";
+    const id = String(s.id || game);
+    const box = mk("div", "msui-box msui-dr msui-pg");
+    const players = arr(s.players).map((p) => (typeof p === "string" ? { name: p } : p)).filter((p) => p && p.name);
+    const me = players.find((p) => p.you) || players[0] || { name: "Du" };
+    const others = players.filter((p) => p !== me);
+    const turn = s.turn || {};
+    const act = String(turn.action || "").toLowerCase();
+    const tag = game === "imposter" ? "🕵️ Imposter" : "🤔 Wer bin ich?";
+    const sentKey = "msui-pg-" + hash(JSON.stringify([id, s.log ? arr(s.log).length : 0, act, turn.question || ""]));
+    const already = store.get(sentKey);
+    const send = (text, label) => { store.set(sentKey, label || text); ctx.send(tag + " (" + id + "): " + text); paint(); };
+
+    box.appendChild(mk("div", "msui-dr-title", tag));
+    // Rolle des Spielers
+    const you = s.you || {};
+    const role = mk("div", "msui-pg-role" + (you.imposter ? " imp" : ""));
+    if (game === "imposter") {
+      if (you.imposter) role.append(mk("span", "k", "Du bist"), mk("b", "", "😈 IMPOSTER"), mk("span", "h", you.hint ? "Tipp: " + you.hint : "Du kennst das Wort nicht – bluffe!"));
+      else role.append(mk("span", "k", "Das geheime Wort"), mk("b", "", you.word || "?"), mk("span", "h", "Verrate es nicht zu deutlich!"));
+    } else role.append(mk("span", "k", "Deine Karte"), mk("b", "", "❓ ???"), mk("span", "h", "Frag mit Ja/Nein-Fragen, wer du bist"));
+    // Schleier: Rolle erst beim Antippen zeigen (falls jemand mitschaut)
+    const veil = mk("button", "msui-pg-veil", "👁 Antippen zum Ansehen"); veil.type = "button"; veil.onclick = () => veil.remove();
+    const roleWrap = mk("div", "msui-pg-rolewrap"); roleWrap.append(role, veil); box.appendChild(roleWrap);
+
+    // Spieler-Reihe
+    const row = mk("div", "msui-pg-players");
+    players.forEach((p, i) => {
+      const d = mk("div", "msui-pg-p" + (p === me ? " me" : "") + (turn.from === p.name ? " active" : "") + (p.out ? " out" : ""));
+      d.style.setProperty("--c", MODEL_COLOR[p.name] || PALETTE[i % PALETTE.length]); d.style.animationDelay = i * 70 + "ms";
+      d.appendChild(mk("span", "av", p === me ? "🙂" : p.name.slice(0, 1)));
+      d.appendChild(mk("span", "n", p === me ? "Du" : p.name));
+      if (game === "werbinich" && p !== me && p.card) d.appendChild(mk("span", "c", p.card));
+      row.appendChild(d);
+    });
+    box.appendChild(row);
+
+    // Timer (Imposter: Standard 3 Minuten ab dem ersten Stand dieses Spiels)
+    let timerEl = null, tick = 0;
+    const secs = Number(s.timer) || (game === "imposter" ? 180 : 0);
+    if (secs && act !== "over") {
+      const tkey = "msui-pgt-" + hash(id + "|" + players.map((p) => p.name).join(","));
+      let start = store.get(tkey); if (!start) { start = Date.now(); store.set(tkey, start); }
+      timerEl = mk("div", "msui-pg-timer");
+      const bar = mk("i"); timerEl.append(mk("span", "t", ""), bar);
+      const upd = () => {
+        const left = Math.max(0, secs - Math.floor((Date.now() - start) / 1000));
+        timerEl.firstChild.textContent = left ? "⏱ " + Math.floor(left / 60) + ":" + String(left % 60).padStart(2, "0") : "⏰ Zeit um – abstimmen!";
+        bar.style.width = (left / secs) * 100 + "%";
+        timerEl.classList.toggle("low", left <= 30);
+        if (!left && act !== "vote" && !box.querySelector(".msui-pg-vote") && !already) { clearInterval(tick); paintVote(true); }
+        if (!box.isConnected && tick) clearInterval(tick);
+      };
+      box.appendChild(timerEl); upd(); tick = setInterval(upd, 1000);
+    }
+
+    // Verlauf
+    const log = arr(s.log);
+    if (log.length) {
+      const lg = mk("div", "msui-pg-log");
+      log.slice(-8).forEach((l, i, a) => {
+        const it = mk("div", "msui-pg-li" + (i === a.length - 1 ? " new" : ""));
+        if (l.q) { const q = mk("div", "q"); q.append(mk("b", "", (l.from || "?") + " → " + (l.to || "?") + ": "), mk("span", "", l.q)); it.appendChild(q); }
+        if (l.a) { const a2 = mk("div", "a"); a2.append(mk("b", "", (l.to || "") + ": "), mk("span", "", l.a)); it.appendChild(a2); }
+        if (l.text) it.appendChild(mk("div", "q", l.text));
+        lg.appendChild(it);
+      });
+      box.appendChild(lg);
+    }
+
+    const panel = mk("div", "msui-pg-panel"); box.appendChild(panel);
+    const targetPicker = (sel) => {
+      const w = mk("div", "msui-btns");
+      others.forEach((p) => { const b = mk("button", "msui-btn msui-pg-target", p.name); b.type = "button"; b.style.setProperty("--c", MODEL_COLOR[p.name] || "#a78bfa"); b.onclick = () => { w.querySelectorAll("button").forEach((x) => x.classList.remove("on")); b.classList.add("on"); sel.v = p.name; }; w.appendChild(b); });
+      return w;
+    };
+    function paintVote(timeUp) {
+      panel.replaceChildren();
+      panel.appendChild(mk("div", "msui-dr-turn", timeUp ? "⏰ Zeit um! Wer ist der Imposter?" : "🗳 Wer ist der Imposter?"));
+      const w = mk("div", "msui-btns msui-pg-vote");
+      others.forEach((p) => { const b = mk("button", "msui-btn msui-dr-main", "👉 " + p.name); b.type = "button"; b.onclick = () => send("Zeit um – ich stimme für " + p.name + ". Lass jetzt alle anderen abstimmen und löse auf.", "Gestimmt für " + p.name); w.appendChild(b); });
+      panel.appendChild(w);
+    }
+    function paint() {
+      panel.replaceChildren();
+      const done = store.get(sentKey);
+      if (done) { const d = mk("div", "msui-q-done"); d.append(mk("span", "", "✓"), mk("span", "", done)); panel.appendChild(d); return; }
+      if (act === "over" || s.result) {
+        const r = s.result || {};
+        const end = mk("div", "msui-dr-endbox");
+        end.appendChild(mk("div", "msui-dr-big", r.title || (r.win === true ? "🏆 Gewonnen!" : r.win === false ? "💀 Verloren!" : "🏁 Spiel vorbei")));
+        if (r.text) end.appendChild(mk("div", "msui-sub", r.text));
+        if (arr(r.reveal).length) { const rv = mk("div", "msui-pg-reveal"); arr(r.reveal).forEach((x, i) => { const c = mk("div", "msui-pg-rc"); c.style.animationDelay = i * 150 + "ms"; c.append(mk("b", "", x.name), mk("span", "", x.role || x.card || "")); rv.appendChild(c); }); end.appendChild(rv); }
+        if (r.win === true) { const conf = mk("div", "msui-dr-confetti"); for (let k = 0; k < 28; k++) { const c = mk("i"); c.style.left = Math.random() * 100 + "%"; c.style.animationDelay = Math.random() * 0.6 + "s"; c.style.background = PALETTE[k % PALETTE.length]; conf.appendChild(c); } end.appendChild(conf); }
+        const bs = mk("div", "msui-btns");
+        const again = mk("button", "msui-btn msui-dr-main", "🔁 Nochmal"); again.type = "button"; again.onclick = () => ctx.send("Nochmal " + (game === "imposter" ? "Imposter" : "Wer bin ich") + " mit denselben Spielern!");
+        const other = mk("button", "msui-btn", "🎮 Anderes Spiel"); other.type = "button"; other.onclick = () => ctx.send("Lass uns ein anderes Spiel spielen.");
+        bs.append(again, other); end.appendChild(bs); panel.appendChild(end);
+        return;
+      }
+      if (act === "vote") return paintVote(false);
+      if (act === "yesno") { // Wer bin ich: ein Mitspieler fragt dich etwas über SEINE Karte
+        panel.appendChild(mk("div", "msui-dr-turn", (turn.from || "Jemand") + " fragt: „" + (turn.question || "?") + "“"));
+        const w = mk("div", "msui-btns");
+        [["✅ Ja", "Ja"], ["❌ Nein", "Nein"], ["🤷 Weiß nicht", "Weiß ich nicht"]].forEach(([l, v]) => { const b = mk("button", "msui-btn msui-dr-main", l); b.type = "button"; b.onclick = () => send("Meine Antwort an " + (turn.from || "") + ": " + v + ".", l); w.appendChild(b); });
+        panel.appendChild(w); return;
+      }
+      if (game === "werbinich" && (act === "ask" || act === "guess" || !act)) {
+        panel.appendChild(mk("div", "msui-dr-turn", "🙂 Du bist dran – stell eine Ja/Nein-Frage über dich"));
+        const inp = mk("input", "msui-q-other"); inp.placeholder = "z. B. „Bin ich ein Mensch?“";
+        const g = mk("input", "msui-q-other"); g.placeholder = "Oder raten: „Bin ich …?“";
+        const w = mk("div", "msui-btns");
+        const b1 = mk("button", "msui-q-send", "Fragen"); b1.type = "button"; b1.onclick = () => { const v = inp.value.trim(); if (v) send("Meine Frage über mich: „" + v + "“", "Gefragt: " + v); };
+        const b2 = mk("button", "msui-btn", "🎯 Raten"); b2.type = "button"; b2.onclick = () => { const v = g.value.trim(); if (v) send("Ich rate: Bin ich " + v.replace(/^bin ich\s*/i, "").replace(/\?$/, "") + "?", "Geraten: " + v); };
+        inp.onkeydown = (e) => { if (e.key === "Enter") b1.click(); }; g.onkeydown = (e) => { if (e.key === "Enter") b2.click(); };
+        w.append(b1, b2); panel.append(inp, g, w); return;
+      }
+      // Imposter: antworten (falls gefragt) und dann selbst jemanden fragen
+      const asked = act === "answer";
+      if (asked) panel.appendChild(mk("div", "msui-dr-turn", (turn.from || "Jemand") + " fragt dich: „" + (turn.question || "?") + "“"));
+      else panel.appendChild(mk("div", "msui-dr-turn", "🙂 Du bist dran – frag jemanden"));
+      const ans = mk("input", "msui-q-other"); ans.placeholder = "Deine Antwort (nicht zu eindeutig!)";
+      if (asked) panel.appendChild(ans);
+      panel.appendChild(mk("div", "msui-mut", "Wen fragst du als Nächstes?"));
+      const sel = { v: "" }; panel.appendChild(targetPicker(sel));
+      const q = mk("input", "msui-q-other"); q.placeholder = "Deine Frage, z. B. „Wo findet man das?“";
+      panel.appendChild(q);
+      const go = mk("button", "msui-q-send", asked ? "Antworten & fragen" : "Fragen"); go.type = "button";
+      go.onclick = () => {
+        if (asked && !ans.value.trim()) { ans.focus(); return; }
+        if (!sel.v || !q.value.trim()) { (sel.v ? q : panel).focus?.(); return; }
+        send((asked ? "Meine Antwort: „" + ans.value.trim() + "“. " : "") + "Ich frage " + sel.v + ": „" + q.value.trim() + "“", (asked ? "Geantwortet & " : "") + sel.v + " gefragt");
+      };
+      const vote = mk("button", "msui-btn", "🗳 Jetzt abstimmen"); vote.type = "button"; vote.onclick = () => paintVote(false);
+      const w = mk("div", "msui-btns"); w.append(go, vote); panel.appendChild(w);
+    }
+    paint();
+    return box;
+  };
+  B.imposter = (s, ctx) => B.partygame(Object.assign({ game: "imposter" }, s), ctx);
+  B.werbinich = (s, ctx) => B.partygame(Object.assign({ game: "werbinich" }, s), ctx);
+
   B.buttons = (s, ctx) => {
     const box = mk("div"); if (s.title) box.appendChild(mk("div", "msui-mut", s.title)).style.marginBottom = "6px";
     const bs = mk("div", "msui-btns");
@@ -1084,6 +1318,13 @@ body.light .msui-num{background:#fff}
     "- draft (20-€-Draft, Bietspiel gegen dich): Will jemand das „20-€-Spiel“/„20-Dollar-Draft“ spielen, schlage ZUERST 3 Themen vor: {\"type\":\"draft\",\"themes\":[{\"title\":\"Fußball-Startelf\",\"emoji\":\"⚽\",\"text\":\"kurz\"},{…},{…}]} (der Nutzer kann auch eigenes Thema eingeben). " +
     "Kommt „Starte das 20-€-Draft mit dem Thema „X““, antworte mit EINEM Satz und dem Spiel: {\"type\":\"draft\",\"theme\":\"X\",\"emoji\":\"🍔\",\"budget\":20,\"slots\":5,\"deck\":[{\"name\":\"Wagyu-Patty\",\"emoji\":\"🥩\",\"value\":9,\"note\":\"kurzer Witz/Fakt\"}, …]} " +
     "mit 14 Karten in zufälliger Reihenfolge: konkrete, echte Dinge/Personen zum Thema, gemischt von Top (value 8-10) über solide bis schwach/witzig (1-3). Das Spiel läuft komplett in der Oberfläche – erkläre keine Regeln und biete nicht selbst im Text.\n" +
+    "- SPIELE: Du kannst mit dem Nutzer Party-Spiele spielen und bist dabei Spielleiter. Will jemand „ein Spiel spielen“, zeig zuerst die Auswahl {\"type\":\"gamesetup\"} (Wer bin ich?, Imposter, 20-€-Draft; 2–6 Spieler, Imposter ab 3; 1 Imposter bei 3–4, bis 2 bei 5–6). " +
+    "Die Mitspieler heißen wie die Mythos-Modelle (Amber, Bolt, Spark, Atlas, Pebble) – du spielst sie alle mit eigener Persönlichkeit. Jede Spiel-Antwort: 1–2 Sätze + EIN Baustein mit dem aktuellen Stand.\n" +
+    "- partygame (Imposter/Wer bin ich): {\"type\":\"partygame\",\"game\":\"imposter|werbinich\",\"id\":\"fest-pro-runde\",\"players\":[{\"name\":\"Du\",\"you\":true},{\"name\":\"Amber\",\"card\":\"nur bei Wer bin ich: Figur\"}],\"you\":{\"word\":\"Pizza\"} oder {\"imposter\":true,\"hint\":\"Essen\"},\"log\":[{\"from\":\"Amber\",\"to\":\"Bolt\",\"q\":\"…\",\"a\":\"…\"}],\"turn\":{\"action\":\"answer|ask|vote|yesno|over\",\"from\":\"Amber\",\"question\":\"…\"},\"timer\":180,\"result\":{\"win\":true,\"text\":\"…\",\"reveal\":[{\"name\":\"Bolt\",\"role\":\"Imposter\"}]}}. " +
+    "IMPOSTER: Alle außer den Imposter(n) kennen dasselbe geheime Wort; Imposter bekommen nur eine Kategorie als Tipp. Ist der Nutzer Imposter, steht das Wort NIRGENDS im Baustein. Ein Spieler fragt einen anderen etwas Unauffälliges, der antwortet (vage, ohne das Wort) und fragt den Nächsten. " +
+    "Spiele die Bot-Züge selbst im log aus, bis der Nutzer dran ist (turn.action answer = er wurde gefragt, ask = er darf fragen). Nach 3 Minuten (timer) oder wenn der Nutzer abstimmt: alle stimmen ab (Bots begründen kurz), dann auflösen mit result. Merke dir Wort und Imposter über alle Züge gleich. " +
+    "WER BIN ICH: Jeder hat eine bekannte Figur, die alle außer ihm selbst sehen (players[].card; beim Nutzer \"?\"). Der Nutzer stellt Ja/Nein-Fragen über sich – antworte als die Mitspieler ehrlich im log; Bots fragen den Nutzer über ihre eigene Karte (turn.action yesno). Wer richtig rät, gewinnt. " +
+    "Die id bleibt pro Runde gleich; keine Regeln lang erklären.\n" +
     "- buttons: {\"type\":\"buttons\",\"items\":[{\"label\":\"Kürzer\",\"prompt\":\"Mach es kürzer\"}]} – nächste Schritte per Klick (gut am Ende).\n" +
     "Beispiele: „Vergleiche X und Y“ → compare mit Bildern; „Rechner für …“ → calculator; „Erkläre Pythagoras“ → formula + calculator mit svg-Dreieck; " +
     "„Plane einen Ausflug“ → map + timeline + checklist; „Zeig Entwicklung meiner Ausgaben“ → chart; „Lernplan/Quiz“ → steps/quiz. " +
