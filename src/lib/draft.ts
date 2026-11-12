@@ -17,7 +17,7 @@ const THEMES: { title: string; emoji: string; text: string }[] = [
 /** „Lass uns das 20-€-Spiel spielen“ & Co. */
 export function isDraftStart(text: string): boolean {
   const t = text.toLowerCase();
-  return /\b20\s*(€|euro|eur|dollar|\$)\s*-?\s*(spiel|game|draft|challenge)|\b(\$|€)\s*20\s*-?\s*(spiel|game|draft)|\bdraft[- ]?spiel\b/.test(t) && !/^starte das 20-€-draft/i.test(text.trim());
+  return /\b20\s*-?\s*(€|euro|eur|dollar|\$)\s*-?\s*(spiel|game|draft|challenge)|\b(\$|€)\s*20\s*-?\s*(spiel|game|draft)|\bdraft[- ]?spiel\b/.test(t) && !/^starte das 20-€-draft/i.test(text.trim());
 }
 
 /** Themenwahl als fertiger Baustein (3 zufällige Themen). */
