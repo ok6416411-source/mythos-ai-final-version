@@ -1008,7 +1008,7 @@ body.light .msui-num{background:#fff}
       try {
         const role = isImp(bot) ? "Du bist IMPOSTER und kennst das Wort NICHT (nur Kategorie „" + st.cat + "“) – frag so, dass du mehr erfährst, ohne aufzufallen." : "Das geheime Wort ist „" + st.word + "“. Frag unauffällig so, dass Wissende es erkennen, der Imposter aber nicht.";
         const r = jsonOf(await askAI("Imposter-Spiel. Du bist " + bot + ". " + role + "\nBisher: " + (st.log.slice(-6).map((l) => l.from + "→" + l.to + ": " + l.q + (l.a ? " / " + l.a : "")).join(" | ") || "nichts") + "\nWähle wen du fragst aus: " + targets.join(", ") + ". Antworte NUR als JSON: {\"to\":\"Name\",\"q\":\"kurze Frage, max 10 Wörter, ohne das Wort\"}"));
-        if (r && targets.includes(r.to) && r.q) return { to: r.to, q: String(r.q).slice(0, 140) };
+        if (r && targets.includes(r.to) && String(r.q || "").trim().length > 3) return { to: r.to, q: String(r.q).slice(0, 140) };
       } catch (e) { /* Fallback */ }
       return fallback;
     }
@@ -1219,7 +1219,8 @@ body.light .msui-num{background:#fff}
         if (ok) { st.phase = "over"; st.win = false; st.winner = bot; save(); paint(); return; }
         return nextWho();
       }
-      say(bot, "Du", String(r.q).slice(0, 140), ""); st.pendingWho = { from: bot, q: r.q }; save(); paint();
+      const wq = String(r.q || "").trim().length > 3 ? String(r.q).slice(0, 140) : "Bin ich ein Mensch?";
+      say(bot, "Du", wq, ""); st.pendingWho = { from: bot, q: wq }; save(); paint();
     }
     function nextWho() { st.turn = (st.turn + 1) % st.names.length; save(); paint(); }
 
@@ -1308,7 +1309,15 @@ body.light .msui-num{background:#fff}
   //  "log":[{"from":"Amber","to":"Bolt","q":"…","a":"…"}],
   //  "turn":{"action":"answer|ask|vote|yesno|guess|over","from":"Amber","question":"…"},
   //  "timer":180, "result":{"text":"…","reveal":[{"name":"Bolt","role":"Imposter"}]}}
+  // Schickt das Modell trotzdem einen Spielstand-Baustein, startet immer das echte Spiel im Baustein
+  // (Mythos erfindet sonst Antworten für den Spieler). Gleiche id = gleiches Spiel, auch nach Neuladen.
   B.partygame = (s, ctx) => {
+    const g = String(s.game || "imposter").toLowerCase().includes("wer") ? "werbinich" : "imposter";
+    const n = Math.max(g === "imposter" ? 3 : 2, Math.min(6, arr(s.players).length || 4));
+    const imps = Math.max(1, Math.min(n >= 5 ? 2 : 1, Number(s.imposters) || 1));
+    return localParty(g, n, imps, "msui-pg-local-" + hash(String(s.id || g) + "|" + n), ctx);
+  };
+  B.partygameOld = (s, ctx) => {
     const game = String(s.game || "imposter").toLowerCase().includes("wer") ? "werbinich" : "imposter";
     const id = String(s.id || game);
     const box = mk("div", "msui-box msui-dr msui-pg");
@@ -1448,8 +1457,8 @@ body.light .msui-num{background:#fff}
     paint();
     return box;
   };
-  B.imposter = (s, ctx) => B.partygame(Object.assign({ game: "imposter" }, s), ctx);
-  B.werbinich = (s, ctx) => B.partygame(Object.assign({ game: "werbinich" }, s), ctx);
+  B.imposter = (s, ctx) => B.partygame(Object.assign({}, s, { game: "imposter" }), ctx);
+  B.werbinich = (s, ctx) => B.partygame(Object.assign({}, s, { game: "werbinich" }), ctx);
 
   B.buttons = (s, ctx) => {
     const box = mk("div"); if (s.title) box.appendChild(mk("div", "msui-mut", s.title)).style.marginBottom = "6px";
