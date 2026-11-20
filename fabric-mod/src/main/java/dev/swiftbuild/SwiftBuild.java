@@ -37,8 +37,11 @@ public class SwiftBuild implements ModInitializer {
 		ServerPlayNetworking.registerGlobalReceiver(UndoPayload.ID, (payload, context) -> BuildService.handleUndo(context.player(), payload.redo()));
 
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
-			ServerConfig c = ServerConfig.get();
-			sender.sendPacket(new HelloPayload(c.reachCreative, c.reachSurvival, c.maxBlocksCreative, c.maxBlocksSurvival));
+			// Players without SwiftBuild can still join; they just never get the hello packet.
+			if (ServerPlayNetworking.canSend(handler.player, HelloPayload.ID)) {
+				ServerConfig c = ServerConfig.get();
+				sender.sendPacket(new HelloPayload(c.reachCreative, c.reachSurvival, c.maxBlocksCreative, c.maxBlocksSurvival));
+			}
 		});
 		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> BuildService.forget(handler.player.getUuid()));
 		ServerTickEvents.END_SERVER_TICK.register(BuildService::tick);

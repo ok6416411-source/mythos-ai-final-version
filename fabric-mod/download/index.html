@@ -88,7 +88,7 @@ code { font: 14px var(--mono); color: var(--amber); }
     <div>
       <p class="file">SwiftBuild-1.0.0-mc1.21.11-fabric.zip <span>· 98 KB</span></p>
       <p class="note">Enthält <code>swiftbuild-1.0.0.jar</code> und eine Kurzanleitung. Entpacken und das Jar in den <code>mods</code>-Ordner legen.</p>
-      <p class="note">Falls der Button nicht reagiert: <a href="/_blob/e2064877447fb2225df2c4350fb1bee8" style="color:var(--accent)">ZIP direkt öffnen</a></p>
+      <p class="note">Falls der Button nicht reagiert: <a href="/_blob/bcb137bb76e69167418763cdfa9d31ac" style="color:var(--accent)">ZIP direkt öffnen</a></p>
       <div id="status" role="status" aria-live="polite"></div>
     </div>
     <button id="dl" type="button">Herunterladen</button>
@@ -100,7 +100,8 @@ code { font: 14px var(--mono); color: var(--amber); }
       <ol>
         <li>Fabric Loader für 1.21.11 installieren und <b>Fabric API</b> in den <code>mods</code>-Ordner legen.</li>
         <li>ZIP entpacken, <code>swiftbuild-1.0.0.jar</code> nach <code>.minecraft/mods</code> kopieren.</li>
-        <li>Mit dem Fabric-Profil starten. Auf einem Server muss die Mod auch dort installiert sein.</li>
+        <li>Mit dem Fabric-Profil starten.</li>
+        <li><b>Server:</b> Die Mod muss auf dem Server <b>und</b> bei dir installiert sein. Auf Servern ohne SwiftBuild bleibt sie aus, du spielst dann ganz normal. Spieler ohne die Mod können auf deinen SwiftBuild-Server trotzdem joinen.</li>
       </ol>
     </section>
     <section class="card">
@@ -184,7 +185,7 @@ btn.addEventListener("click", async () => {
   btn.disabled = true;
   say("Datei wird vorbereitet …");
   try {
-    const res = await fetch("/_blob/e2064877447fb2225df2c4350fb1bee8");
+    const res = await fetch("/_blob/bcb137bb76e69167418763cdfa9d31ac");
     if (!res.ok) throw { code: "fetch", message: "HTTP " + res.status };
     const blob = await res.blob();
     await downloads.save({ filename: FILE, data: blob });
