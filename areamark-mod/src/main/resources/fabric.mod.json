@@ -1,0 +1,18 @@
+{
+	"schemaVersion": 1,
+	"id": "areamark",
+	"version": "${version}",
+	"name": "AreaMark",
+	"description": "Select single blocks or block areas with two clicks and keep them highlighted: animated coloured boxes with labels, sizes and block counts, saved per world, plus WorldEdit //pos1 //pos2 hand-off. Client-only.",
+	"authors": ["AreaMark"],
+	"license": "MIT",
+	"icon": "assets/areamark/icon.png",
+	"environment": "client",
+	"entrypoints": { "client": ["dev.areamark.AreaMark"] },
+	"depends": {
+		"fabricloader": ">=0.17.0",
+		"minecraft": "~1.21.11",
+		"java": ">=21",
+		"fabric-api": "*"
+	}
+}

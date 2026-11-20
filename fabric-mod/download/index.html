@@ -48,6 +48,11 @@ button:hover { background: #6ff3e5; }
 .warm { color: var(--orange); }
 h1.warm { color: var(--text); }
 .warm-border { border-left-color: var(--orange); }
+.amber-border { border-left-color: var(--amber); }
+.amber { color: var(--amber); }
+.amber-btn { background: var(--amber); color: #2a2106; box-shadow: 0 4px 0 #9a7f1c; }
+.amber-btn:hover { background: #ffe37a; }
+.amber-btn:active { box-shadow: 0 1px 0 #9a7f1c; }
 hr.sep { border: 0; border-top: 1px dashed var(--line); margin: 8px 0; width: 100%; }
 button:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--accent-deep); }
 button:focus-visible { outline: 3px solid var(--amber); outline-offset: 3px; }
@@ -224,6 +229,55 @@ code { font: 14px var(--mono); color: var(--amber); }
         <tr><td><kbd>O</kbd></td><td>Stil (Dezent bis Übertrieben), First Person, Third Person, Kamera, Item-Physik mit Stärke, jeder Einzeleffekt</td></tr>
         <tr><td>Optionen</td><td>Ressourcenpakete: 3D-Modelle und Haltung ein/aus</td></tr>
       </table>
+    </section>
+  </div>
+
+  <hr class="sep">
+
+  <header>
+    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAEMUlEQVR4nO2dPVbbQBRGxzkpWAB0LIAVUWQRNFlHGhZBwYpYQDqzADqnyPk4ZtBIM/qZee99360IR5aF79WTZPsoKQkhhBCCkdNRK768PlyOWjcjp8e3Q1ztulJJ78OeMWxekaSPZWsMP7Y8WPLHs9XBqnpqnvTu6WPNqkWB8/PN4jJrpkHzA+bkS3of5mJojaBp4ZJ8iR9DKYSWCKrPASTfHqXXvuW8oKqUqRVKvC2mpkHNJFicAJLvgyknNZOg+TJQ8u2yxs1sALrO98+Sw2IAGv0+aT0UVB8CJN8PLa42vRUs/DMZQD4ytPf7I3dWOgxoApCjAMj5FoDGfxxqDgOaAOQoAHIUADkKgBwFQI4CIIc+gPPL/ehNGMrP0Rswimvx+Pnu199RmzMMugDm9njGEGgCmBT//v7n8+fb29/5sgwhhA9gUXz+O7IQwgZQLb60DEkI4QJYLb70mOAhhAlgN/GldQQNwX0Ah4kvrTNYCG4D6Ca+9BxBQnAXwDDxped0HoKbAMyIL22D0xDMB2BWfI7TEMwG4EZ8jrMQzAXgVnyOkxDMBBBGfI7xEIYHEFZ8jtEQhgVAIz7HWAjdA6AVn2MkhK4BfJPPKD6nEEKvCMaeA+CPZg7hSvwIhp8EppQ4QxgsHgwLACPuy2GBIYQJ8ZOvRSeGTwCaEGbEj2R4ACBsCEbFAzMBgDAhGBcPzAUA3IbgRDwwGwBwE4Iz8cB8AMBsCE7FAzcBADMhOBcP3AUAhoUQRDxwGwDoFkIw8cB9AOCwEIKKB2ECALuFEFw8CBcAWB0CiXgQNgBQHQKZeBA+ADAbQmFZBmgCAHMfvTKJB7R3CctlM8pPiTgA8R8FQI4CIEcBkKMAyFEA5CgAchQAOQqAHAVAjgIgRwGQMywA9v+qJWfU69E1gPwTt/PLPX0IU69B2DuEpDT9ebyFmyX1xsr3EUzdH4AhBCviwfBvBLGEYE08GB4AiBqCVfHATAAgSgjWxQNzAQCvIXgRD8wGALyE4E08MB8AsBqCV/HATQDASgjexQN3AYBRIUQRD9wGAHqFEE08cB8AOCqEqOJBmADAXiFEFw/CBQDWhsAiHoQNAMyFcA2beBA+ANByR24G8YAmAKD7A3yFLgBwHQKjeED/pVBm+SkpAHoUADkKgBwFQI4CIOdbAKfHt9P1v8/PN/22RuxK7i53m5ImAD0KgJzJAHQY8E/N+E9JE4Ce6gA0BfzQ4qoYwNTIUAT2mXJUGv8pLUyAuQcKHyw5bD4H0BSwyxo3iwHoUOCD1tH/uUztE1xeHy5Tv797+qhdhTiA0s5Ye/iuPgSUVqhpMI6t8lNqmACgNAlS0jToxdxO13rivuosfy4CoBj2pWbSrrlq23SZVxOCOJ4tl+ub3grW+wTj2epgV4GaCH3Yc8c7bA9WDPuiaSuEEEKIPfkHPUOEv9NBpEsAAAAASUVORK5CYII=" alt="AreaMark-Icon">
+    <div>
+      <h1>AreaMark</h1>
+      <p class="sub">Blöcke und Blockbereiche mit zwei Klicks markieren und farbig hervorheben, schlicht und animiert. Nur Client.</p>
+      <div class="tags">
+        <span class="tag">Minecraft <b>1.21.11</b></span>
+        <span class="tag">benötigt <b>Fabric API</b></span>
+        <span class="tag">Version <b>1.0.0</b></span>
+        <span class="tag"><b>nur Client</b></span>
+      </div>
+    </div>
+  </header>
+
+  <div class="download amber-border">
+    <div>
+      <p class="file">AreaMark-1.0.0-mc1.21.11-fabric.zip <span>· 31 KB</span></p>
+      <p class="note">Enthält <code>areamark-1.0.0.jar</code> und eine Anleitung.</p>
+      <p class="note">Falls der Button nicht reagiert: <a href="/_blob/23c664138eebf1b6554cac9b959b3ffb" style="color:var(--amber)">ZIP direkt öffnen</a></p>
+      <div id="status-am" class="status" role="status" aria-live="polite"></div>
+    </div>
+    <button class="amber-btn" type="button" data-blob="/_blob/23c664138eebf1b6554cac9b959b3ffb" data-file="AreaMark-1.0.0-mc1.21.11-fabric.zip" data-status="status-am">Herunterladen</button>
+  </div>
+
+  <div class="grid">
+    <section class="card">
+      <h2 class="amber">Bedienung</h2>
+      <table>
+        <tr><td><kbd>G</kbd></td><td>Markier-Modus an, nochmal <kbd>G</kbd> speichert</td></tr>
+        <tr><td>Linksklick</td><td>Ecke 1 (bis 64 Blöcke weit, nichts wird abgebaut)</td></tr>
+        <tr><td>Rechtsklick</td><td>Ecke 2 (nichts wird platziert)</td></tr>
+        <tr><td><kbd>H</kbd></td><td>Liste: umbenennen, Farbe, ein/aus, Koordinaten kopieren, WorldEdit <code>//pos1</code> <code>//pos2</code>, Blöcke zählen, löschen</td></tr>
+      </table>
+      <p class="note">Nur Ecke 1 setzen und <kbd>G</kbd> drücken markiert einen einzelnen Block. Gespeichert wird pro Welt bzw. Server und Dimension.</p>
+    </section>
+    <section class="card">
+      <h2 class="amber">Animationen</h2>
+      <ul class="feat">
+        <li>Bereiche wachsen beim Speichern aus der ersten Ecke heraus und schrumpfen beim Löschen zusammen.</li>
+        <li>Pulsierende Füllung, ein Lichtstreifen läuft die Seiten entlang, leuchtender Rand.</li>
+        <li>Das Schild mit Name und Größe ploppt auf und schwebt.</li>
+        <li>Die Live-Auswahl wechselt die Farbe, die Ecken-Würfel drehen sich.</li>
+        <li>Das Banner gleitet herein, die Listenzeilen gleiten nacheinander herein.</li>
+      </ul>
     </section>
   </div>
 </main>
