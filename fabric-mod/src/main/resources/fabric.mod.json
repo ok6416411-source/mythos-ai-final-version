@@ -1,0 +1,24 @@
+{
+	"schemaVersion": 1,
+	"id": "swiftbuild",
+	"version": "${version}",
+	"name": "SwiftBuild",
+	"description": "Build lines, walls, floors, cubes, circles, cylinders, spheres and pyramids in a few clicks, with mirror/array/radial modifiers, undo/redo, a live hologram preview and smooth build animations.",
+	"authors": ["SwiftBuild"],
+	"license": "MIT",
+	"icon": "assets/swiftbuild/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": ["dev.swiftbuild.SwiftBuild"],
+		"client": ["dev.swiftbuild.client.SwiftBuildClient"]
+	},
+	"mixins": [
+		{ "config": "swiftbuild.client.mixins.json", "environment": "client" }
+	],
+	"depends": {
+		"fabricloader": ">=0.17.0",
+		"minecraft": "~1.21.11",
+		"java": ">=21",
+		"fabric-api": "*"
+	}
+}
