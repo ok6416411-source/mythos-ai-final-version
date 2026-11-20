@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SwiftBuild Download</title>
+<title>Minecraft-Mods Download</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Silkscreen&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -18,6 +18,7 @@
   --accent: #3fe0d0;
   --accent-deep: #237c77;
   --amber: #ffd84a;
+  --orange: #ffb050;
   --display: "Silkscreen", "Courier New", monospace;
   --body: "IBM Plex Sans", system-ui, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, monospace;
@@ -41,12 +42,19 @@ h2 { font: 400 18px/1.2 var(--display); margin: 0 0 14px; color: var(--accent); 
 .file span { color: var(--muted); }
 button { font: 400 16px/1 var(--display); background: var(--accent); color: #062421; border: 0; border-radius: 4px; padding: 16px 22px; cursor: pointer; box-shadow: 0 4px 0 var(--accent-deep); transition: transform .08s, box-shadow .08s; }
 button:hover { background: #6ff3e5; }
+.warm-btn { background: var(--orange); color: #2a1606; box-shadow: 0 4px 0 #9a5a1c; }
+.warm-btn:hover { background: #ffc47a; }
+.warm-btn:active { box-shadow: 0 1px 0 #9a5a1c; }
+.warm { color: var(--orange); }
+h1.warm { color: var(--text); }
+.warm-border { border-left-color: var(--orange); }
+hr.sep { border: 0; border-top: 1px dashed var(--line); margin: 8px 0; width: 100%; }
 button:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--accent-deep); }
 button:focus-visible { outline: 3px solid var(--amber); outline-offset: 3px; }
 button:disabled { opacity: .55; cursor: wait; }
-#status { font-size: 14px; color: var(--muted); min-height: 1.5em; margin-top: 8px; }
-#status.ok { color: var(--accent); }
-#status.err { color: #ff8a7a; }
+.status { font-size: 14px; color: var(--muted); min-height: 1.5em; margin-top: 8px; }
+.status.ok { color: var(--accent); }
+.status.err { color: #ff8a7a; }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
 section.card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 22px; }
 ol { margin: 0; padding-left: 22px; display: grid; gap: 8px; }
@@ -79,19 +87,20 @@ code { font: 14px var(--mono); color: var(--amber); }
         <span class="tag">Minecraft <b>1.21.11</b></span>
         <span class="tag">Fabric Loader <b>≥ 0.17</b></span>
         <span class="tag">benötigt <b>Fabric API</b></span>
-        <span class="tag">Version <b>1.0.0</b></span>
+        <span class="tag">Version <b>1.1.0</b></span>
+        <span class="tag">läuft auch auf <b>Servern ohne Mod</b></span>
       </div>
     </div>
   </header>
 
   <div class="download">
     <div>
-      <p class="file">SwiftBuild-1.0.0-mc1.21.11-fabric.zip <span>· 98 KB</span></p>
-      <p class="note">Enthält <code>swiftbuild-1.0.0.jar</code> und eine Kurzanleitung. Entpacken und das Jar in den <code>mods</code>-Ordner legen.</p>
-      <p class="note">Falls der Button nicht reagiert: <a href="/_blob/bcb137bb76e69167418763cdfa9d31ac" style="color:var(--accent)">ZIP direkt öffnen</a></p>
-      <div id="status" role="status" aria-live="polite"></div>
+      <p class="file">SwiftBuild-1.1.0-mc1.21.11-fabric.zip <span>· 105 KB</span></p>
+      <p class="note">Enthält <code>swiftbuild-1.1.0.jar</code> und eine Kurzanleitung. Entpacken und das Jar in den <code>mods</code>-Ordner legen.</p>
+      <p class="note">Falls der Button nicht reagiert: <a href="/_blob/19996651bae962fd67f31cf9986db28a" style="color:var(--accent)">ZIP direkt öffnen</a></p>
+      <div id="status-sb" class="status" role="status" aria-live="polite"></div>
     </div>
-    <button id="dl" type="button">Herunterladen</button>
+    <button type="button" data-blob="/_blob/19996651bae962fd67f31cf9986db28a" data-file="SwiftBuild-1.1.0-mc1.21.11-fabric.zip" data-status="status-sb">Herunterladen</button>
   </div>
 
   <div class="grid">
@@ -99,9 +108,10 @@ code { font: 14px var(--mono); color: var(--amber); }
       <h2>Installation</h2>
       <ol>
         <li>Fabric Loader für 1.21.11 installieren und <b>Fabric API</b> in den <code>mods</code>-Ordner legen.</li>
-        <li>ZIP entpacken, <code>swiftbuild-1.0.0.jar</code> nach <code>.minecraft/mods</code> kopieren.</li>
+        <li>ZIP entpacken, <code>swiftbuild-1.1.0.jar</code> nach <code>.minecraft/mods</code> kopieren.</li>
         <li>Mit dem Fabric-Profil starten.</li>
-        <li><b>Server:</b> Die Mod muss auf dem Server <b>und</b> bei dir installiert sein. Auf Servern ohne SwiftBuild bleibt sie aus, du spielst dann ganz normal. Spieler ohne die Mod können auf deinen SwiftBuild-Server trotzdem joinen.</li>
+        <li><b>Server mit SwiftBuild:</b> volle Reichweite, Bau-Wellen und Undo/Redo.</li>
+        <li><b>Server ohne SwiftBuild:</b> Der Client-Modus setzt Blöcke als normale Klicks, nur in deiner Reichweite (etwa 5 Blöcke) und gedrosselt. Abbauen in Form und Undo gehen dort nur im Kreativmodus. Nur nutzen, wo Bauhilfen erlaubt sind.</li>
       </ol>
     </section>
     <section class="card">
@@ -143,6 +153,75 @@ code { font: 14px var(--mono); color: var(--amber); }
       <p class="note">Survival: Items werden verbraucht, Undo gibt sie zurück. Abbauen in Form klappt nur bei weichen Blöcken oder mit passendem Werkzeug.</p>
     </section>
   </div>
+
+  <hr class="sep">
+
+  <header>
+    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAEfElEQVR4nO2dPXITQRCFWxRHIEapQoqIgIgDuBz5BCRQPoCP4AOoioQTOHL5AEQOiChCpXLMHUSCbLHame2e6fnZfe+LwKxWqnpfv5ldSViEEEIIIYisSp34cHd5KHVuRFZX90Wycj0pQ6+DpwzZJ2LobcmV4VXOgxl+e3IzSLJH86Tr613KqUmA/XYzeUxKG5gfEAufodchJoNVAtPBofAZfBtCIlgkUB84h/D3283t8c/r691Ny9dSi1wJVAeNhd9D8KeBj4Eigci4CBoJJg/oLfyp0E9BEkAkTYLX1idpFb4leFTW1zvV1cIpUQFaX+enhI429VMc7i4PsRYI/kPL6mfN52FZCtRLQI3wtcEz9DiWpcC8BygFd/RtGK2FYf2XnH4GX45hC4wtA00bIBY+g69DEwFKBr/fbh4H5/uYc76lc1YJpeu/RPjD0AfnhBZgahmo2gCh8FOCj4VO9FQRwHPqrcHvt5tH9BaIUVwAr6m3BM/A9RQVwCN8TfAMPJ1iAuSGz+DrUESAkuEzdF/cBRgLn8H3i6sASwr/x++f6mM/vftQ8JWUxU2AEuHnBD+8AdLDR9h6pPV7Aa5Tb/00TAiU6RdxEiBl+r2m3it0VLIFaBU+g/chS4AW4WuDT13zkepfxHkP0Dp8bvTsJAtg/cRuTvgMvhxJAuRc8g0ekxW+d/Bo9S/itASkVH9O+Jx4P8wCeFT/VPg1px4dkwDW6vcMv3TwiPUvkvlfxFjX/V7DR0YtgNeuP3L86M97C39J0y+S0QDe1R94DutDkrDU/9JQCZD71eyU6u9t8pdKUgNYpz9G6/BRN39HsjaBGmLT3zp8ohBgWP+W6beu+wy/PsUbIEQPb+ei17+IQoDUj3Wx+ueB6k5g6a9qM/x2uCwBlp1/D9Uvwvo/UmQPYNn8cfrb4vV28HPgsTboZfrJC+4NMIfpZ/2/0OwykPRBVQFOJ55rfx9U/2ZQ6+BZ///DJQAcCgAOlACs/3OgBCDnUABwYARg/Y8DIwAZhwKAAyEA6z8MhAAkDAU4AW36RQAEQP7Wj4bFC0DiLFoAbv6mWbQAZBoKAM5iBWD961isAEQHBQBnkQKw/vUsUgCip5vfHq5l//B++qCnr77n+8f64pf62LnABgCHAoBDAcChAOBQAHAoADgUAJzZ3QfQ8u370+QxXz6/rfBK+mZ2AmhvxtxcvHE715LhEgAOBQCHAoBDAcChAOBQAHAoADgUABwKAA4FAIcCgEMBwKEA4FAAcCgAOLP7PICW24c/rV/CLDhrgNXV/er07/w9P/NlmN0wWxEuAfBQAHBGBeAyMH809S/CBoBHLQBbYD5YsgoKMFYZlKB/xjIK1b/IRAPEHkjmwVSG5j0AW6BfUrKZFIBLwTywVv/zMdonONxdHsZ+3vo3gaITGkbt8q1eAkInZBu0Izd8EUMDHAk1gQjboBaxobNu3JN2+TEJjlAGXzRNm3LVlnWZpxGBlCfncj3rVjDvE7QnNwPXANkIdfAcvGITTBl8YdsSQgghxJO/YMsck0K/VbAAAAAASUVORK5CYII=" alt="Lively-Hands-Icon">
+    <div>
+      <h1 class="warm">Lively Hands</h1>
+      <p class="sub">Animationen für First und Third Person, 3D-Item-Physik und ein eingebautes Ressourcenpaket. Nur Client, läuft auf jedem Server.</p>
+      <div class="tags">
+        <span class="tag">Minecraft <b>1.21.11</b></span>
+        <span class="tag">benötigt <b>Fabric API</b></span>
+        <span class="tag">Version <b>1.0.0</b></span>
+        <span class="tag"><b>nur Client</b></span>
+      </div>
+    </div>
+  </header>
+
+  <div class="download warm-border">
+    <div>
+      <p class="file">LivelyHands-1.0.0-mc1.21.11-fabric.zip <span>· 37 KB</span></p>
+      <p class="note">Enthält <code>livelyhands-1.0.0.jar</code> (das Ressourcenpaket steckt im Jar) und eine Anleitung.</p>
+      <p class="note">Falls der Button nicht reagiert: <a href="/_blob/d9c605ccbd7947928d8612c18c778a9b" style="color:var(--orange)">ZIP direkt öffnen</a></p>
+      <div id="status-lh" class="status" role="status" aria-live="polite"></div>
+    </div>
+    <button class="warm-btn" type="button" data-blob="/_blob/d9c605ccbd7947928d8612c18c778a9b" data-file="LivelyHands-1.0.0-mc1.21.11-fabric.zip" data-status="status-lh">Herunterladen</button>
+  </div>
+
+  <div class="grid">
+    <section class="card">
+      <h2 class="warm">First Person</h2>
+      <ul class="feat">
+        <li>Trägheit beim Umschauen: Das Item zieht nach und federt nach.</li>
+        <li>Neigen beim Strafen, Vorlehnen beim Sprinten, Absenken beim Schleichen, Atmen im Stand.</li>
+        <li>Schweben beim Fallen, Einfedern beim Landen.</li>
+        <li>Eigene Schläge: Schwert-Hieb, Axt-Hacken, Spitzhacke, Schaufel-Stoß, Block-Drücken.</li>
+        <li>Hochklappen beim Item-Wechsel, Kauen beim Essen und Trinken.</li>
+        <li><kbd>I</kbd> Ansehen: Das Item kommt in die Mitte und dreht sich einmal.</li>
+      </ul>
+    </section>
+    <section class="card">
+      <h2 class="warm">Third Person, alle Spieler</h2>
+      <ul class="feat">
+        <li>Oberkörper dreht mit dem Kopf mit, Vorlehnen und Armschwung beim Sprinten.</li>
+        <li>Wippen beim Gehen, Atmen, angezogene Beine beim Springen.</li>
+        <li>Rudernde Arme beim Fallen, Einfedern beim Landen.</li>
+        <li>Klettern an Leitern, Hand zum Mund beim Essen, Zusammenzucken bei Schaden.</li>
+        <li>Hieb-, Hack- und Stoß-Schläge je nach Werkzeug, erhobene Waffe in Bereitschaft.</li>
+      </ul>
+    </section>
+  </div>
+  <div class="grid">
+    <section class="card">
+      <h2 class="warm">3D &amp; Ressourcenpaket</h2>
+      <ul class="feat">
+        <li>Item-Physik: Gedroppte Items überschlagen sich und liegen flach auf dem Boden.</li>
+        <li>Dickere 3D-Items in der Hand und am Boden.</li>
+        <li>Natürlichere Haltung für Werkzeuge, Items und Blöcke, dazu ein schlichtes Fadenkreuz.</li>
+        <li>Kamera: leichte Neigung beim Strafen, Einknicken beim Landen.</li>
+      </ul>
+    </section>
+    <section class="card">
+      <h2 class="warm">Jederzeit abschaltbar</h2>
+      <table>
+        <tr><td><kbd>K</kbd></td><td>alle Animationen an/aus</td></tr>
+        <tr><td><kbd>O</kbd></td><td>Einstellungen: First Person, Third Person, Kamera und Item-Physik einzeln, jeweils mit Stärke von 25 % bis 200 %</td></tr>
+        <tr><td>Optionen</td><td>Ressourcenpakete: „Lively Hands – Haltung &amp; Fadenkreuz“ ein/aus</td></tr>
+      </table>
+    </section>
+  </div>
 </main>
 <script>
 const MODES = [
@@ -169,34 +248,34 @@ for (const [name, desc, rows] of MODES) {
   host.appendChild(el);
 }
 
-const FILE = "SwiftBuild-1.0.0-mc1.21.11-fabric.zip";
-const btn = document.getElementById("dl");
-const status = document.getElementById("status");
-function say(text, cls) { status.textContent = text; status.className = cls || ""; }
+function say(status, text, cls) { status.textContent = text; status.className = cls || ""; }
+const UNAVAILABLE = "Herunterladen ist in dieser Ansicht nicht möglich. Öffne die Seite direkt auf claude.ai.";
 let downloads = null;
 if (window.claude && claude.use) {
   claude.use("downloads").then(d => {
     downloads = d;
-    if (!d) say("Herunterladen ist in dieser Ansicht nicht möglich. Öffne die Seite direkt auf claude.ai.", "err");
-  }).catch(() => say("Herunterladen ist in dieser Ansicht nicht möglich. Öffne die Seite direkt auf claude.ai.", "err"));
+    if (!d) document.querySelectorAll(".status").forEach(el => say(el, UNAVAILABLE, "err"));
+  }).catch(() => document.querySelectorAll(".status").forEach(el => say(el, UNAVAILABLE, "err")));
 }
-btn.addEventListener("click", async () => {
-  if (!downloads) { say("Herunterladen ist in dieser Ansicht nicht möglich. Öffne die Seite direkt auf claude.ai.", "err"); return; }
-  btn.disabled = true;
-  say("Datei wird vorbereitet …");
-  try {
-    const res = await fetch("/_blob/bcb137bb76e69167418763cdfa9d31ac");
-    if (!res.ok) throw { code: "fetch", message: "HTTP " + res.status };
-    const blob = await res.blob();
-    await downloads.save({ filename: FILE, data: blob });
-    say("Gespeichert. ZIP entpacken und das Jar in den mods-Ordner legen.", "ok");
-  } catch (e) {
-    if (e && e.code === "declined") say("Download abgebrochen.");
-    else if (e && e.code === "rate_limited") say("Es ist schon ein Dialog offen. Bitte kurz warten und nochmal klicken.", "err");
-    else say("Download fehlgeschlagen (" + ((e && (e.code || e.message)) || "unbekannt") + "). Bitte nochmal versuchen.", "err");
-  } finally {
-    btn.disabled = false;
-  }
+document.querySelectorAll("button[data-blob]").forEach(btn => {
+  const status = document.getElementById(btn.dataset.status);
+  btn.addEventListener("click", async () => {
+    if (!downloads) { say(status, UNAVAILABLE, "err"); return; }
+    btn.disabled = true;
+    say(status, "Datei wird vorbereitet …");
+    try {
+      const res = await fetch(btn.dataset.blob);
+      if (!res.ok) throw { code: "fetch", message: "HTTP " + res.status };
+      await downloads.save({ filename: btn.dataset.file, data: await res.blob() });
+      say(status, "Gespeichert. ZIP entpacken und das Jar in den mods-Ordner legen.", "ok");
+    } catch (e) {
+      if (e && e.code === "declined") say(status, "Download abgebrochen.");
+      else if (e && e.code === "rate_limited") say(status, "Es ist schon ein Dialog offen. Bitte kurz warten und nochmal klicken.", "err");
+      else say(status, "Download fehlgeschlagen (" + ((e && (e.code || e.message)) || "unbekannt") + "). Bitte nochmal versuchen.", "err");
+    } finally {
+      btn.disabled = false;
+    }
+  });
 });
 </script>
 </body>
