@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SwiftBuild Download</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  /* One visual world: the mod's own palette, deep slate with teal and amber. Layout: left-aligned header + download panel, then two-column reference. */
+  --bg: #0e151c;
+  --panel: #16212b;
+  --line: #26343f;
+  --text: #e4eef0;
+  --muted: #8fa3b0;
+  --accent: #3fe0d0;
+  --accent-deep: #237c77;
+  --amber: #ffd84a;
+  --display: "Silkscreen", "Courier New", monospace;
+  --body: "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--text); font: 16px/1.55 var(--body); }
+main { max-width: 980px; margin: 0 auto; padding: 40px 20px 64px; display: grid; gap: 32px; }
+header { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+header img { width: 72px; height: 72px; image-rendering: pixelated; }
+h1 { font: 400 40px/1.1 var(--display); margin: 0; letter-spacing: 1px; text-wrap: balance; }
+h2 { font: 400 18px/1.2 var(--display); margin: 0 0 14px; color: var(--accent); letter-spacing: .5px; }
+.sub { color: var(--muted); margin: 4px 0 0; }
+.tags { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.tag { font: 500 12px/1 var(--mono); padding: 6px 9px; border: 1px solid var(--line); border-radius: 4px; color: var(--muted); }
+.tag b { color: var(--text); font-weight: 500; }
+.download { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 6px; padding: 22px; display: flex; gap: 20px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.download p { margin: 0; max-width: 56ch; }
+.file { font: 500 14px/1.4 var(--mono); color: var(--text); }
+.file span { color: var(--muted); }
+button { font: 400 16px/1 var(--display); background: var(--accent); color: #062421; border: 0; border-radius: 4px; padding: 16px 22px; cursor: pointer; box-shadow: 0 4px 0 var(--accent-deep); transition: transform .08s, box-shadow .08s; }
+button:hover { background: #6ff3e5; }
+button:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--accent-deep); }
+button:focus-visible { outline: 3px solid var(--amber); outline-offset: 3px; }
+button:disabled { opacity: .55; cursor: wait; }
+#status { font-size: 14px; color: var(--muted); min-height: 1.5em; margin-top: 8px; }
+#status.ok { color: var(--accent); }
+#status.err { color: #ff8a7a; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+section.card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 22px; }
+ol { margin: 0; padding-left: 22px; display: grid; gap: 8px; }
+table { width: 100%; border-collapse: collapse; font-size: 15px; }
+td { padding: 8px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+td:first-child { white-space: nowrap; padding-right: 14px; }
+tr:last-child td { border-bottom: 0; }
+kbd { font: 500 13px/1 var(--mono); background: #0b1117; border: 1px solid var(--line); border-bottom-width: 3px; border-radius: 4px; padding: 3px 7px; color: var(--text); }
+.modes { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; }
+.mode { display: grid; justify-items: center; gap: 8px; padding: 12px 6px; border: 1px solid var(--line); border-radius: 6px; font-size: 14px; text-align: center; }
+.mode svg { width: 40px; height: 40px; shape-rendering: crispEdges; }
+.mode small { color: var(--muted); font-size: 12px; line-height: 1.3; }
+ul.feat { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+ul.feat li { padding-left: 16px; position: relative; }
+ul.feat li::before { content: ""; position: absolute; left: 0; top: .6em; width: 7px; height: 7px; background: var(--amber); }
+.note { color: var(--muted); font-size: 14px; }
+code { font: 14px var(--mono); color: var(--amber); }
+@media (prefers-reduced-motion: reduce) { button { transition: none; } }
+@media (max-width: 420px) { h1 { font-size: 30px; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAEFElEQVR4nO2dsVLVQBiFF8cXcKispLHRAko7fAQ7WgtewAewcex5AQo6x45HkO6WWGBDAzPOUDk+AlZHMSS5u9kk+///OV8FzL17dzhfzmaTMKQkhBBCCEZ2lhr48ObyfqmxGbnYO1gkq1kHVejrMKcM1QMp9LbUyvCk5s0Kvz21GUyyJ+dDv795N2VoMcD+5nzra6a0QfEbxsJX6OswJkOpBEUvHgpfwbdhSIQSCbLPARS+PYZ+9yXnBVmm9A2o4G3R1wY5TbC1ARS+D/oyyWmC4m2gwrfLlGxGBdA+3z/bMhwUQNXvk9KlIHsJUPh+KMmq6lKw8E+vAN3K0NHvj25mQ8uAGoAcCUDOIwFU/3HIWQbUAORIAHIkADkSgBwJQI4EIEcCkCMByJEA5EgAciQAORKAHAlAjgQgRwKQIwHIkQDk0AtwcnfVegpNedp6Aq14GDy+/vD8davpNINOgLEjnlGEyQL8/vaq+sOfvf1RPUYuJVXPJEL4BqhZ4xlECCvAnCd3kUUIJ8CSZ/URRZgswJrrdw5rbuciieC+AVru4yOI4FYASxdwPIvgTgBLwXfxKIIbASwH38WTCOYF8BR8Fw8imBXAc/BdLItgToBIwXexKIKZ28H7m/PQ4T/k5O4q7R4ftZ5GSslYA5zdXqeUUnr/4mXjmSzH54+fWk/hP1a/G5hzBTGiCNaCB6YaoEsEEawGD0wLADyKYD144EIA4EEEL8EDl3cDLYrgLXjgqgG6WBDBa/DAtQCghQjegwchBABriBAleBBKALCECNGCByEFAHOIEDV4EFoAMEWE6MEDCgFAjggswQMqAUCfCGzBA0oBwNntdfp5+qX1NJqyyt1Aa39DIP5h5oEQ0QYJQI4EIMfl3UAxH2oAciQAORKAHAlAjgQgRwKQIwHIkQDkSAByJAA5Zp4HwP+639+cN53HGvw6/dp6Cn8xIwCILIKl4IE5AUAkESwGD8wKADyLYDl4YF4A4EkED8EDNwIAyyJ4Ch64EwBYEsFj8MCtAKClCJ6DB+4FAGuKECF4EEYAsKQIkYIH4QQAc4oQMXgQVgBQI0Lk4EF4AUCJCAzBAxoBwJgITMEDOgEARNg9PqIMHtA/D8AcfkoSgB4JQI4EIEcCkPNIgIu9g52H31u42yam0c2um21KagB6JAA5vQJoGfBPTv2npAagJ1sAtYAfSrIaFKCvMiSBffoyGqr/lLY0wNgbhQ+2ZVh8DqAWsMuUbLYKoKXAB6XVD7Ir/vDm8r7v57ivLtowdDDmLt/ZS8DQgGqDdtSGn1JBA4ChJkhJbbAWYwdd6Yn7pLP8MQmAZJiXnKadsmur2ubliCCWp2a7XnUpWNcJ2lObwawBqhHWYc4Db7EjWDLMi9pWCCGEEHPyB0+Znyj6OCT0AAAAAElFTkSuQmCC" alt="SwiftBuild-Icon">
+    <div>
+      <h1>SwiftBuild</h1>
+      <p class="sub">Formen in wenigen Klicks bauen, mit Hologramm-Vorschau und Bau-Animationen.</p>
+      <div class="tags">
+        <span class="tag">Minecraft <b>1.21.11</b></span>
+        <span class="tag">Fabric Loader <b>≥ 0.17</b></span>
+        <span class="tag">benötigt <b>Fabric API</b></span>
+        <span class="tag">Version <b>1.0.0</b></span>
+      </div>
+    </div>
+  </header>
+
+  <div class="download">
+    <div>
+      <p class="file">SwiftBuild-1.0.0-mc1.21.11-fabric.zip <span>· 98 KB</span></p>
+      <p class="note">Enthält <code>swiftbuild-1.0.0.jar</code> und eine Kurzanleitung. Entpacken und das Jar in den <code>mods</code>-Ordner legen.</p>
+      <p class="note">Falls der Button nicht reagiert: <a href="/_blob/e2064877447fb2225df2c4350fb1bee8" style="color:var(--accent)">ZIP direkt öffnen</a></p>
+      <div id="status" role="status" aria-live="polite"></div>
+    </div>
+    <button id="dl" type="button">Herunterladen</button>
+  </div>
+
+  <div class="grid">
+    <section class="card">
+      <h2>Installation</h2>
+      <ol>
+        <li>Fabric Loader für 1.21.11 installieren und <b>Fabric API</b> in den <code>mods</code>-Ordner legen.</li>
+        <li>ZIP entpacken, <code>swiftbuild-1.0.0.jar</code> nach <code>.minecraft/mods</code> kopieren.</li>
+        <li>Mit dem Fabric-Profil starten. Auf einem Server muss die Mod auch dort installiert sein.</li>
+      </ol>
+    </section>
+    <section class="card">
+      <h2>Steuerung</h2>
+      <table>
+        <tr><td><kbd>Alt links</kbd> halten</td><td>Baumenü: Modus, Füllung, Hotbar-Mix, Modifikatoren, Undo/Redo</td></tr>
+        <tr><td>Rechtsklick</td><td>Punkte setzen und Form platzieren</td></tr>
+        <tr><td>Linksklick</td><td>Form abbauen, beim Platzieren abbrechen</td></tr>
+        <tr><td>Sneaken + Klick</td><td>normales Minecraft-Verhalten</td></tr>
+        <tr><td><kbd>Z</kbd> / <kbd>Y</kbd></td><td>Rückgängig / Wiederholen</td></tr>
+        <tr><td><kbd>N</kbd></td><td>Modifikator-Einstellungen</td></tr>
+      </table>
+    </section>
+  </div>
+
+  <section class="card">
+    <h2>Baumodi</h2>
+    <div class="modes" id="modes"></div>
+  </section>
+
+  <div class="grid">
+    <section class="card">
+      <h2>Animationen</h2>
+      <ul class="feat">
+        <li>Blöcke fallen ein, drehen sich und ploppen wellenförmig vom ersten Klick aus auf.</li>
+        <li>Beim Abbauen schrumpfen sie mit Drehung weg.</li>
+        <li>Pulsierendes Hologramm vor dem Bauen, rot beim Abbauen.</li>
+        <li>Federnd aufklappendes Radialmenü und einfahrendes HUD mit Maßen und Blockzahl.</li>
+      </ul>
+    </section>
+    <section class="card">
+      <h2>Modifikatoren</h2>
+      <ul class="feat">
+        <li><b>Array:</b> Form bis zu 64-mal mit Versatz wiederholen.</li>
+        <li><b>Spiegeln:</b> auf X, Y und Z, Zentrum mittig oder auf der Blockkante.</li>
+        <li><b>Radial:</b> 2 bis 16 Segmente um eine Achse.</li>
+        <li><b>Hotbar-Mix:</b> zufällige Blöcke aus der Hotbar, die Vorschau zeigt das echte Ergebnis.</li>
+      </ul>
+      <p class="note">Survival: Items werden verbraucht, Undo gibt sie zurück. Abbauen in Form klappt nur bei weichen Blöcken oder mit passendem Werkzeug.</p>
+    </section>
+  </div>
+</main>
+<script>
+const MODES = [
+  ["Aus", "Normales Bauen", ["..####..",".#....#.","#....#.#","#...#..#","#..#...#","#.#....#",".#....#.","..####.."]],
+  ["Einzeln", "1 Klick, mit Modifikatoren", ["........","........","..####..","..#++#..","..#++#..","..####..","........","........"]],
+  ["Linie", "Start, Ende", ["........","........","........","########","#+#+#+##","........","........","........"]],
+  ["Wand", "zwei Ecken", ["########","#+++#++#","########","#++#+++#","########","#+++#++#","########","........"]],
+  ["Boden", "zwei Ecken", ["........","........","....####","...#+++#","..#+++#.",".#+++#..","####....","........"]],
+  ["Quader", "Ecke, Ecke, Höhe", ["..######",".#++++##","######+#","#++++#+#","#++++#+#","#++++##.","######..","........"]],
+  ["Kreis", "Mitte, Radius", ["..####..",".#....#.","#......#","#......#","#......#","#......#",".#....#.","..####.."]],
+  ["Zylinder", "Mitte, Radius, Höhe", [".######.","#++++++#",".######.","#......#","#......#","#......#",".######.","........"]],
+  ["Kugel", "Mitte, Radius", ["..####..",".#++++#.","#+##+++#","#+#++++#","#++++++#","#++++++#",".#++++#.","..####.."]],
+  ["Pyramide", "zwei Ecken der Grundfläche", ["........","...##...","..#++#..","..#++#..",".#++++#.",".#++++#.","########","........"]]
+];
+const host = document.getElementById("modes");
+for (const [name, desc, rows] of MODES) {
+  let rects = "";
+  rows.forEach((row, y) => [...row].forEach((ch, x) => {
+    if (ch !== ".") rects += '<rect x="' + x + '" y="' + y + '" width="1" height="1" fill="' + (ch === "#" ? "#e4eef0" : "#3fe0d0") + '"/>';
+  }));
+  const el = document.createElement("div");
+  el.className = "mode";
+  el.innerHTML = '<svg viewBox="0 0 8 8" aria-hidden="true">' + rects + '</svg><span>' + name + '</span><small>' + desc + '</small>';
+  host.appendChild(el);
+}
+
+const FILE = "SwiftBuild-1.0.0-mc1.21.11-fabric.zip";
+const btn = document.getElementById("dl");
+const status = document.getElementById("status");
+function say(text, cls) { status.textContent = text; status.className = cls || ""; }
+let downloads = null;
+if (window.claude && claude.use) {
+  claude.use("downloads").then(d => {
+    downloads = d;
+    if (!d) say("Herunterladen ist in dieser Ansicht nicht möglich. Öffne die Seite direkt auf claude.ai.", "err");
+  }).catch(() => say("Herunterladen ist in dieser Ansicht nicht möglich. Öffne die Seite direkt auf claude.ai.", "err"));
+}
+btn.addEventListener("click", async () => {
+  if (!downloads) { say("Herunterladen ist in dieser Ansicht nicht möglich. Öffne die Seite direkt auf claude.ai.", "err"); return; }
+  btn.disabled = true;
+  say("Datei wird vorbereitet …");
+  try {
+    const res = await fetch("/_blob/e2064877447fb2225df2c4350fb1bee8");
+    if (!res.ok) throw { code: "fetch", message: "HTTP " + res.status };
+    const blob = await res.blob();
+    await downloads.save({ filename: FILE, data: blob });
+    say("Gespeichert. ZIP entpacken und das Jar in den mods-Ordner legen.", "ok");
+  } catch (e) {
+    if (e && e.code === "declined") say("Download abgebrochen.");
+    else if (e && e.code === "rate_limited") say("Es ist schon ein Dialog offen. Bitte kurz warten und nochmal klicken.", "err");
+    else say("Download fehlgeschlagen (" + ((e && (e.code || e.message)) || "unbekannt") + "). Bitte nochmal versuchen.", "err");
+  } finally {
+    btn.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
