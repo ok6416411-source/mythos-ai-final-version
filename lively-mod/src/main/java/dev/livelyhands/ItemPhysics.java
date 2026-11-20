@@ -12,8 +12,19 @@ import net.minecraft.util.math.RotationAxis;
  * and while flying everything tumbles. Replaces vanilla's floating bob and spin.
  */
 public final class ItemPhysics {
-	public record Data(boolean onGround, boolean inWater, float spinSpeed) {
+	public record Data(boolean onGround, boolean inWater, float spinSpeed, float bounce) {
 	}
+
+	private static final class Track {
+		final Spring bounce = new Spring();
+		boolean wasOnGround;
+		double lastVy;
+		long lastNanos = -1;
+		long seen;
+	}
+
+	private static final java.util.Map<Integer, Track> TRACKS = new java.util.HashMap<>();
+	private static long lastCleanup;
 
 	public static final RenderStateDataKey<Data> DATA = RenderStateDataKey.create(() -> "livelyhands:item");
 
@@ -31,7 +42,25 @@ public final class ItemPhysics {
 			return;
 		}
 		float speed = (float) entity.getVelocity().length();
-		state.setData(DATA, new Data(entity.isOnGround(), entity.isTouchingWater(), speed));
+		long nowNs = System.nanoTime();
+		long nowMs = net.minecraft.util.Util.getMeasuringTimeMs();
+		Track t = TRACKS.computeIfAbsent(entity.getId(), id -> new Track());
+		float dt = t.lastNanos < 0 ? 0.016f : Math.min(0.05f, (nowNs - t.lastNanos) / 1.0e9f);
+		t.lastNanos = nowNs;
+		t.seen = nowMs;
+		boolean onGround = entity.isOnGround();
+		if (onGround && !t.wasOnGround && t.lastVy < -0.08 && LivelyConfig.get().extras()) {
+			// Hop back up a little when it hits the ground.
+			t.bounce.vel += (float) Math.min(6.0, -t.lastVy * 18.0);
+		}
+		t.wasOnGround = onGround;
+		t.lastVy = entity.getVelocity().y;
+		t.bounce.update(0, 90, 7, dt);
+		if (nowMs - lastCleanup > 10_000) {
+			lastCleanup = nowMs;
+			TRACKS.values().removeIf(tr -> tr.seen < nowMs - 10_000);
+		}
+		state.setData(DATA, new Data(onGround, entity.isTouchingWater(), speed, Math.max(0, t.bounce.pos)));
 	}
 
 	/**
@@ -45,6 +74,10 @@ public final class ItemPhysics {
 		boolean flat = box.getLengthZ() <= 0.0626;
 		float seedYaw = state.uniqueOffset * 57.29578f;
 		if (d.onGround() && !d.inWater()) {
+			if (d.bounce() > 0.001f) {
+				matrices.translate(0, d.bounce() * 0.12f, 0);
+				matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(d.bounce() * 25f));
+			}
 			if (flat) {
 				// Lie flat; the stack copies (offset along Z) then pile upwards.
 				matrices.translate(0, 0.02f, 0);

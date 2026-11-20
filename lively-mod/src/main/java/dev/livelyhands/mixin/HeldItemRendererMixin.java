@@ -7,6 +7,7 @@ import net.minecraft.client.render.command.OrderedRenderCommandQueue;
 import net.minecraft.client.render.item.HeldItemRenderer;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.item.ItemStack;
+import net.minecraft.util.Arm;
 import net.minecraft.util.Hand;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -27,6 +28,11 @@ public abstract class HeldItemRendererMixin {
 	@Inject(method = RENDER_HANDS, at = @At("TAIL"))
 	private void livelyhands$end(float tickProgress, MatrixStack matrices, OrderedRenderCommandQueue queue, ClientPlayerEntity player, int light, CallbackInfo ci) {
 		matrices.pop();
+	}
+
+	@Inject(method = "renderArmHoldingItem", at = @At("HEAD"))
+	private void livelyhands$fist(MatrixStack matrices, OrderedRenderCommandQueue queue, int light, float equipProgress, float swingProgress, Arm arm, CallbackInfo ci) {
+		Motion.applyFist(matrices, swingProgress, arm);
 	}
 
 	@Inject(

@@ -48,9 +48,14 @@ public class LivelyScreen extends Screen {
 		int col = 154;
 		int left = width / 2 - col - 4;
 		int right = width / 2 + 4;
-		int y = 36;
+		int y = 34;
 
-		toggle(left, y, col * 2 + 8, "livelyhands.screen.master", c.enabled, k -> k.enabled = !k.enabled);
+		toggle(left, y, col, "livelyhands.screen.master", c.enabled, k -> k.enabled = !k.enabled);
+		addDrawableChild(ButtonWidget.builder(Text.translatable("livelyhands.screen.style", Text.translatable("livelyhands.style." + c.style.name().toLowerCase(java.util.Locale.ROOT))), b -> {
+			c.style = c.style.next();
+			LivelyConfig.save();
+			clearAndInit();
+		}).dimensions(right, y, col, 20).build());
 		y += 30;
 		toggle(left, y, col, "livelyhands.screen.first_person", c.firstPerson, k -> k.firstPerson = !k.firstPerson);
 		addDrawableChild(ButtonWidget.builder(Text.translatable("livelyhands.screen.strength", Math.round(c.intensity * 100)), b -> {
@@ -86,6 +91,12 @@ public class LivelyScreen extends Screen {
 		y += 24;
 		toggle(left, y, col, "livelyhands.screen.eating", c.eatingWobble, k -> k.eatingWobble = !k.eatingWobble);
 		toggle(right, y, col, "livelyhands.screen.inspect", c.inspect, k -> k.inspect = !k.inspect);
+		y += 24;
+		toggle(left, y, col, "livelyhands.screen.combos", c.combos, k -> k.combos = !k.combos);
+		toggle(right, y, col, "livelyhands.screen.flips", c.flips, k -> k.flips = !k.flips);
+		y += 24;
+		toggle(left, y, col, "livelyhands.screen.fidgets", c.fidgets, k -> k.fidgets = !k.fidgets);
+		toggle(right, y, col, "livelyhands.screen.shake", c.shake, k -> k.shake = !k.shake);
 		y += 30;
 		addDrawableChild(ButtonWidget.builder(Text.translatable("gui.done"), b -> close()).dimensions(width / 2 - 100, Math.min(y, height - 26), 200, 20).build());
 	}

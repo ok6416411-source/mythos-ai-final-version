@@ -1,0 +1,28 @@
+{
+ "model": {
+  "type": "minecraft:select",
+  "property": "minecraft:display_context",
+  "cases": [
+   {
+    "when": [
+     "gui",
+     "fixed"
+    ],
+    "model": {
+     "type": "minecraft:model",
+     "model": "minecraft:item/pufferfish_bucket"
+    }
+   }
+  ],
+  "fallback": {
+   "type": "minecraft:model",
+   "model": "livelyhands:item/pufferfish_bucket_3d",
+   "tints": [
+    {
+     "type": "minecraft:constant",
+     "value": -12618012
+    }
+   ]
+  }
+ }
+}

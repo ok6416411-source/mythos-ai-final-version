@@ -12,6 +12,30 @@ import net.fabricmc.loader.api.FabricLoader;
 public final class LivelyConfig {
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
+	/** How wild everything is. INSANE is the default: big, flashy, over the top. */
+	public enum Style {
+		SUBTLE(0.45f, false), NORMAL(1.0f, false), STRONG(1.6f, true), INSANE(2.3f, true);
+
+		public final float factor;
+		public final boolean extras;
+
+		Style(float factor, boolean extras) {
+			this.factor = factor;
+			this.extras = extras;
+		}
+
+		public Style next() {
+			return values()[(ordinal() + 1) % values().length];
+		}
+	}
+
+	public Style style = Style.INSANE;
+	/** Combos, flips, fidgets and screen shake (only with STRONG / INSANE). */
+	public boolean combos = true;
+	public boolean flips = true;
+	public boolean fidgets = true;
+	public boolean shake = true;
+
 	/** Master switch (key K by default). */
 	public boolean enabled = true;
 	public boolean firstPerson = true;
@@ -37,6 +61,22 @@ public final class LivelyConfig {
 		return instance;
 	}
 
+	public float fp() {
+		return intensity * style.factor;
+	}
+
+	public float tp() {
+		return thirdPersonIntensity * style.factor;
+	}
+
+	public float cam() {
+		return cameraIntensity * style.factor;
+	}
+
+	public boolean extras() {
+		return style.extras;
+	}
+
 	public static void load() {
 		Path file = FabricLoader.getInstance().getConfigDir().resolve("livelyhands.json");
 		try {
@@ -44,6 +84,9 @@ public final class LivelyConfig {
 				try (Reader reader = Files.newBufferedReader(file)) {
 					LivelyConfig loaded = GSON.fromJson(reader, LivelyConfig.class);
 					if (loaded != null) {
+						if (loaded.style == null) {
+							loaded.style = Style.INSANE;
+						}
 						instance = loaded;
 					}
 				}

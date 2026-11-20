@@ -21,5 +21,14 @@
  "livelyhands.screen.swings": "Werkzeug-Schläge: %s",
  "livelyhands.screen.equip": "Zieh-Animation: %s",
  "livelyhands.screen.eating": "Kauen: %s",
- "livelyhands.screen.inspect": "Ansehen (I): %s"
+ "livelyhands.screen.inspect": "Ansehen (I): %s",
+ "livelyhands.screen.style": "Stil: %s",
+ "livelyhands.style.subtle": "Dezent",
+ "livelyhands.style.normal": "Normal",
+ "livelyhands.style.strong": "Krass",
+ "livelyhands.style.insane": "ÜBERTRIEBEN",
+ "livelyhands.screen.combos": "Combos & Finisher: %s",
+ "livelyhands.screen.flips": "Saltos & Drehungen: %s",
+ "livelyhands.screen.fidgets": "Leerlauf-Spielereien: %s",
+ "livelyhands.screen.shake": "Kamera-Wackeln: %s"
 }

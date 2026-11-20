@@ -51,6 +51,19 @@ public class LivelyHands implements ClientModInitializer {
 			CameraMotion.tick(client);
 		});
 
+		// Impact feedback: recoil + screen shake when hitting mobs or breaking blocks.
+		net.fabricmc.fabric.api.event.player.AttackEntityCallback.EVENT.register((player, world, hand, entity, hit) -> {
+			if (world.isClient()) {
+				Motion.recoil(0.6f);
+				CameraMotion.shake(0.35f);
+			}
+			return net.minecraft.util.ActionResult.PASS;
+		});
+		net.fabricmc.fabric.api.event.client.player.ClientPlayerBlockBreakEvents.AFTER.register((world, player, pos, state) -> {
+			Motion.recoil(0.35f);
+			CameraMotion.shake(0.12f);
+		});
+
 		// Built-in resource pack: new holding poses for tools, items and blocks, plus a crosshair.
 		FabricLoader.getInstance().getModContainer(MOD_ID).ifPresent(container ->
 			ResourceLoader.registerBuiltinPack(Identifier.of(MOD_ID, "lively_pack"), container,

@@ -21,5 +21,14 @@
  "livelyhands.screen.swings": "Tool swings: %s",
  "livelyhands.screen.equip": "Equip flip: %s",
  "livelyhands.screen.eating": "Eating wobble: %s",
- "livelyhands.screen.inspect": "Inspect (I): %s"
+ "livelyhands.screen.inspect": "Inspect (I): %s",
+ "livelyhands.screen.style": "Style: %s",
+ "livelyhands.style.subtle": "Subtle",
+ "livelyhands.style.normal": "Normal",
+ "livelyhands.style.strong": "Strong",
+ "livelyhands.style.insane": "INSANE",
+ "livelyhands.screen.combos": "Combos & finisher: %s",
+ "livelyhands.screen.flips": "Flips & spins: %s",
+ "livelyhands.screen.fidgets": "Idle fidgets: %s",
+ "livelyhands.screen.shake": "Screen shake: %s"
 }

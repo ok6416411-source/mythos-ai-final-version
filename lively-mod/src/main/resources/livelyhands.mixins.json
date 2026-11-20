@@ -2,6 +2,6 @@
 	"required": true,
 	"package": "dev.livelyhands.mixin",
 	"compatibilityLevel": "JAVA_21",
-	"client": ["HeldItemRendererMixin", "PlayerEntityRendererMixin", "PlayerEntityModelMixin", "ItemEntityRendererMixin", "GameRendererMixin"],
+	"client": ["HeldItemRendererMixin", "PlayerEntityRendererMixin", "BipedEntityModelMixin", "ItemEntityRendererMixin", "GameRendererMixin", "HeldItemFeatureRendererMixin"],
 	"injectors": { "defaultRequire": 1 }
 }
