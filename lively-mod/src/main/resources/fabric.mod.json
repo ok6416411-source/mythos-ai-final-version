@@ -1,0 +1,21 @@
+{
+	"schemaVersion": 1,
+	"id": "livelyhands",
+	"version": "${version}",
+	"name": "Lively Hands",
+	"description": "Client-only first-person animations: inertia when turning, leaning while moving, jump and landing bounce, tool-specific swings, equip flips, eating wobble and an inspect animation. Ships a built-in resource pack with new holding poses and a crosshair.",
+	"authors": ["Lively Hands"],
+	"license": "MIT",
+	"icon": "assets/livelyhands/icon.png",
+	"environment": "client",
+	"entrypoints": {
+		"client": ["dev.livelyhands.LivelyHands"]
+	},
+	"mixins": ["livelyhands.mixins.json"],
+	"depends": {
+		"fabricloader": ">=0.17.0",
+		"minecraft": "~1.21.11",
+		"java": ">=21",
+		"fabric-api": "*"
+	}
+}

@@ -4,7 +4,9 @@ Eine eigene Bau-Mod im Stil von "schnell bauen": Formen in wenigen Klicks, mit H
 
 ## Installation
 1. Fabric Loader ≥ 0.17 für Minecraft 1.21.11 und **Fabric API** installieren.
-2. `swiftbuild-1.0.0.jar` in den `mods`-Ordner legen (Client **und** Server; im Einzelspieler reicht der Client).
+2. `swiftbuild-1.1.0.jar` in den `mods`-Ordner legen. Im Einzelspieler reicht das.
+
+**Server:** Ist SwiftBuild auch auf dem Server installiert, gilt die volle Reichweite, und es gibt Server-Animationen und Undo/Redo. Auf Servern **ohne** die Mod läuft automatisch der **Client-Modus**: Die Mod setzt Blöcke als normale Klicks, nur in deiner Reichweite (etwa 5 Blöcke) und gedrosselt auf 2 Blöcke pro Tick (einstellbar mit `N`). Abbauen in Form und Undo gehen dort nur im Kreativmodus. Viele Server verbieten Bauhilfen, also nur dort nutzen, wo es erlaubt ist.
 
 ## Bedienung
 | Taste | Funktion |
@@ -25,5 +27,5 @@ Im Überlebensmodus werden Items verbraucht. Formen abbauen geht dort nur bei we
 
 ## Bauen aus dem Quellcode
 ```
-./gradlew build   # -> build/libs/swiftbuild-1.0.0.jar
+./gradlew build   # -> build/libs/swiftbuild-1.1.0.jar
 ```
