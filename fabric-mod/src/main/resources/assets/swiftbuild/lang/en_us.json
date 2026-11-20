@@ -35,7 +35,7 @@
  "swiftbuild.hud.break": "Breaking",
  "swiftbuild.hud.cancel": "Left click: cancel",
  "swiftbuild.hud.cancel_break": "Right click: cancel",
- "swiftbuild.hud.no_server": "SwiftBuild is not installed on this server",
+ "swiftbuild.hud.no_server": "SwiftBuild is not on this server (client mode is off)",
  "swiftbuild.hud.limit": "Limit: %s",
  "swiftbuild.menu.fill": "Fill: %s",
  "swiftbuild.menu.mix": "Hotbar mix: %s",
@@ -72,5 +72,12 @@
  "swiftbuild.msg.nothing_redo": "Nothing to redo",
  "swiftbuild.msg.other_dimension": "That build is in another dimension",
  "swiftbuild.msg.undone": "Undone (%s blocks)",
- "swiftbuild.msg.redone": "Redone (%s blocks)"
+ "swiftbuild.msg.redone": "Redone (%s blocks)",
+ "swiftbuild.msg.client_break_creative": "Client mode: shape breaking only works in creative",
+ "swiftbuild.msg.client_no_redo": "Client mode: redo is not available",
+ "swiftbuild.msg.client_undo_creative": "Client mode: undo only works in creative",
+ "swiftbuild.hud.client_mode": "Client mode (reach only)",
+ "swiftbuild.hud.queue": "%s queued",
+ "swiftbuild.screen.client_mode": "Client mode: %s",
+ "swiftbuild.screen.client_speed": "Blocks/tick: %s"
 }

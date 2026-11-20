@@ -68,6 +68,14 @@ public final class AnimationManager {
 		}
 	}
 
+	/** Animation for a block this client places or breaks itself (client-only mode). */
+	public static void addLocal(BlockPos pos, BlockState state, long delayMs, long durationMs, boolean grow) {
+		if (!ClientConfig.get().animations || state.isAir()) {
+			return;
+		}
+		ANIMS.add(new Anim(pos.toImmutable(), state, Util.getMeasuringTimeMs() + Math.max(0, delayMs), Math.max(120, durationMs), grow));
+	}
+
 	public static void clear() {
 		ANIMS.clear();
 	}

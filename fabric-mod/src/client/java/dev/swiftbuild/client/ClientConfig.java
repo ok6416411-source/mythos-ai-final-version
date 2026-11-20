@@ -24,6 +24,10 @@ public final class ClientConfig {
 	public boolean animations = true;
 	public boolean preview = true;
 	public boolean hud = true;
+	/** On servers without SwiftBuild: place blocks with normal clicks (reach-limited, throttled). */
+	public boolean clientMode = true;
+	public int clientBlocksPerTick = 2;
+	public int clientMaxBlocks = 256;
 
 	private static ClientConfig instance = new ClientConfig();
 

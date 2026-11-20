@@ -35,7 +35,7 @@
  "swiftbuild.hud.break": "Abbauen",
  "swiftbuild.hud.cancel": "Linksklick: abbrechen",
  "swiftbuild.hud.cancel_break": "Rechtsklick: abbrechen",
- "swiftbuild.hud.no_server": "SwiftBuild ist auf diesem Server nicht installiert",
+ "swiftbuild.hud.no_server": "SwiftBuild fehlt auf dem Server (Client-Modus ist aus)",
  "swiftbuild.hud.limit": "Limit: %s",
  "swiftbuild.menu.fill": "Füllung: %s",
  "swiftbuild.menu.mix": "Hotbar-Mix: %s",
@@ -72,5 +72,12 @@
  "swiftbuild.msg.nothing_redo": "Nichts zum Wiederholen",
  "swiftbuild.msg.other_dimension": "Dieser Bau ist in einer anderen Dimension",
  "swiftbuild.msg.undone": "Rückgängig gemacht (%s Blöcke)",
- "swiftbuild.msg.redone": "Wiederholt (%s Blöcke)"
+ "swiftbuild.msg.redone": "Wiederholt (%s Blöcke)",
+ "swiftbuild.msg.client_break_creative": "Client-Modus: Abbauen in Form nur im Kreativmodus",
+ "swiftbuild.msg.client_no_redo": "Client-Modus: Wiederholen geht hier nicht",
+ "swiftbuild.msg.client_undo_creative": "Client-Modus: Rückgängig nur im Kreativmodus",
+ "swiftbuild.hud.client_mode": "Client-Modus (nur Reichweite)",
+ "swiftbuild.hud.queue": "%s in Warteschlange",
+ "swiftbuild.screen.client_mode": "Client-Modus: %s",
+ "swiftbuild.screen.client_speed": "Blöcke/Tick: %s"
 }

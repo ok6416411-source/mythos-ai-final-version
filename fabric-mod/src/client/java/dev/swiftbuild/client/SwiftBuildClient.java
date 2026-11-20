@@ -44,14 +44,16 @@ public class SwiftBuildClient implements ClientModInitializer {
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> client.execute(() -> {
 			BuildController.serverSupported = false;
 			BuildController.cancel();
+			ClientOnlyBuilder.clear();
 			AnimationManager.clear();
 		}));
 
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			BuildController.tick(client);
+			ClientOnlyBuilder.tick(client);
 			while (menuKey.wasPressed()) {
 				if (client.currentScreen == null && client.player != null) {
-					if (BuildController.serverSupported) {
+					if (BuildController.available()) {
 						client.setScreen(new RadialMenuScreen(menuKey));
 					} else {
 						client.player.sendMessage(Text.translatable("swiftbuild.hud.no_server"), true);

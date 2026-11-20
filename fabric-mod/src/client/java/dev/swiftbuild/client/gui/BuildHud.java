@@ -5,6 +5,7 @@ import dev.swiftbuild.build.BuildMode;
 import dev.swiftbuild.build.Modifiers;
 import dev.swiftbuild.client.BuildController;
 import dev.swiftbuild.client.ClientConfig;
+import dev.swiftbuild.client.ClientOnlyBuilder;
 import dev.swiftbuild.client.Easing;
 import java.util.ArrayList;
 import java.util.List;
@@ -45,9 +46,13 @@ public final class BuildHud {
 		int y = 6;
 
 		List<Text> lines = new ArrayList<>();
-		if (!BuildController.serverSupported) {
+		if (!BuildController.available()) {
 			lines.add(Text.translatable("swiftbuild.hud.no_server"));
 		} else {
+			if (BuildController.clientOnly()) {
+				lines.add(Text.translatable("swiftbuild.hud.client_mode").append(ClientOnlyBuilder.busy()
+					? Text.literal(" · ").append(Text.translatable("swiftbuild.hud.queue", ClientOnlyBuilder.pending())) : Text.empty()));
+			}
 			StringBuilder mods = new StringBuilder();
 			Modifiers m = cfg.modifiers;
 			if (m.array() && m.arrayCount() > 1) mods.append(Text.translatable("swiftbuild.mod.array").getString()).append(" ×").append(m.arrayCount()).append("  ");
@@ -74,7 +79,8 @@ public final class BuildHud {
 				lines.add(Text.translatable("swiftbuild.hud.size", size[0], size[1], size[2]).append(" · ")
 					.append(Text.translatable("swiftbuild.hud.blocks", preview.positions().size())));
 				if (preview.truncated()) {
-					int limit = mc.player.isCreative() ? BuildController.limits.maxBlocksCreative() : BuildController.limits.maxBlocksSurvival();
+					int limit = BuildController.clientOnly() ? ClientOnlyBuilder.limit()
+						: mc.player.isCreative() ? BuildController.limits.maxBlocksCreative() : BuildController.limits.maxBlocksSurvival();
 					lines.add(Text.translatable("swiftbuild.hud.limit", limit));
 				}
 			}

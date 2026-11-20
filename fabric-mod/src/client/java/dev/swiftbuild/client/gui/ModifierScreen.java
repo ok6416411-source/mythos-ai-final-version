@@ -132,6 +132,17 @@ public class ModifierScreen extends Screen {
 			ClientConfig.save();
 			clearAndInit();
 		});
+		y += 24;
+		button(left, y, col, Text.translatable("swiftbuild.screen.client_mode", onOff(cfg.clientMode)), b -> {
+			cfg.clientMode = !cfg.clientMode;
+			BuildController.onModeChanged();
+			clearAndInit();
+		});
+		stepper(right, y, Text.translatable("swiftbuild.screen.client_speed", cfg.clientBlocksPerTick), d -> {
+			cfg.clientBlocksPerTick = Math.max(1, Math.min(8, cfg.clientBlocksPerTick + d));
+			ClientConfig.save();
+			clearAndInit();
+		});
 		y += 32;
 		button(width / 2 - 100, Math.min(y, height - 28), 200, Text.translatable("gui.done"), b -> close());
 	}

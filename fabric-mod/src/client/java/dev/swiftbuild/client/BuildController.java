@@ -73,14 +73,23 @@ public final class BuildController {
 		return points.size();
 	}
 
+	/** SwiftBuild can work: either the server has the mod, or client-only mode is allowed. */
+	public static boolean available() {
+		return serverSupported || cfg().clientMode;
+	}
+
+	public static boolean clientOnly() {
+		return !serverSupported;
+	}
+
 	public static boolean placeActive() {
 		BuildMode mode = cfg().mode;
-		return serverSupported && mode != BuildMode.VANILLA && (mode != BuildMode.SINGLE || cfg().modifiers.any() || cfg().mix);
+		return available() && mode != BuildMode.VANILLA && (mode != BuildMode.SINGLE || cfg().modifiers.any() || cfg().mix);
 	}
 
 	public static boolean breakActive() {
 		BuildMode mode = cfg().mode;
-		return serverSupported && mode != BuildMode.VANILLA && (mode != BuildMode.SINGLE || cfg().modifiers.any());
+		return available() && mode != BuildMode.VANILLA && (mode != BuildMode.SINGLE || cfg().modifiers.any());
 	}
 
 	public static void cancel() {
@@ -97,6 +106,8 @@ public final class BuildController {
 	public static void undo(boolean redo) {
 		if (serverSupported) {
 			ClientPlayNetworking.send(new UndoPayload(redo));
+		} else if (cfg().clientMode) {
+			ClientOnlyBuilder.undo(MinecraftClient.getInstance(), redo);
 		}
 	}
 
@@ -180,6 +191,15 @@ public final class BuildController {
 		}
 		points.add(p);
 		click();
+		if (points.size() >= cfg().mode.clicks && clientOnly()) {
+			Preview finished = preview(mc, delta);
+			if (finished != null) {
+				ClientOnlyBuilder.submit(mc, action, finished.positions(), finished.states());
+			}
+			seed = ThreadLocalRandom.current().nextLong();
+			cancel();
+			return;
+		}
 		if (points.size() >= cfg().mode.clicks) {
 			ClientPlayNetworking.send(new BuildRequestPayload(action, cfg().mode, cfg().fill, List.copyOf(points), side, hitX, hitY, hitZ,
 				cfg().modifiers, cfg().mix && action == BuildAction.PLACE, seed));
@@ -195,6 +215,9 @@ public final class BuildController {
 	// ------------------------------------------------------------------ picking
 
 	private static double reach(ClientPlayerEntity player) {
+		if (clientOnly()) {
+			return player.getBlockInteractionRange();
+		}
 		return player.isCreative() ? limits.reachCreative() : limits.reachSurvival();
 	}
 
@@ -381,10 +404,17 @@ public final class BuildController {
 		if (Objects.equals(key, previewKey) && previewCache != null) {
 			return previewCache;
 		}
-		int limit = player.isCreative() ? limits.maxBlocksCreative() : limits.maxBlocksSurvival();
+		int limit = clientOnly() ? ClientOnlyBuilder.limit() * 4 : player.isCreative() ? limits.maxBlocksCreative() : limits.maxBlocksSurvival();
 		ShapeResult shape = ShapeGenerator.generate(cfg().mode, cfg().fill, pts, cfg().modifiers, limit);
 		List<BlockPos> positions = new ArrayList<>(shape.positions());
 		ShapeGenerator.sortFrom(positions, pts.get(0));
+		if (clientOnly()) {
+			// Only what the server will accept as a normal click: inside the player's reach.
+			positions.removeIf(pos -> !ClientOnlyBuilder.inReach(player, pos));
+			if (positions.size() > ClientOnlyBuilder.limit()) {
+				positions = new ArrayList<>(positions.subList(0, ClientOnlyBuilder.limit()));
+			}
+		}
 		List<BlockState> states = new ArrayList<>();
 		if (act == BuildAction.PLACE) {
 			List<BlockPos> placeable = new ArrayList<>();
